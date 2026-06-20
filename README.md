@@ -115,6 +115,18 @@ set EXT_FILE_URL=file:///D:/projects/backrooms3d.js
 node scripts/generate-sb3.mjs
 ```
 
+## Web 部署
+
+```bash
+npm run build
+```
+
+把 `dist/` 目录作为静态站点根目录部署。访问站点根路径时服务器会读取
+`dist/index.html`；如果服务器根目录里没有 `index.html`，常见表现就是 403。
+
+也可以直接部署构建后生成的 `backrooms.html`，它会内联资源，适合只上传单个
+HTML 文件的场景。
+
 ## 验证
 
 ```bash
