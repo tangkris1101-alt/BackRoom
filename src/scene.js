@@ -1,9 +1,9 @@
 import * as THREE from "three";
 
 const CELL_SIZE = 4;
-const WALL_HEIGHT = 3.18;
+const WALL_HEIGHT = 3.72;
 const WALL_THICKNESS = 0.22;
-const CEILING_Y = 3.12;
+const CEILING_Y = 3.66;
 const MAX_POINT_LIGHTS = 14;
 
 const LAYOUT_COLS = 31;
@@ -237,18 +237,18 @@ function createCarpetTexture() {
   return makeTexture(
     512,
     (context, size) => {
-      context.fillStyle = "#72642f";
+      context.fillStyle = "#9f9055";
       context.fillRect(0, 0, size, size);
       for (let y = 0; y < size; y += 8) {
-        context.fillStyle = y % 16 === 0 ? "rgba(40,34,18,0.2)" : "rgba(218,194,91,0.06)";
+        context.fillStyle = y % 16 === 0 ? "rgba(55,46,24,0.15)" : "rgba(238,215,121,0.08)";
         context.fillRect(0, y, size, 3);
       }
       for (let x = 0; x < size; x += 28) {
-        context.fillStyle = "rgba(22,19,13,0.15)";
+        context.fillStyle = "rgba(42,35,19,0.1)";
         context.fillRect(x, 0, 2, size);
       }
-      drawSpeckles(context, size, 1600, 0.12, "10,9,7");
-      drawSpeckles(context, size, 800, 0.08, "210,178,77");
+      drawSpeckles(context, size, 1600, 0.1, "26,22,14");
+      drawSpeckles(context, size, 850, 0.1, "238,208,111");
     },
     18,
     18,
@@ -259,9 +259,9 @@ function createCeilingTexture() {
   return makeTexture(
     512,
     (context, size) => {
-      context.fillStyle = "#b7b08b";
+      context.fillStyle = "#d5cca0";
       context.fillRect(0, 0, size, size);
-      context.strokeStyle = "rgba(43,45,36,0.34)";
+      context.strokeStyle = "rgba(92,84,52,0.22)";
       context.lineWidth = 4;
       for (let x = 0; x <= size; x += 128) {
         context.beginPath();
@@ -275,8 +275,8 @@ function createCeilingTexture() {
         context.lineTo(size, y);
         context.stroke();
       }
-      drawSpeckles(context, size, 520, 0.12, "33,34,27");
-      drawSpeckles(context, size, 90, 0.2, "91,84,45");
+      drawSpeckles(context, size, 480, 0.08, "64,57,36");
+      drawSpeckles(context, size, 80, 0.14, "137,122,69");
     },
     12,
     12,
@@ -381,12 +381,12 @@ function addExitSign(scene, position) {
     roughness: 0.42,
   });
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.25, 0.9), signMaterial);
-  sign.position.set(position.x, 2.1, position.z + CELL_SIZE / 2 - 0.12);
+  sign.position.set(position.x, 2.34, position.z + CELL_SIZE / 2 - 0.12);
   sign.rotation.y = Math.PI;
   scene.add(sign);
 
   const glow = new THREE.PointLight(0x6dff8f, 0.9, 7, 2.2);
-  glow.position.set(position.x, 2.15, position.z + CELL_SIZE / 2 - 0.55);
+  glow.position.set(position.x, 2.39, position.z + CELL_SIZE / 2 - 0.55);
   scene.add(glow);
 }
 
@@ -407,7 +407,7 @@ function addPipes(scene) {
   pipeRows.forEach((pipe) => {
     const center = cellCenter(pipe.col, pipe.row);
     const mesh = new THREE.Mesh(pipeGeometry, pipeMaterial);
-    mesh.position.set(center.x, 2.86, center.z);
+    mesh.position.set(center.x, CEILING_Y - 0.32, center.z);
     mesh.rotation.z = Math.PI / 2;
     mesh.rotation.y = pipe.rotation;
     scene.add(mesh);
@@ -418,7 +418,7 @@ function addMoodZones(scene) {
   const shadowMaterial = new THREE.MeshBasicMaterial({
     color: 0x080904,
     transparent: true,
-    opacity: 0.34,
+    opacity: 0.18,
     depthWrite: false,
   });
   const glowMaterial = new THREE.MeshBasicMaterial({
@@ -474,11 +474,12 @@ function collectWallTransforms() {
       }
 
       const lightSeed = (col * 37 + row * 19) % 11;
+      const wideLightSeed = (col * 17 + row * 29) % 19;
       const shouldLight =
-        (isBrightZone && (lightSeed <= 2 || (row + col) % 5 === 0)) ||
-        (!isDarkZone && isSpacious && lightSeed <= 1) ||
+        (isBrightZone && wideLightSeed <= 2) ||
+        (!isDarkZone && isSpacious && lightSeed === 0 && (row + col) % 2 === 0) ||
         (!isDarkZone && !isSpacious && lightSeed === 0) ||
-        (isDarkZone && lightSeed === 0 && (row + col) % 2 === 0);
+        (isDarkZone && lightSeed === 0 && (row + col) % 3 === 0);
 
       if (shouldLight) {
         fixturePositions.push({
@@ -488,9 +489,9 @@ function collectWallTransforms() {
           phase: col * 0.83 + row * 1.17,
           speed: isDarkZone ? 8 + ((col * row) % 7) : 4 + ((col * row) % 5),
           weak: isDarkZone ? 0.48 : isBrightZone ? 0 : isSpacious ? 0.12 : 0.3,
-          range: isBrightZone ? 11.5 : isDarkZone ? 5.5 : 8.4,
-          baseIntensity: isBrightZone ? 1.35 : isDarkZone ? 0.38 : 0.82,
-          panelWidth: isSpacious ? 2.25 : 1.35,
+          range: isBrightZone ? 12.8 : isDarkZone ? 5.7 : 8.8,
+          baseIntensity: isBrightZone ? 1.48 : isDarkZone ? 0.38 : 0.86,
+          panelWidth: isBrightZone ? 2.85 : isSpacious ? 2.05 : 1.35,
           color: isDarkZone ? 0xd4b05f : 0xffefb0,
           hasPointLight: isBrightZone || isSpacious || lightSeed === 0,
           priority: (isBrightZone ? 3 : 0) + (isSpacious ? 1 : 0) - (isDarkZone ? 2 : 0),
@@ -504,8 +505,8 @@ function collectWallTransforms() {
 
 export function createBackroomsScene() {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x15150d);
-  scene.fog = new THREE.FogExp2(0xc8b55a, 0.026);
+  scene.background = new THREE.Color(0x18170e);
+  scene.fog = new THREE.FogExp2(0xd4bd65, 0.024);
 
   const camera = new THREE.PerspectiveCamera(76, 1, 0.05, 82);
   const spawnCell = cellCenter(START_CELL.col, START_CELL.row);
@@ -518,7 +519,9 @@ export function createBackroomsScene() {
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: carpetTexture,
-    color: 0xb99d49,
+    color: 0xe0c66d,
+    emissive: 0x4a3b18,
+    emissiveIntensity: 0.08,
     roughness: 0.98,
   });
   const wallMaterial = new THREE.MeshStandardMaterial({
@@ -529,8 +532,10 @@ export function createBackroomsScene() {
   });
   const ceilingMaterial = new THREE.MeshStandardMaterial({
     map: ceilingTexture,
-    color: 0xb8af88,
-    roughness: 0.9,
+    color: 0xfff6cf,
+    emissive: 0xd0b86c,
+    emissiveIntensity: 0.42,
+    roughness: 0.86,
   });
 
   const floor = new THREE.Mesh(
@@ -563,8 +568,12 @@ export function createBackroomsScene() {
     eastWest,
   );
 
-  const ambientLight = new THREE.HemisphereLight(0xf6e9a2, 0x342e19, 0.72);
+  const ambientLight = new THREE.HemisphereLight(0xfff1b8, 0x90713a, 0.92);
   scene.add(ambientLight);
+
+  const ceilingFill = new THREE.DirectionalLight(0xfff1bd, 0.26);
+  ceilingFill.position.set(-18, CEILING_Y - 0.45, 12);
+  scene.add(ceilingFill);
 
   const fixtures = createLights(scene, fixturePositions);
   addExitSign(scene, exitPosition);
@@ -606,7 +615,7 @@ export function createBackroomsScene() {
       playerPosition.x - exitPosition.x,
       playerPosition.z - exitPosition.z,
     );
-    scene.fog.density = 0.022 + (1 - flicker) * 0.014;
+    scene.fog.density = 0.02 + (1 - flicker) * 0.013;
 
     return {
       exitDistance: Math.round(exitDistance),
