@@ -31,6 +31,10 @@
   const EXIT = { x: 19.5, y: 1.5 };
   const FOV = Math.PI / 3;
   const TAN_HALF_FOV = Math.tan(FOV / 2);
+  // Shared "haze" colour (#c0b05a). Distant walls, the floor and the ceiling all
+  // blend toward this instead of toward black — that black-fade was why far areas
+  // rendered as voids. It matches the foggy mono-yellow Backrooms look.
+  const FOG_RGB = { r: 194, g: 178, b: 102 };
   const MOVE_SPEED = 2.2;
   const SPRINT_MULT = 1.55;
   const ROTATE_SPEED = 0.0022;
@@ -407,13 +411,22 @@
       const fogDensity = 0.025 + (1 - flicker) * 0.018;
       const brightness = 0.55 + flicker * 0.45;
 
-      // ceiling
-      ctx.fillStyle = this.shadeColor('#b7b08b', brightness * 0.9);
-      ctx.fillRect(0, 0, w, h / 2);
+      const pitchOffset = Math.round(this.player.pitch * 80);
+      const horizon = clamp(Math.floor(h / 2 + pitchOffset), 1, h - 1);
 
-      // floor
-      ctx.fillStyle = this.shadeColor('#72642f', brightness * 0.8);
-      ctx.fillRect(0, h / 2, w, h / 2);
+      // ceiling — off-white acoustic drop-tiles fading into haze at the horizon
+      const ceilGrad = ctx.createLinearGradient(0, 0, 0, horizon);
+      ceilGrad.addColorStop(0, this.shadeToFog('#d4cfa5', brightness * 0.95, 0.06));
+      ceilGrad.addColorStop(1, this.shadeToFog('#d4cfa5', brightness * 0.9, 0.88));
+      ctx.fillStyle = ceilGrad;
+      ctx.fillRect(0, 0, w, horizon);
+
+      // floor — moist mono-yellow carpet fading into haze at the horizon
+      const floorGrad = ctx.createLinearGradient(0, horizon, 0, h);
+      floorGrad.addColorStop(0, this.shadeToFog('#9f9048', brightness * 0.85, 0.88));
+      floorGrad.addColorStop(1, this.shadeToFog('#9f9048', brightness * 0.82, 0.04));
+      ctx.fillStyle = floorGrad;
+      ctx.fillRect(0, horizon, w, h - horizon);
 
       const dirX = -Math.sin(this.player.yaw);
       const dirY = -Math.cos(this.player.yaw);
@@ -422,7 +435,6 @@
 
       const numRays = 120;
       const stripWidth = w / numRays;
-      const pitchOffset = Math.round(this.player.pitch * 80);
 
       for (let i = 0; i < numRays; i++) {
         const cameraX = 2 * i / numRays - 1;
@@ -475,13 +487,24 @@
         const drawStart = Math.max(0, Math.floor(-lineHeight / 2 + h / 2 + pitchOffset));
         const drawEnd = Math.min(h - 1, Math.floor(lineHeight / 2 + h / 2 + pitchOffset));
 
-        const distFade = Math.min(1, Math.exp(-perpWallDist * fogDensity));
-        let wallColor = '#d8c866';
-        if (side === 1) wallColor = '#b8aa4d';
-        // wallpaper stripes by angle
-        if ((mapX + mapY) % 2 === 0) wallColor = '#c5b756';
+        // How far along the wall cell the ray hit (0..1), used for wallpaper seams.
+        let wallX = side === 0
+          ? this.player.y + perpWallDist * rayDirY
+          : this.player.x + perpWallDist * rayDirX;
+        wallX -= Math.floor(wallX);
 
-        ctx.fillStyle = this.shadeColor(wallColor, brightness * distFade);
+        // Distance haze: 0 up close, 1 far away. Far walls dissolve into the fog
+        // colour instead of fading to black.
+        const fogAmount = 1 - Math.min(1, Math.exp(-perpWallDist * fogDensity));
+
+        // Mono-yellow wallpaper with a faint per-cell tonal shift.
+        let wallColor = (mapX + mapY) % 2 === 0 ? '#c0b160' : '#c8b46b';
+        // Fake directional shading: walls facing N/S read slightly darker.
+        let light = brightness * (side === 1 ? 0.82 : 1);
+        // Subtle darker seam where wallpaper strips meet at the cell edges.
+        if (wallX < 0.045 || wallX > 0.955) light *= 0.8;
+
+        ctx.fillStyle = this.shadeToFog(wallColor, light, fogAmount);
         ctx.fillRect(Math.floor(i * stripWidth), drawStart, Math.ceil(stripWidth), drawEnd - drawStart + 1);
       }
 
@@ -491,7 +514,7 @@
       // vignette
       const grad = ctx.createRadialGradient(w / 2, h / 2, h * 0.25, w / 2, h / 2, h * 0.85);
       grad.addColorStop(0, 'rgba(0,0,0,0)');
-      grad.addColorStop(1, `rgba(21,21,13,${0.35 + (1 - flicker) * 0.35})`);
+      grad.addColorStop(1, `rgba(54,47,18,${0.28 + (1 - flicker) * 0.28})`);
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
 
@@ -542,6 +565,20 @@
       const g = parseInt(hex.substring(2, 4), 16);
       const b = parseInt(hex.substring(4, 6), 16);
       return `rgb(${Math.floor(r * factor)}, ${Math.floor(g * factor)}, ${Math.floor(b * factor)})`;
+    }
+
+    // Shade a base hex colour by `light` (0..1), then blend the result toward the
+    // shared fog colour by `fog` (0..1). At distance fog -> 1 so the surface melts
+    // into yellow haze rather than going black.
+    shadeToFog(color, light, fog) {
+      const hex = color.replace('#', '');
+      const r = parseInt(hex.substring(0, 2), 16) * light;
+      const g = parseInt(hex.substring(2, 4), 16) * light;
+      const b = parseInt(hex.substring(4, 6), 16) * light;
+      const rr = Math.floor(r + (FOG_RGB.r - r) * fog);
+      const gg = Math.floor(g + (FOG_RGB.g - g) * fog);
+      const bb = Math.floor(b + (FOG_RGB.b - b) * fog);
+      return `rgb(${rr}, ${gg}, ${bb})`;
     }
 
     distanceToExit() {

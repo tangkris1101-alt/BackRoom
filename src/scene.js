@@ -89,40 +89,47 @@ function createWallpaperTexture() {
   return makeTexture(
     512,
     (context, size) => {
-      const gradient = context.createLinearGradient(0, 0, size, size);
-      gradient.addColorStop(0, "#d8c866");
-      gradient.addColorStop(0.52, "#c5b756");
-      gradient.addColorStop(1, "#a99943");
-      context.fillStyle = gradient;
+      // Flat mono-yellow base — the documented "iconic" Level 0 wall yellow.
+      context.fillStyle = "#c8b46b";
       context.fillRect(0, 0, size, size);
 
-      for (let x = -24; x < size + 24; x += 42) {
-        context.strokeStyle = "rgba(92,80,35,0.26)";
-        context.lineWidth = 2;
-        context.beginPath();
-        for (let y = 0; y <= size; y += 8) {
-          const wave = Math.sin(y * 0.038 + x * 0.13) * 5;
-          if (y === 0) {
-            context.moveTo(x + wave, y);
-          } else {
-            context.lineTo(x + wave, y);
-          }
+      // Faint vertical wallpaper seams (where strips of paper meet).
+      for (let x = 0; x <= size; x += 64) {
+        context.fillStyle = "rgba(150,134,62,0.14)";
+        context.fillRect(x - 1, 0, 2, size);
+        context.fillStyle = "rgba(222,208,128,0.10)";
+        context.fillRect(x + 2, 0, 1, size);
+      }
+
+      // Very subtle diamond damask motif, barely visible like the real paper.
+      context.strokeStyle = "rgba(150,135,66,0.08)";
+      context.lineWidth = 1.5;
+      const step = 64;
+      for (let y = -step; y < size + step; y += step) {
+        for (let x = -step; x < size + step; x += step) {
+          context.beginPath();
+          context.moveTo(x + step / 2, y);
+          context.lineTo(x + step, y + step / 2);
+          context.lineTo(x + step / 2, y + step);
+          context.lineTo(x, y + step / 2);
+          context.closePath();
+          context.stroke();
         }
-        context.stroke();
       }
 
-      for (let y = 38; y < size; y += 82) {
-        context.fillStyle = "rgba(244,231,126,0.22)";
-        context.fillRect(0, y, size, 5);
-        context.fillStyle = "rgba(83,71,31,0.16)";
-        context.fillRect(0, y + 6, size, 2);
-      }
+      // Damp staining drifting up from the baseboard.
+      const damp = context.createLinearGradient(0, size, 0, size * 0.55);
+      damp.addColorStop(0, "rgba(96,84,40,0.22)");
+      damp.addColorStop(1, "rgba(96,84,40,0)");
+      context.fillStyle = damp;
+      context.fillRect(0, size * 0.55, size, size * 0.45);
 
-      drawSpeckles(context, size, 460, 0.16, "44,38,21");
-      drawSpeckles(context, size, 70, 0.2, "112,99,43");
+      // Aged grime and a few lighter bleached flecks.
+      drawSpeckles(context, size, 300, 0.1, "84,72,30");
+      drawSpeckles(context, size, 60, 0.1, "190,172,98");
     },
-    1.6,
-    1.4,
+    1.5,
+    1.15,
   );
 }
 
@@ -130,21 +137,37 @@ function createCarpetTexture() {
   return makeTexture(
     512,
     (context, size) => {
-      context.fillStyle = "#72642f";
+      // Moist olive-yellow carpet — same family as the walls but darker/greener.
+      context.fillStyle = "#9f9048";
       context.fillRect(0, 0, size, size);
-      for (let y = 0; y < size; y += 8) {
-        context.fillStyle = y % 16 === 0 ? "rgba(40,34,18,0.2)" : "rgba(218,194,91,0.06)";
-        context.fillRect(0, y, size, 3);
+
+      // Soft mottled damp patches so the floor looks moist and uneven.
+      for (let i = 0; i < 46; i += 1) {
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const radius = Math.random() * 64 + 26;
+        const dark = Math.random() > 0.5;
+        const grd = context.createRadialGradient(x, y, 0, x, y, radius);
+        grd.addColorStop(0, dark ? "rgba(64,56,26,0.16)" : "rgba(198,178,96,0.12)");
+        grd.addColorStop(1, "rgba(0,0,0,0)");
+        context.fillStyle = grd;
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
       }
-      for (let x = 0; x < size; x += 28) {
-        context.fillStyle = "rgba(22,19,13,0.15)";
-        context.fillRect(x, 0, 2, size);
+
+      // Very faint directional pile lines (low-pile commercial carpet).
+      for (let y = 0; y < size; y += 6) {
+        context.fillStyle = "rgba(60,52,24,0.05)";
+        context.fillRect(0, y, size, 2);
       }
-      drawSpeckles(context, size, 1600, 0.12, "10,9,7");
-      drawSpeckles(context, size, 800, 0.08, "210,178,77");
+
+      // Fine fibre grain.
+      drawSpeckles(context, size, 2600, 0.1, "44,38,18");
+      drawSpeckles(context, size, 1200, 0.07, "206,186,102");
     },
-    18,
-    18,
+    12,
+    12,
   );
 }
 
@@ -152,27 +175,28 @@ function createCeilingTexture() {
   return makeTexture(
     512,
     (context, size) => {
-      context.fillStyle = "#b7b08b";
+      // Pale goldenrod-cream acoustic tile (documented Level 0 ceiling tone).
+      context.fillStyle = "#d4cfa5";
       context.fillRect(0, 0, size, size);
-      context.strokeStyle = "rgba(43,45,36,0.34)";
-      context.lineWidth = 4;
-      for (let x = 0; x <= size; x += 128) {
-        context.beginPath();
-        context.moveTo(x, 0);
-        context.lineTo(x, size);
-        context.stroke();
-      }
-      for (let y = 0; y <= size; y += 128) {
-        context.beginPath();
-        context.moveTo(0, y);
-        context.lineTo(size, y);
-        context.stroke();
-      }
-      drawSpeckles(context, size, 520, 0.12, "33,34,27");
-      drawSpeckles(context, size, 90, 0.2, "91,84,45");
+
+      // Slight inward shading so each tile reads as a recessed panel.
+      const shade = context.createLinearGradient(0, 0, size, size);
+      shade.addColorStop(0, "rgba(255,250,224,0.10)");
+      shade.addColorStop(1, "rgba(96,92,64,0.12)");
+      context.fillStyle = shade;
+      context.fillRect(0, 0, size, size);
+
+      // The metal T-bar grid framing each tile.
+      context.strokeStyle = "rgba(58,56,40,0.42)";
+      context.lineWidth = 7;
+      context.strokeRect(0, 0, size, size);
+
+      // Pin-hole acoustic speckle.
+      drawSpeckles(context, size, 1600, 0.1, "104,100,72");
+      drawSpeckles(context, size, 280, 0.06, "238,232,198");
     },
-    12,
-    12,
+    21,
+    19,
   );
 }
 
@@ -219,8 +243,8 @@ function createLights(scene, fixturePositions) {
 
   fixturePositions.forEach((fixture, index) => {
     const glowMaterial = new THREE.MeshStandardMaterial({
-      color: 0xfff4ba,
-      emissive: 0xffef9d,
+      color: 0xfdfae4,
+      emissive: 0xfdf7d2,
       emissiveIntensity: 1.2,
       roughness: 0.28,
     });
@@ -236,7 +260,7 @@ function createLights(scene, fixturePositions) {
 
     let light = null;
     if (index < 16) {
-      light = new THREE.PointLight(0xffefb0, 0.95, 8.8, 1.8);
+      light = new THREE.PointLight(0xfdf6d0, 0.95, 9.6, 1.8);
       light.position.set(fixture.x, CEILING_Y - 0.25, fixture.z);
       scene.add(light);
     }
@@ -338,8 +362,13 @@ function collectWallTransforms() {
 
 export function createBackroomsScene() {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x15150d);
-  scene.fog = new THREE.FogExp2(0xc8b55a, 0.026);
+  // The background MUST match the fog colour. Otherwise every pixel that isn't
+  // covered by geometry (corridor ends, the far-clip plane, plane edges) shows
+  // the raw background — which is what produced the black voids in the distance.
+  // A single warm "haze" colour makes the world dissolve into yellow instead.
+  const HAZE_COLOR = 0xc2b266;
+  scene.background = new THREE.Color(HAZE_COLOR);
+  scene.fog = new THREE.FogExp2(HAZE_COLOR, 0.04);
 
   const camera = new THREE.PerspectiveCamera(76, 1, 0.05, 82);
   const spawnCell = cellCenter(START_CELL.col, START_CELL.row);
@@ -352,19 +381,19 @@ export function createBackroomsScene() {
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: carpetTexture,
-    color: 0xb99d49,
+    color: 0xffffff,
     roughness: 0.98,
   });
   const wallMaterial = new THREE.MeshStandardMaterial({
     map: wallpaperTexture,
-    color: 0xd4c15e,
-    roughness: 0.94,
+    color: 0xffffff,
+    roughness: 0.95,
     metalness: 0,
   });
   const ceilingMaterial = new THREE.MeshStandardMaterial({
     map: ceilingTexture,
-    color: 0xb8af88,
-    roughness: 0.9,
+    color: 0xffffff,
+    roughness: 0.92,
   });
 
   const floor = new THREE.Mesh(
@@ -397,7 +426,7 @@ export function createBackroomsScene() {
     eastWest,
   );
 
-  const ambientLight = new THREE.HemisphereLight(0xf6e9a2, 0x342e19, 0.72);
+  const ambientLight = new THREE.HemisphereLight(0xfaf0c4, 0x55502c, 0.95);
   scene.add(ambientLight);
 
   const fixtures = createLights(scene, fixturePositions);
@@ -439,7 +468,7 @@ export function createBackroomsScene() {
       playerPosition.x - exitPosition.x,
       playerPosition.z - exitPosition.z,
     );
-    scene.fog.density = 0.022 + (1 - flicker) * 0.014;
+    scene.fog.density = 0.038 + (1 - flicker) * 0.016;
 
     return {
       exitDistance: Math.round(exitDistance),
