@@ -4,6 +4,7 @@ const CELL_SIZE = 4;
 const WALL_HEIGHT = 3.18;
 const WALL_THICKNESS = 0.22;
 const CEILING_Y = 3.12;
+const MAX_POINT_LIGHTS = 14;
 
 const LAYOUT_COLS = 31;
 const LAYOUT_ROWS = 27;
@@ -315,6 +316,13 @@ function addInstancedBoxes(scene, geometry, material, transforms) {
 
 function createLights(scene, fixturePositions) {
   const fixtures = [];
+  const pointLightIndexes = new Set(
+    fixturePositions
+      .map((fixture, index) => ({ index, priority: fixture.priority }))
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, MAX_POINT_LIGHTS)
+      .map(({ index }) => index),
+  );
   const panelGeometry = new THREE.BoxGeometry(1, 0.04, 0.42);
   const trimGeometry = new THREE.BoxGeometry(1, 0.035, 0.62);
   const trimMaterial = new THREE.MeshStandardMaterial({
@@ -323,7 +331,7 @@ function createLights(scene, fixturePositions) {
     metalness: 0.08,
   });
 
-  fixturePositions.forEach((fixture) => {
+  fixturePositions.forEach((fixture, index) => {
     const glowMaterial = new THREE.MeshStandardMaterial({
       color: fixture.color,
       emissive: fixture.color,
@@ -343,7 +351,7 @@ function createLights(scene, fixturePositions) {
     scene.add(panel);
 
     let light = null;
-    if (fixture.hasPointLight) {
+    if (fixture.hasPointLight && pointLightIndexes.has(index)) {
       light = new THREE.PointLight(fixture.color, fixture.baseIntensity, fixture.range, 1.8);
       light.position.set(fixture.x, CEILING_Y - 0.25, fixture.z);
       scene.add(light);
@@ -467,8 +475,8 @@ function collectWallTransforms() {
 
       const lightSeed = (col * 37 + row * 19) % 11;
       const shouldLight =
-        (isBrightZone && (lightSeed <= 4 || (row + col) % 3 === 0)) ||
-        (!isDarkZone && isSpacious && lightSeed <= 2) ||
+        (isBrightZone && (lightSeed <= 2 || (row + col) % 5 === 0)) ||
+        (!isDarkZone && isSpacious && lightSeed <= 1) ||
         (!isDarkZone && !isSpacious && lightSeed === 0) ||
         (isDarkZone && lightSeed === 0 && (row + col) % 2 === 0);
 
@@ -485,6 +493,7 @@ function collectWallTransforms() {
           panelWidth: isSpacious ? 2.25 : 1.35,
           color: isDarkZone ? 0xd4b05f : 0xffefb0,
           hasPointLight: isBrightZone || isSpacious || lightSeed === 0,
+          priority: (isBrightZone ? 3 : 0) + (isSpacious ? 1 : 0) - (isDarkZone ? 2 : 0),
         });
       }
     }
