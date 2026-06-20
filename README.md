@@ -121,7 +121,10 @@ node scripts/generate-sb3.mjs
 npm run build
 ```
 
-把 `dist/` 目录作为静态站点根目录部署。访问站点根路径时服务器会读取
+如果服务器直接把仓库根目录作为静态站点根目录部署，访问 `/` 会从
+`index.html` 自动跳转到独立版 `backrooms.html`。
+
+也可以把 `dist/` 目录作为静态站点根目录部署。访问站点根路径时服务器会读取
 `dist/index.html`；如果服务器根目录里没有 `index.html`，常见表现就是 403。
 
 也可以直接部署构建后生成的 `backrooms.html`，它会内联资源，适合只上传单个

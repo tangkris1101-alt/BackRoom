@@ -5,10 +5,7 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 700,
     rollupOptions: {
-      input: {
-        index: "index.html",
-        app: "app.html",
-      },
+      input: "app.html",
     },
   },
 });
