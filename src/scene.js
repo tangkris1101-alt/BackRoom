@@ -5,35 +5,119 @@ const WALL_HEIGHT = 3.18;
 const WALL_THICKNESS = 0.22;
 const CEILING_Y = 3.12;
 
-const MAP = [
-  "#####################",
-  "#.........#.........#",
-  "#.#####.#.#.#####.#.#",
-  "#.#...#.#.#.#...#.#.#",
-  "#.#.#.#.#...#.#.#.#.#",
-  "#...#...#####.#...#.#",
-  "###.#####.....#####.#",
-  "#...#...#.###.#.....#",
-  "#.###.#.#.#.#.#.#####",
-  "#.....#...#...#.....#",
-  "#####.#########.###.#",
-  "#...#.......#...#...#",
-  "#.#.#######.#.###.#.#",
-  "#.#.......#.#.....#.#",
-  "#.#######.#.#####.#.#",
-  "#.....#...#.....#.#.#",
-  "#.###.#.#######.#.#.#",
-  "#...#...........#...#",
-  "#####################",
+const LAYOUT_COLS = 31;
+const LAYOUT_ROWS = 27;
+
+const BRIGHT_ZONES = [
+  { col: 19, row: 1, width: 10, height: 7 },
+  { col: 11, row: 3, width: 7, height: 5 },
+  { col: 10, row: 10, width: 9, height: 6 },
 ];
+
+const DARK_ZONES = [
+  { col: 1, row: 20, width: 6, height: 5 },
+  { col: 22, row: 12, width: 6, height: 4 },
+  { col: 3, row: 8, width: 5, height: 5 },
+  { col: 13, row: 18, width: 12, height: 5 },
+];
+
+function createLayout() {
+  const grid = Array.from({ length: LAYOUT_ROWS }, () =>
+    Array.from({ length: LAYOUT_COLS }, () => "#"),
+  );
+
+  const carveCell = (col, row) => {
+    if (row > 0 && row < LAYOUT_ROWS - 1 && col > 0 && col < LAYOUT_COLS - 1) {
+      grid[row][col] = ".";
+    }
+  };
+
+  const carveRoom = (col, row, width, height) => {
+    for (let y = row; y < row + height; y += 1) {
+      for (let x = col; x < col + width; x += 1) {
+        carveCell(x, y);
+      }
+    }
+  };
+
+  const carveHorizontal = (fromCol, toCol, row, width = 1) => {
+    const start = Math.min(fromCol, toCol);
+    const end = Math.max(fromCol, toCol);
+    for (let x = start; x <= end; x += 1) {
+      for (let offset = 0; offset < width; offset += 1) {
+        carveCell(x, row + offset);
+      }
+    }
+  };
+
+  const carveVertical = (col, fromRow, toRow, width = 1) => {
+    const start = Math.min(fromRow, toRow);
+    const end = Math.max(fromRow, toRow);
+    for (let y = start; y <= end; y += 1) {
+      for (let offset = 0; offset < width; offset += 1) {
+        carveCell(col + offset, y);
+      }
+    }
+  };
+
+  const rooms = [
+    { col: 1, row: 20, width: 6, height: 5 },
+    { col: 2, row: 13, width: 4, height: 3 },
+    { col: 3, row: 8, width: 5, height: 5 },
+    { col: 1, row: 1, width: 8, height: 6 },
+    { col: 11, row: 3, width: 7, height: 5 },
+    { col: 10, row: 10, width: 9, height: 6 },
+    { col: 13, row: 18, width: 12, height: 5 },
+    { col: 22, row: 12, width: 6, height: 4 },
+    { col: 19, row: 1, width: 10, height: 7 },
+    { col: 24, row: 20, width: 5, height: 4 },
+  ];
+  rooms.forEach((room) => carveRoom(room.col, room.row, room.width, room.height));
+
+  carveVertical(3, 15, 22, 1);
+  carveHorizontal(3, 14, 15, 1);
+  carveVertical(14, 7, 15, 1);
+  carveHorizontal(14, 23, 7, 2);
+  carveVertical(23, 5, 8, 1);
+  carveHorizontal(23, 28, 5, 1);
+
+  carveHorizontal(5, 13, 21, 2);
+  carveVertical(13, 15, 21, 2);
+  carveHorizontal(18, 24, 14, 1);
+  carveVertical(24, 14, 22, 1);
+  carveHorizontal(5, 11, 10, 1);
+  carveVertical(11, 5, 10, 1);
+  carveHorizontal(8, 12, 4, 1);
+  carveHorizontal(17, 22, 4, 1);
+
+  const pillars = [
+    [13, 12],
+    [15, 12],
+    [17, 12],
+    [14, 14],
+    [20, 4],
+    [23, 3],
+    [26, 5],
+    [16, 20],
+    [20, 20],
+    [5, 10],
+  ];
+  pillars.forEach(([col, row]) => {
+    grid[row][col] = "#";
+  });
+
+  return grid.map((row) => row.join(""));
+}
+
+const MAP = createLayout();
 
 const ROWS = MAP.length;
 const COLS = MAP[0].length;
 const ORIGIN_X = -(COLS * CELL_SIZE) / 2;
 const ORIGIN_Z = -(ROWS * CELL_SIZE) / 2;
 
-const START_CELL = { col: 1, row: 17, yaw: -Math.PI * 0.42 };
-const EXIT_CELL = { col: 19, row: 1 };
+const START_CELL = { col: 3, row: 23, yaw: -Math.PI * 0.48 };
+const EXIT_CELL = { col: 27, row: 3 };
 
 const matrix = new THREE.Matrix4();
 const identityQuaternion = new THREE.Quaternion();
@@ -41,6 +125,28 @@ const unitScale = new THREE.Vector3(1, 1, 1);
 
 function isOpenCell(col, row) {
   return row >= 0 && row < ROWS && col >= 0 && col < COLS && MAP[row][col] === ".";
+}
+
+function isInRect(col, row, zone) {
+  return (
+    col >= zone.col &&
+    col < zone.col + zone.width &&
+    row >= zone.row &&
+    row < zone.row + zone.height
+  );
+}
+
+function isInAnyZone(col, row, zones) {
+  return zones.some((zone) => isInRect(col, row, zone));
+}
+
+function countOpenNeighbors(col, row) {
+  return [
+    [0, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+  ].filter(([offsetCol, offsetRow]) => isOpenCell(col + offsetCol, row + offsetRow)).length;
 }
 
 function cellCenter(col, row) {
@@ -209,34 +315,36 @@ function addInstancedBoxes(scene, geometry, material, transforms) {
 
 function createLights(scene, fixturePositions) {
   const fixtures = [];
-  const panelGeometry = new THREE.BoxGeometry(1.8, 0.04, 0.42);
-  const trimGeometry = new THREE.BoxGeometry(2.04, 0.035, 0.62);
+  const panelGeometry = new THREE.BoxGeometry(1, 0.04, 0.42);
+  const trimGeometry = new THREE.BoxGeometry(1, 0.035, 0.62);
   const trimMaterial = new THREE.MeshStandardMaterial({
     color: 0x2b2c22,
     roughness: 0.72,
     metalness: 0.08,
   });
 
-  fixturePositions.forEach((fixture, index) => {
+  fixturePositions.forEach((fixture) => {
     const glowMaterial = new THREE.MeshStandardMaterial({
-      color: 0xfff4ba,
-      emissive: 0xffef9d,
-      emissiveIntensity: 1.2,
+      color: fixture.color,
+      emissive: fixture.color,
+      emissiveIntensity: fixture.baseIntensity,
       roughness: 0.28,
     });
     const trim = new THREE.Mesh(trimGeometry, trimMaterial);
     trim.position.set(fixture.x, CEILING_Y - 0.055, fixture.z);
     trim.rotation.y = fixture.rotation;
+    trim.scale.x = fixture.panelWidth + 0.24;
     scene.add(trim);
 
     const panel = new THREE.Mesh(panelGeometry, glowMaterial);
     panel.position.set(fixture.x, CEILING_Y - 0.09, fixture.z);
     panel.rotation.y = fixture.rotation;
+    panel.scale.x = fixture.panelWidth;
     scene.add(panel);
 
     let light = null;
-    if (index < 16) {
-      light = new THREE.PointLight(0xffefb0, 0.95, 8.8, 1.8);
+    if (fixture.hasPointLight) {
+      light = new THREE.PointLight(fixture.color, fixture.baseIntensity, fixture.range, 1.8);
       light.position.set(fixture.x, CEILING_Y - 0.25, fixture.z);
       scene.add(light);
     }
@@ -247,6 +355,7 @@ function createLights(scene, fixturePositions) {
       light,
       phase: fixture.phase,
       speed: fixture.speed,
+      baseIntensity: fixture.baseIntensity,
       weak: fixture.weak,
     });
   });
@@ -281,9 +390,10 @@ function addPipes(scene) {
   });
   const pipeGeometry = new THREE.CylinderGeometry(0.055, 0.055, CELL_SIZE * 7.2, 14);
   const pipeRows = [
-    { col: 5, row: 7, rotation: Math.PI / 2 },
-    { col: 14, row: 12, rotation: Math.PI / 2 },
-    { col: 10, row: 4, rotation: 0 },
+    { col: 4, row: 10, rotation: Math.PI / 2 },
+    { col: 16, row: 14, rotation: Math.PI / 2 },
+    { col: 23, row: 6, rotation: 0 },
+    { col: 18, row: 20, rotation: 0 },
   ];
 
   pipeRows.forEach((pipe) => {
@@ -296,6 +406,38 @@ function addPipes(scene) {
   });
 }
 
+function addMoodZones(scene) {
+  const shadowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x080904,
+    transparent: true,
+    opacity: 0.34,
+    depthWrite: false,
+  });
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffed9a,
+    transparent: true,
+    opacity: 0.12,
+    depthWrite: false,
+  });
+
+  const addFloorTint = (zone, material, yOffset) => {
+    const width = zone.width * CELL_SIZE;
+    const height = zone.height * CELL_SIZE;
+    const geometry = new THREE.PlaneGeometry(width, height);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(
+      ORIGIN_X + zone.col * CELL_SIZE + width / 2,
+      yOffset,
+      ORIGIN_Z + zone.row * CELL_SIZE + height / 2,
+    );
+    scene.add(mesh);
+  };
+
+  DARK_ZONES.forEach((zone) => addFloorTint(zone, shadowMaterial, 0.018));
+  BRIGHT_ZONES.forEach((zone) => addFloorTint(zone, glowMaterial, 0.022));
+}
+
 function collectWallTransforms() {
   const northSouth = [];
   const eastWest = [];
@@ -306,6 +448,10 @@ function collectWallTransforms() {
       if (!isOpenCell(col, row)) continue;
 
       const center = cellCenter(col, row);
+      const isBrightZone = isInAnyZone(col, row, BRIGHT_ZONES);
+      const isDarkZone = isInAnyZone(col, row, DARK_ZONES);
+      const openNeighborCount = countOpenNeighbors(col, row);
+      const isSpacious = openNeighborCount >= 3;
       if (!isOpenCell(col, row - 1)) {
         northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2));
       }
@@ -320,14 +466,25 @@ function collectWallTransforms() {
       }
 
       const lightSeed = (col * 37 + row * 19) % 11;
-      if (lightSeed === 0 || (row + col) % 13 === 0) {
+      const shouldLight =
+        (isBrightZone && (lightSeed <= 4 || (row + col) % 3 === 0)) ||
+        (!isDarkZone && isSpacious && lightSeed <= 2) ||
+        (!isDarkZone && !isSpacious && lightSeed === 0) ||
+        (isDarkZone && lightSeed === 0 && (row + col) % 2 === 0);
+
+      if (shouldLight) {
         fixturePositions.push({
           x: center.x,
           z: center.z,
           rotation: (row + col) % 2 === 0 ? 0 : Math.PI / 2,
           phase: col * 0.83 + row * 1.17,
-          speed: 6 + ((col * row) % 5),
-          weak: lightSeed === 0 ? 0 : 0.22,
+          speed: isDarkZone ? 8 + ((col * row) % 7) : 4 + ((col * row) % 5),
+          weak: isDarkZone ? 0.48 : isBrightZone ? 0 : isSpacious ? 0.12 : 0.3,
+          range: isBrightZone ? 11.5 : isDarkZone ? 5.5 : 8.4,
+          baseIntensity: isBrightZone ? 1.35 : isDarkZone ? 0.38 : 0.82,
+          panelWidth: isSpacious ? 2.25 : 1.35,
+          color: isDarkZone ? 0xd4b05f : 0xffefb0,
+          hasPointLight: isBrightZone || isSpacious || lightSeed === 0,
         });
       }
     }
@@ -403,6 +560,7 @@ export function createBackroomsScene() {
   const fixtures = createLights(scene, fixturePositions);
   addExitSign(scene, exitPosition);
   addPipes(scene);
+  addMoodZones(scene);
 
   function isWalkable(x, z, radius = 0.36) {
     const corner = radius * 0.72;
@@ -430,8 +588,8 @@ export function createBackroomsScene() {
       const soft = 0.72 + Math.sin(elapsed * 1.7 + fixture.phase) * 0.1;
       const sharp = Math.sin(elapsed * fixture.speed + fixture.phase * 2.4) > 0.89 ? 0.18 : 1;
       const pulse = Math.max(0.18, soft * sharp - fixture.weak);
-      fixture.material.emissiveIntensity = pulse * 1.55;
-      if (fixture.light) fixture.light.intensity = pulse * 1.15;
+      fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.55;
+      if (fixture.light) fixture.light.intensity = pulse * fixture.baseIntensity * 1.12;
       flicker = Math.min(flicker, pulse);
     });
 
