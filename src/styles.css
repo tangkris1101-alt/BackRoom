@@ -99,6 +99,15 @@ body {
   color: #ffd36b;
 }
 
+#fps-readout {
+  min-width: 48px;
+  text-align: right;
+}
+
+#fps-readout[data-quality="LOW"] {
+  color: #ff8c6b;
+}
+
 .reticle {
   position: fixed;
   left: 50%;

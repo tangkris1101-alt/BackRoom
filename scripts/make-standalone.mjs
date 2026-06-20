@@ -7,6 +7,7 @@ const distDirectory = resolve(projectRoot, "dist");
 const sourcePath = resolve(distDirectory, "app.html");
 const outputPath = resolve(projectRoot, "backrooms.html");
 const distOutputPath = resolve(distDirectory, "backrooms.html");
+const distIndexPath = resolve(distDirectory, "index.html");
 
 let html = await readFile(sourcePath, "utf8");
 
@@ -47,6 +48,7 @@ html = html
 await Promise.all([
   writeFile(outputPath, html, "utf8"),
   writeFile(distOutputPath, html, "utf8"),
+  writeFile(distIndexPath, html, "utf8"),
 ]);
 
-console.log("Created standalone backrooms.html");
+console.log("Created standalone backrooms.html and dist/index.html");
