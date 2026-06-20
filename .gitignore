@@ -1,0 +1,13 @@
+backup/
+node_modules/
+
+.agents/
+.codex/
+
+vite-dev.log
+vite-dev.err.log
+
+.env
+.env.*
+.DS_Store
+Thumbs.db

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Backrooms</title>
+  </head>
+  <body>
+    <main id="app" aria-label="Backrooms 3D scene">
+      <canvas id="scene"></canvas>
+      <div class="static-layer" aria-hidden="true"></div>
+      <div class="vignette" aria-hidden="true"></div>
+
+      <header class="hud hud--top">
+        <div class="signal">
+          <span class="signal__label">LEVEL 0</span>
+          <span id="status-text">NO SIGNAL</span>
+        </div>
+        <div class="meters" aria-live="polite">
+          <span id="distance-readout">0m</span>
+          <span id="light-readout">FLICKER</span>
+        </div>
+      </header>
+
+      <div class="reticle" aria-hidden="true"></div>
+
+      <div id="joystick" class="joystick" aria-label="Move">
+        <div class="joystick__knob"></div>
+      </div>
+      <button id="jump-button" class="jump-button" type="button" aria-label="Jump">
+        <span></span>
+      </button>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

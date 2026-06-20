@@ -1,0 +1,19 @@
+{
+  "name": "three-backrooms",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build && node scripts/make-standalone.mjs",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "scratch-vm": "^5.0.300",
+    "three": "0.184.0"
+  },
+  "devDependencies": {
+    "vite": "8.0.16"
+  }
+}
