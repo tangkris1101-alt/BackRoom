@@ -286,6 +286,8 @@ let lastDrinkCancelled = false;
 let lastDrinkCompletedItemId = null;
 let isPaused = false;
 let pauseAccumulatedDelta = 0;
+let pauseFromUnlock = false;
+let isInPauseTransition = false;
 
 try {
   const savedLanguage = window.localStorage?.getItem(LANGUAGE_STORAGE_KEY);
@@ -833,9 +835,11 @@ function updateDrinkingMeter(controlState) {
 
 let lastDrinkCancelledUntil = 0;
 
-function setPauseState(next) {
+function setPauseState(next, { fromUnlock = false } = {}) {
   if (isPaused === next) return;
   isPaused = next;
+  pauseFromUnlock = fromUnlock;
+  isInPauseTransition = false;
   canvas.dataset.paused = String(isPaused);
   if (pauseOverlay) {
     pauseOverlay.classList.toggle("is-visible", isPaused);
@@ -855,6 +859,18 @@ function setPauseState(next) {
   } else {
     clock.getDelta();
   }
+}
+
+function handlePointerLockChange() {
+  if (document.pointerLockElement === canvas) return;
+  isInPauseTransition = false;
+  if (isPaused || exitComplete || gameFailed || levelTransition) return;
+  if (pauseFromUnlock) {
+    pauseFromUnlock = false;
+    setPauseState(true, { fromUnlock: true });
+    return;
+  }
+  setPauseState(true, { fromUnlock: true });
 }
 
 function acquireFlashlight(count) {
@@ -1152,7 +1168,19 @@ function onUseKeyDown(event) {
   }
   if (event.code === "Escape") {
     event.preventDefault();
-    setPauseState(true);
+    if (document.pointerLockElement === canvas) {
+      pauseFromUnlock = true;
+      isInPauseTransition = true;
+      try {
+        document.exitPointerLock();
+      } catch {
+        isInPauseTransition = false;
+        pauseFromUnlock = false;
+        setPauseState(true);
+      }
+    } else {
+      setPauseState(true);
+    }
   }
 }
 
@@ -1205,7 +1233,11 @@ window.addEventListener("resize", resize);
 window.addEventListener("pointerdown", startAudioOnce, { passive: true });
 window.addEventListener("keydown", startAudioOnce);
 window.addEventListener("keydown", onUseKeyDown);
-window.addEventListener("blur", () => setPauseState(true));
+window.addEventListener("blur", () => {
+  if (isInPauseTransition) return;
+  setPauseState(true);
+});
+document.addEventListener("pointerlockchange", handlePointerLockChange);
 
 syncLevelHud();
 resize();
