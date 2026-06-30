@@ -69,6 +69,7 @@ const ALMOND_WATER_DURATION = 45;
 const SUPER_ALMOND_WATER_DURATION = 25;
 const ALMOND_WATER_STAMINA_BONUS = 50;
 const ALMOND_WATER_DRINK_DURATION = 1.0;
+const WATER_LONG_PRESS_MS = 600;
 
 const ITEM_TEXT = {
   "zh-CN": {
@@ -288,6 +289,9 @@ let isPaused = false;
 let pauseAccumulatedDelta = 0;
 let pauseFromUnlock = false;
 let isInPauseTransition = false;
+let ePressStartTime = 0;
+let ePressActive = false;
+let ePressLongTriggered = false;
 
 try {
   const savedLanguage = window.localStorage?.getItem(LANGUAGE_STORAGE_KEY);
@@ -867,8 +871,10 @@ function setPauseState(next, { fromUnlock = false } = {}) {
         // ignore
       }
     }
+    ambientHum.suspend();
   } else {
     clock.getDelta();
+    ambientHum.resume();
   }
 }
 
@@ -1030,16 +1036,26 @@ function usePickup() {
   renderInventoryBar();
 }
 
-function useEquipped() {
+function useEquippedShortPress() {
   if (exitComplete || levelTransition || isPaused) return;
   const equipped = getEquipped();
   if (!equipped) return;
-
   if (equipped.id === "flashlight") {
     toggleFlashlight();
+    actionButton?.classList.add("is-active");
+    window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
   } else if (equipped.id === "detector") {
     startDetectorScan();
-  } else if (equipped.id === "almond-water") {
+    actionButton?.classList.add("is-active");
+    window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
+  }
+}
+
+function startEquippedDrink() {
+  if (exitComplete || levelTransition || isPaused) return;
+  const equipped = getEquipped();
+  if (!equipped) return;
+  if (equipped.id === "almond-water") {
     const started = controls.startDrink("almond-water", { staminaBonus: ALMOND_WATER_STAMINA_BONUS });
     if (started) {
       actionButton?.classList.add("is-active");
@@ -1051,6 +1067,60 @@ function useEquipped() {
       actionButton?.classList.add("is-active");
       window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
     }
+  }
+}
+
+function isWaterItem(id) {
+  return id === "almond-water" || id === "super-almond-water";
+}
+
+function beginEPress() {
+  if (exitComplete || levelTransition || isPaused) return;
+  if (ePressActive) return;
+  ePressActive = true;
+  ePressStartTime = performance.now();
+  ePressLongTriggered = false;
+  if (actionButton) {
+    actionButton.classList.add("is-pressing");
+    actionButton.dataset.longPress = "true";
+    actionButton.style.setProperty("--long-press-progress", "0");
+  }
+}
+
+function endEPress(event) {
+  if (!ePressActive) return;
+  const duration = performance.now() - ePressStartTime;
+  ePressActive = false;
+  if (actionButton) {
+    actionButton.classList.remove("is-pressing");
+    delete actionButton.dataset.longPress;
+    actionButton.style.removeProperty("--long-press-progress");
+  }
+  if (exitComplete || levelTransition || isPaused) return;
+  const equipped = getEquipped();
+  if (!equipped) return;
+
+  if (isWaterItem(equipped.id)) {
+    if (duration >= WATER_LONG_PRESS_MS && !ePressLongTriggered) {
+      ePressLongTriggered = true;
+      startEquippedDrink();
+    }
+    return;
+  }
+  if (duration < WATER_LONG_PRESS_MS) {
+    useEquippedShortPress();
+  }
+}
+
+function tickLongPressProgress() {
+  if (!ePressActive || !actionButton) return;
+  const equipped = getEquipped();
+  const duration = performance.now() - ePressStartTime;
+  const ratio = Math.max(0, Math.min(1, duration / WATER_LONG_PRESS_MS));
+  actionButton.style.setProperty("--long-press-progress", ratio.toFixed(3));
+  if (ratio >= 1 && isWaterItem(equipped?.id) && !ePressLongTriggered) {
+    ePressLongTriggered = true;
+    startEquippedDrink();
   }
 }
 
@@ -1084,11 +1154,13 @@ function updateHud(metrics, controlState, elapsed) {
 function animate() {
   const rawDelta = clock.getDelta();
   if (isPaused) {
+    tickLongPressProgress();
     requestAnimationFrame(animate);
     return;
   }
   const delta = Math.min(rawDelta, 0.05);
   const elapsed = clock.elapsedTime;
+  tickLongPressProgress();
 
   updateLevelTransition(delta);
   if (!exitComplete && !gameFailed && !levelTransition) controls.update(delta);
@@ -1162,7 +1234,7 @@ function onUseKeyDown(event) {
   }
   if (event.code === "KeyE") {
     event.preventDefault();
-    useEquipped();
+    if (!event.repeat) beginEPress();
     return;
   }
   if (event.code === "ArrowLeft") {
@@ -1195,6 +1267,13 @@ function onUseKeyDown(event) {
   }
 }
 
+function onUseKeyUp(event) {
+  if (event.code === "KeyE") {
+    event.preventDefault();
+    endEPress();
+  }
+}
+
 useButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
@@ -1203,7 +1282,39 @@ useButton?.addEventListener("pointerdown", (event) => {
 actionButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
-  useEquipped();
+  beginEPress();
+  if (actionButton && event.pointerId !== undefined) {
+    try {
+      actionButton.setPointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+  }
+});
+actionButton?.addEventListener("pointerup", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (actionButton && actionButton.hasPointerCapture?.(event.pointerId)) {
+    actionButton.releasePointerCapture(event.pointerId);
+  }
+  endEPress();
+});
+actionButton?.addEventListener("pointercancel", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (actionButton && actionButton.hasPointerCapture?.(event.pointerId)) {
+    actionButton.releasePointerCapture(event.pointerId);
+  }
+  ePressActive = false;
+  ePressLongTriggered = false;
+  if (actionButton) {
+    actionButton.classList.remove("is-pressing");
+    delete actionButton.dataset.longPress;
+    actionButton.style.removeProperty("--long-press-progress");
+  }
+});
+actionButton?.addEventListener("pointerleave", (event) => {
+  if (ePressActive) endEPress();
 });
 inventoryPrev?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
@@ -1244,7 +1355,9 @@ window.addEventListener("resize", resize);
 window.addEventListener("pointerdown", startAudioOnce, { passive: true });
 window.addEventListener("keydown", startAudioOnce);
 window.addEventListener("keydown", onUseKeyDown);
+window.addEventListener("keyup", onUseKeyUp);
 window.addEventListener("blur", () => {
+  if (ePressActive) endEPress();
   if (isInPauseTransition) return;
   setPauseState(true);
 });

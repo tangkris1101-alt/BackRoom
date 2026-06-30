@@ -1357,6 +1357,38 @@ body {
   opacity: 0.42;
 }
 
+.action-button.is-pressing {
+  background: rgba(8, 10, 7, 0.4);
+  box-shadow:
+    inset 0 0 0 2px rgba(140, 255, 160, 0.85),
+    0 0 22px rgba(140, 255, 160, 0.45);
+}
+
+.action-button.is-pressing[data-long-press="true"]::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: conic-gradient(
+    rgba(150, 255, 175, 0.85) calc(var(--long-press-progress, 0) * 360deg),
+    rgba(150, 255, 175, 0.08) 0
+  );
+  -webkit-mask: radial-gradient(circle, transparent 56%, black 58%);
+  mask: radial-gradient(circle, transparent 56%, black 58%);
+  pointer-events: none;
+  z-index: 1;
+  animation: long-press-glow 0.6s ease-out;
+}
+
+@keyframes long-press-glow {
+  from {
+    box-shadow: 0 0 0 rgba(140, 255, 160, 0);
+  }
+  to {
+    box-shadow: 0 0 18px rgba(140, 255, 160, 0.45);
+  }
+}
+
 .pause-button {
   right: max(168px, calc(env(safe-area-inset-right) + 168px));
   top: max(168px, calc(env(safe-area-inset-top) + 168px));

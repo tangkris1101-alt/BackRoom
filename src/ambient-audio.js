@@ -6,6 +6,7 @@ export function createAmbientHum() {
   let stepFilter = null;
   let lastStepAt = 0;
   let stepNoiseBuffer = null;
+  let suspendedByPause = false;
 
   function start() {
     if (started) return;
@@ -101,7 +102,7 @@ export function createAmbientHum() {
 
   function update(flicker, movementState = {}) {
     if (!context || !flickerGain) return;
-    if (context.state === "suspended") context.resume?.();
+    if (context.state === "suspended" && !suspendedByPause) context.resume?.();
     const now = context.currentTime;
     const level = 0.055 + (1 - flicker) * 0.08;
     flickerGain.gain.setTargetAtTime(level, now, 0.035);
@@ -123,5 +124,21 @@ export function createAmbientHum() {
     }
   }
 
-  return { start, update };
+  function suspend() {
+    if (!context) return;
+    suspendedByPause = true;
+    if (context.state === "running") context.suspend?.();
+  }
+
+  function resume() {
+    if (!context) return;
+    suspendedByPause = false;
+    if (context.state === "suspended") context.resume?.();
+  }
+
+  function isSuspended() {
+    return suspendedByPause;
+  }
+
+  return { start, update, suspend, resume, isSuspended };
 }
