@@ -197,7 +197,7 @@ const STATUS_TEXT = {
   },
 };
 
-[hud, joystick, jumpButton, useButton, actionButton, flashlightButton, detectorButton, pauseButton, loadingOverlay].forEach((element) => {
+[hud, joystick, jumpButton, useButton, actionButton, flashlightButton, detectorButton, pauseButton, loadingOverlay, inventoryBar].forEach((element) => {
   element?.removeAttribute("hidden");
 });
 exitOverlay?.setAttribute("hidden", "");
