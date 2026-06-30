@@ -66,43 +66,56 @@ export function createAmbientHum() {
 
     stepFilter = context.createBiquadFilter();
     stepFilter.type = "lowpass";
-    stepFilter.frequency.value = 620;
-    stepFilter.Q.value = 0.58;
+    stepFilter.frequency.value = 1800;
+    stepFilter.Q.value = 0.7;
     stepFilter.connect(master);
   }
 
   function playFootstep({ sprinting }) {
     if (!context || !stepFilter || !stepNoiseBuffer) return;
+    if (context.state === "suspended") {
+      try {
+        context.resume?.();
+      } catch {
+        // ignore
+      }
+    }
     const now = context.currentTime;
 
     const noise = context.createBufferSource();
     noise.buffer = stepNoiseBuffer;
     const noiseGain = context.createGain();
     noiseGain.gain.setValueAtTime(0, now);
-    noiseGain.gain.linearRampToValueAtTime(sprinting ? 0.42 : 0.28, now + 0.012);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + (sprinting ? 0.12 : 0.105));
+    noiseGain.gain.linearRampToValueAtTime(sprinting ? 1.4 : 1.0, now + 0.01);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + (sprinting ? 0.18 : 0.16));
     noise.connect(noiseGain);
     noiseGain.connect(stepFilter);
     noise.start(now);
-    noise.stop(now + 0.14);
+    noise.stop(now + 0.22);
 
     const thump = context.createOscillator();
     thump.type = "sine";
-    thump.frequency.setValueAtTime(sprinting ? 76 : 62, now);
-    thump.frequency.exponentialRampToValueAtTime(sprinting ? 46 : 38, now + 0.09);
+    thump.frequency.setValueAtTime(sprinting ? 88 : 72, now);
+    thump.frequency.exponentialRampToValueAtTime(sprinting ? 52 : 44, now + 0.1);
     const thumpGain = context.createGain();
     thumpGain.gain.setValueAtTime(0, now);
-    thumpGain.gain.linearRampToValueAtTime(sprinting ? 0.16 : 0.1, now + 0.008);
-    thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    thumpGain.gain.linearRampToValueAtTime(sprinting ? 0.7 : 0.55, now + 0.006);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
     thump.connect(thumpGain);
     thumpGain.connect(master);
     thump.start(now);
-    thump.stop(now + 0.11);
+    thump.stop(now + 0.16);
   }
 
   function update(flicker, movementState = {}) {
     if (!context || !flickerGain) return;
-    if (context.state === "suspended" && !suspendedByPause) context.resume?.();
+    if (context.state === "suspended" && !suspendedByPause) {
+      try {
+        context.resume?.();
+      } catch {
+        // ignore
+      }
+    }
     const now = context.currentTime;
     const level = 0.055 + (1 - flicker) * 0.08;
     flickerGain.gain.setTargetAtTime(level, now, 0.035);
@@ -116,8 +129,8 @@ export function createAmbientHum() {
     const speed = Math.max(0, movementState.movementSpeed ?? 0);
     const sprinting = Boolean(movementState.sprinting);
     const stepInterval = sprinting
-      ? Math.max(0.24, 0.34 - speed * 0.018)
-      : Math.max(0.38, 0.54 - speed * 0.026);
+      ? Math.max(0.22, 0.32 - speed * 0.02)
+      : Math.max(0.36, 0.5 - speed * 0.028);
     if (now - lastStepAt >= stepInterval) {
       playFootstep({ sprinting });
       lastStepAt = now;
