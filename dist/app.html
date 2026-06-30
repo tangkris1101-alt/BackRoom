@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Backrooms</title>
-    <script type="module" crossorigin src="./assets/app-unyND97z.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/app-CqnacxD0.css">
+    <script type="module" crossorigin src="./assets/app-Bv43VFRN.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/app-CChF3_ua.css">
   </head>
   <body>
     <main id="app" aria-label="Backrooms 3D scene">
@@ -19,6 +19,7 @@
             <option value="0">LEVEL 0</option>
             <option value="1">LEVEL 1</option>
             <option value="2">LEVEL 2</option>
+            <option value="3">LEVEL 3</option>
           </select>
           <span id="status-text">NO SIGNAL</span>
           <select id="language-select" class="language-select" aria-label="Language">
@@ -46,10 +47,19 @@
             </div>
             <span id="flashlight-readout">--</span>
           </div>
+          <div id="detector-meter" class="detector-meter" aria-label="Entity detector" hidden>
+            <span class="detector-meter__label">SCAN</span>
+            <div class="detector-meter__track">
+              <div id="detector-fill" class="detector-meter__fill"></div>
+            </div>
+            <span id="detector-readout">--</span>
+          </div>
+          <div id="buff-list" class="buff-list" aria-live="polite" hidden></div>
         </div>
       </header>
 
       <div class="reticle" aria-hidden="true"></div>
+      <div id="entity-markers" class="entity-markers" aria-hidden="true"></div>
       <div id="item-info" class="item-info" aria-live="polite" hidden>
         <span id="item-info-name">ALMOND WATER</span>
         <strong id="item-info-effect">+50 STAMINA BOOST</strong>
@@ -79,6 +89,9 @@
         <span>F</span>
       </button>
       <button id="flashlight-button" class="flashlight-button" type="button" aria-label="Toggle flashlight" hidden>
+        <span></span>
+      </button>
+      <button id="detector-button" class="detector-button" type="button" aria-label="Use detector" hidden>
         <span></span>
       </button>
     </main>

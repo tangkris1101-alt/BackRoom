@@ -13,10 +13,22 @@ const ALMOND_WATER_RESPAWN_MIN = 24;
 const ALMOND_WATER_RESPAWN_VARIANCE = 18;
 const ALMOND_WATER_INSPECT_DISTANCE = 6.4;
 const ALMOND_WATER_MODEL_SCALE = 0.72;
+const SUPER_ALMOND_WATER_RESPAWN_MIN = 92;
+const SUPER_ALMOND_WATER_RESPAWN_VARIANCE = 72;
+const SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE = 0.22;
+const SUPER_ALMOND_WATER_RESPAWN_CHANCE = 0.32;
+const SUPER_ALMOND_WATER_MODEL_SCALE = 0.66;
 const FLASHLIGHT_PICKUP_RADIUS = 1.85;
 const FLASHLIGHT_INSPECT_DISTANCE = 6.2;
 const FLASHLIGHT_RESPAWN_MIN = 36;
 const FLASHLIGHT_RESPAWN_VARIANCE = 24;
+const DETECTOR_PICKUP_RADIUS = 1.8;
+const DETECTOR_INSPECT_DISTANCE = 6.2;
+const DETECTOR_RESPAWN_MIN = 84;
+const DETECTOR_RESPAWN_VARIANCE = 42;
+const BACTERIA_CONTACT_RADIUS = 0.74;
+const BACTERIA_SPAWN_MIN_FROM_PLAYER = CELL_SIZE * 7;
+const BACTERIA_SPAWN_MAX_FROM_EXIT = CELL_SIZE * 6.4;
 
 const LAYOUT_COLS = 31;
 const LAYOUT_ROWS = 27;
@@ -25,6 +37,7 @@ const LEVEL_INFOS = new Map([
   [0, { level: 0, levelLabel: "LEVEL 0", levelName: "NOCLIP ZONE" }],
   [1, { level: 1, levelLabel: "LEVEL 1", levelName: "HABITABLE ZONE" }],
   [2, { level: 2, levelLabel: "LEVEL 2", levelName: "PIPE DREAMS" }],
+  [3, { level: 3, levelLabel: "LEVEL 3", levelName: "ELECTRICAL STATION" }],
 ]);
 
 export function getBackroomsLevelInfo(level = 0) {
@@ -42,6 +55,8 @@ const DARK_ZONES = [
   { col: 22, row: 12, width: 6, height: 4 },
   { col: 3, row: 8, width: 5, height: 5 },
   { col: 13, row: 18, width: 12, height: 5 },
+  { col: 2, row: 13, width: 4, height: 3 },
+  { col: 24, row: 20, width: 5, height: 4 },
 ];
 
 function createLayout() {
@@ -820,15 +835,16 @@ function createStableLightState(normalLabel, { dimBelow, normalAbove, dimDelay =
   };
 }
 
-function createAlmondWaterLabelTexture() {
+function createAlmondWaterLabelTexture(variant = "normal") {
+  const isSuper = variant === "super";
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 256;
   const context = canvas.getContext("2d");
 
-  context.fillStyle = "#f5f0d4";
+  context.fillStyle = isSuper ? "#fff0a8" : "#f5f0d4";
   context.fillRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = "#2f6f94";
+  context.fillStyle = isSuper ? "#9f7216" : "#2f6f94";
   context.fillRect(0, 0, canvas.width, 42);
   context.fillRect(0, canvas.height - 44, canvas.width, 44);
 
@@ -841,30 +857,30 @@ function createAlmondWaterLabelTexture() {
   }
   context.putImageData(noise, 0, 0);
 
-  context.fillStyle = "#f9f5df";
+  context.fillStyle = isSuper ? "#fff8c4" : "#f9f5df";
   context.fillRect(58, 54, 292, 134);
-  context.strokeStyle = "rgba(35, 76, 79, 0.42)";
+  context.strokeStyle = isSuper ? "rgba(117, 74, 0, 0.5)" : "rgba(35, 76, 79, 0.42)";
   context.lineWidth = 4;
   context.strokeRect(58, 54, 292, 134);
 
-  context.fillStyle = "#234c4f";
-  context.font = "900 34px Arial, sans-serif";
-  context.fillText("ALMOND", 82, 102);
-  context.font = "900 32px Arial, sans-serif";
-  context.fillText("WATER", 102, 140);
+  context.fillStyle = isSuper ? "#754300" : "#234c4f";
+  context.font = isSuper ? "900 28px Arial, sans-serif" : "900 34px Arial, sans-serif";
+  context.fillText(isSuper ? "SUPER" : "ALMOND", isSuper ? 98 : 82, 98);
+  context.font = isSuper ? "900 27px Arial, sans-serif" : "900 32px Arial, sans-serif";
+  context.fillText(isSuper ? "ALMOND WATER" : "WATER", isSuper ? 74 : 102, 138);
   context.font = "700 11px Arial, sans-serif";
-  context.fillStyle = "#5f6542";
-  context.fillText("LEVEL 0 SUPPLY", 106, 164);
-  context.fillText("+50 STAMINA BOOST", 83, 181);
+  context.fillStyle = isSuper ? "#8e5d05" : "#5f6542";
+  context.fillText(isSuper ? "RARE GOLDEN SUPPLY" : "LEVEL 0 SUPPLY", isSuper ? 91 : 106, 164);
+  context.fillText(isSuper ? "250 CAP / RECOVERY x2" : "+50 STAMINA BOOST", isSuper ? 74 : 83, 181);
 
-  context.fillStyle = "#dccb83";
+  context.fillStyle = isSuper ? "#ffd33f" : "#dccb83";
   context.beginPath();
   context.ellipse(304, 120, 28, 45, -0.12, 0, Math.PI * 2);
   context.fill();
-  context.strokeStyle = "rgba(96, 82, 38, 0.35)";
+  context.strokeStyle = isSuper ? "rgba(116, 65, 0, 0.48)" : "rgba(96, 82, 38, 0.35)";
   context.lineWidth = 3;
   context.stroke();
-  context.strokeStyle = "rgba(86, 76, 34, 0.42)";
+  context.strokeStyle = isSuper ? "rgba(125, 74, 0, 0.54)" : "rgba(86, 76, 34, 0.42)";
   context.lineWidth = 2;
   for (let i = 0; i < 5; i += 1) {
     context.beginPath();
@@ -873,14 +889,14 @@ function createAlmondWaterLabelTexture() {
     context.stroke();
   }
 
-  context.fillStyle = "#18303a";
+  context.fillStyle = isSuper ? "#80520b" : "#18303a";
   for (let x = 384; x < 462; x += 4) {
     const width = x % 12 === 0 ? 3 : 1;
     context.fillRect(x, 78, width, 88);
   }
   context.font = "700 10px Arial, sans-serif";
-  context.fillStyle = "#24414a";
-  context.fillText("NOT FROM HERE", 374, 190);
+  context.fillStyle = isSuper ? "#9a6714" : "#24414a";
+  context.fillText(isSuper ? "NOT FOR EVERYONE" : "NOT FROM HERE", isSuper ? 366 : 374, 190);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -891,48 +907,49 @@ function createAlmondWaterLabelTexture() {
   return texture;
 }
 
-function createAlmondWaterModel() {
+function createAlmondWaterModel(variant = "normal") {
+  const isSuper = variant === "super";
   const group = new THREE.Group();
-  group.name = "almond-water-model";
+  group.name = isSuper ? "super-almond-water-model" : "almond-water-model";
 
   const glassMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0xd9fbff,
-    emissive: 0x2b6f7a,
-    emissiveIntensity: 0.08,
+    color: isSuper ? 0xffe56a : 0xd9fbff,
+    emissive: isSuper ? 0x9d6d08 : 0x2b6f7a,
+    emissiveIntensity: isSuper ? 0.18 : 0.08,
     roughness: 0.12,
     metalness: 0,
-    transmission: 0.18,
+    transmission: isSuper ? 0.12 : 0.18,
     transparent: true,
-    opacity: 0.42,
+    opacity: isSuper ? 0.5 : 0.42,
     thickness: 0.22,
   });
   const liquidMaterial = new THREE.MeshStandardMaterial({
-    color: 0xbadfd0,
-    emissive: 0x8bbba3,
-    emissiveIntensity: 0.18,
+    color: isSuper ? 0xffc43f : 0xbadfd0,
+    emissive: isSuper ? 0xffb423 : 0x8bbba3,
+    emissiveIntensity: isSuper ? 0.32 : 0.18,
     roughness: 0.38,
     transparent: true,
-    opacity: 0.72,
+    opacity: isSuper ? 0.78 : 0.72,
   });
   const labelMaterial = new THREE.MeshStandardMaterial({
-    map: createAlmondWaterLabelTexture(),
+    map: createAlmondWaterLabelTexture(variant),
     color: 0xffffff,
-    emissive: 0xd7e6bd,
-    emissiveIntensity: 0.08,
+    emissive: isSuper ? 0xffcf54 : 0xd7e6bd,
+    emissiveIntensity: isSuper ? 0.18 : 0.08,
     roughness: 0.62,
     side: THREE.DoubleSide,
   });
   const capMaterial = new THREE.MeshStandardMaterial({
-    color: 0x234e70,
-    emissive: 0x07151f,
-    emissiveIntensity: 0.22,
+    color: isSuper ? 0xb17508 : 0x234e70,
+    emissive: isSuper ? 0x362200 : 0x07151f,
+    emissiveIntensity: isSuper ? 0.28 : 0.22,
     roughness: 0.46,
-    metalness: 0.12,
+    metalness: isSuper ? 0.2 : 0.12,
   });
   const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x1d2718,
+    color: isSuper ? 0x332005 : 0x1d2718,
     transparent: true,
-    opacity: 0.2,
+    opacity: isSuper ? 0.26 : 0.2,
     depthWrite: false,
   });
 
@@ -984,15 +1001,29 @@ function createAlmondWaterModel() {
   group.add(baseShadow);
 
   group.traverse((child) => {
-    if (child.isMesh) child.userData.itemId = "almond-water";
+    if (child.isMesh) child.userData.itemId = isSuper ? "super-almond-water" : "almond-water";
   });
   return group;
 }
 
 function createAlmondWaterPickup(
   scene,
-  { cols, rows, isCellOpen, getCellCenter, avoidPositions = [], blockedAabbs = [] },
+  {
+    cols,
+    rows,
+    isCellOpen,
+    getCellCenter,
+    avoidPositions = [],
+    blockedAabbs = [],
+    variant = "normal",
+    respawnMin = ALMOND_WATER_RESPAWN_MIN,
+    respawnVariance = ALMOND_WATER_RESPAWN_VARIANCE,
+    initialSpawnChance = 1,
+    respawnChance = 1,
+  },
 ) {
+  const isSuper = variant === "super";
+  const itemId = isSuper ? "super-almond-water" : "almond-water";
   const candidates = [];
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
@@ -1009,17 +1040,17 @@ function createAlmondWaterPickup(
   }
 
   const group = new THREE.Group();
-  group.name = "almond-water-pickup";
-  const bottleModel = createAlmondWaterModel();
-  bottleModel.scale.setScalar(ALMOND_WATER_MODEL_SCALE);
+  group.name = isSuper ? "super-almond-water-pickup" : "almond-water-pickup";
+  const bottleModel = createAlmondWaterModel(variant);
+  bottleModel.scale.setScalar(isSuper ? SUPER_ALMOND_WATER_MODEL_SCALE : ALMOND_WATER_MODEL_SCALE);
   group.add(bottleModel);
 
   const marker = new THREE.Mesh(
-    new THREE.RingGeometry(0.26, 0.38, 32),
+    new THREE.RingGeometry(isSuper ? 0.3 : 0.26, isSuper ? 0.46 : 0.38, 32),
     new THREE.MeshBasicMaterial({
-      color: 0xeefbd3,
+      color: isSuper ? 0xffd863 : 0xeefbd3,
       transparent: true,
-      opacity: 0.13,
+      opacity: isSuper ? 0.18 : 0.13,
       depthWrite: false,
       side: THREE.DoubleSide,
     }),
@@ -1038,6 +1069,12 @@ function createAlmondWaterPickup(
     return candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
   }
 
+  function scheduleRespawn() {
+    group.visible = false;
+    active = false;
+    respawnTimer = respawnMin + Math.random() * respawnVariance;
+  }
+
   function placeAtRandomPosition() {
     const candidate = chooseCandidate();
     if (!candidate) {
@@ -1051,7 +1088,15 @@ function createAlmondWaterPickup(
     active = true;
   }
 
-  placeAtRandomPosition();
+  function trySpawn(chance = 1) {
+    if (Math.random() > chance) {
+      scheduleRespawn();
+      return;
+    }
+    placeAtRandomPosition();
+  }
+
+  trySpawn(initialSpawnChance);
 
   return {
     inspect(camera) {
@@ -1066,9 +1111,9 @@ function createAlmondWaterPickup(
       if (inspectForward.dot(inspectToItem) < Math.cos(maxAngle)) return null;
 
       return {
-        id: "almond-water",
-        name: "ALMOND WATER",
-        effect: "+50 STAMINA CAPACITY / 45s",
+        id: itemId,
+        name: isSuper ? "SUPER ALMOND WATER" : "ALMOND WATER",
+        effect: isSuper ? "250 STAMINA CAP / RECOVERY x2" : "+50 STAMINA CAPACITY / 45s",
         action: "F / BUTTON PICK UP",
         distance,
       };
@@ -1077,7 +1122,7 @@ function createAlmondWaterPickup(
     update(delta, elapsed, playerPosition) {
       if (!active) {
         respawnTimer -= delta;
-        if (respawnTimer <= 0) placeAtRandomPosition();
+        if (respawnTimer <= 0) trySpawn(respawnChance);
         return {
           visible: false,
           available: false,
@@ -1086,9 +1131,10 @@ function createAlmondWaterPickup(
         };
       }
 
-      group.position.y = Math.sin(elapsed * 2.4) * 0.035;
-      group.rotation.y += delta * 0.45;
-      marker.material.opacity = 0.1 + Math.sin(elapsed * 3.2) * 0.045 + 0.045;
+      group.position.y = Math.sin(elapsed * (isSuper ? 2.8 : 2.4)) * (isSuper ? 0.045 : 0.035);
+      group.rotation.y += delta * (isSuper ? 0.62 : 0.45);
+      marker.material.opacity =
+        (isSuper ? 0.14 : 0.1) + Math.sin(elapsed * (isSuper ? 3.8 : 3.2)) * 0.045 + 0.045;
       const distance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
       return {
         visible: true,
@@ -1105,12 +1151,12 @@ function createAlmondWaterPickup(
       pickupCount += 1;
       active = false;
       group.visible = false;
-      respawnTimer = ALMOND_WATER_RESPAWN_MIN + Math.random() * ALMOND_WATER_RESPAWN_VARIANCE;
+      respawnTimer = respawnMin + Math.random() * respawnVariance;
       return {
         pickedUp: true,
-        itemId: "almond-water",
+        itemId,
         count: pickupCount,
-        staminaBonus: ALMOND_WATER_STAMINA_BONUS,
+        staminaBonus: isSuper ? undefined : ALMOND_WATER_STAMINA_BONUS,
       };
     },
   };
@@ -1313,6 +1359,332 @@ function createFlashlightPickup(
         pickedUp: true,
         itemId: "flashlight",
         count: pickupCount,
+      };
+    },
+  };
+}
+
+function createDetectorModel() {
+  const group = new THREE.Group();
+  group.name = "entity-detector-model";
+
+  const bodyMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2a2621,
+    emissive: 0x120806,
+    emissiveIntensity: 0.12,
+    roughness: 0.64,
+    metalness: 0.28,
+  });
+  const screenMaterial = new THREE.MeshStandardMaterial({
+    color: 0x111b18,
+    emissive: 0xff654d,
+    emissiveIntensity: 0.28,
+    roughness: 0.38,
+    metalness: 0.08,
+  });
+  const accentMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb85638,
+    emissive: 0x461006,
+    emissiveIntensity: 0.26,
+    roughness: 0.5,
+    metalness: 0.16,
+  });
+  const shadowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x090504,
+    transparent: true,
+    opacity: 0.24,
+    depthWrite: false,
+  });
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.2, 0.28), bodyMaterial);
+  body.position.y = 0.17;
+  group.add(body);
+
+  const screen = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.022, 0.16), screenMaterial);
+  screen.position.set(0.02, 0.286, 0);
+  group.add(screen);
+
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.42, 8), accentMaterial);
+  antenna.position.set(-0.16, 0.46, -0.02);
+  antenna.rotation.z = -0.32;
+  group.add(antenna);
+
+  const dish = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.009, 6, 24), accentMaterial);
+  dish.position.set(-0.22, 0.66, -0.03);
+  dish.rotation.x = Math.PI / 2;
+  group.add(dish);
+
+  for (let i = 0; i < 3; i += 1) {
+    const blip = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.012, 0.035), accentMaterial);
+    blip.position.set(-0.05 + i * 0.055, 0.304, -0.055 + i * 0.018);
+    group.add(blip);
+  }
+
+  const baseShadow = new THREE.Mesh(new THREE.CircleGeometry(0.38, 28), shadowMaterial);
+  baseShadow.rotation.x = -Math.PI / 2;
+  baseShadow.scale.z = 0.55;
+  baseShadow.position.y = 0.011;
+  group.add(baseShadow);
+
+  group.traverse((child) => {
+    if (child.isMesh) child.userData.itemId = "detector";
+  });
+  return group;
+}
+
+function createDetectorPickup(
+  scene,
+  { cols, rows, isCellOpen, getCellCenter, avoidPositions = [], blockedAabbs = [] },
+) {
+  const candidates = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      if (!isCellOpen(col, row)) continue;
+      const center = getCellCenter(col, row);
+      const isFarEnough = avoidPositions.every(
+        (position) => Math.hypot(center.x - position.x, center.z - position.z) > CELL_SIZE * 4.5,
+      );
+      const isClearOfProps = blockedAabbs.every(
+        (bounds) => !circleIntersectsAabb(center.x, center.z, DETECTOR_PICKUP_RADIUS, bounds),
+      );
+      if (isFarEnough && isClearOfProps) candidates.push({ col, row, x: center.x, z: center.z });
+    }
+  }
+
+  const group = new THREE.Group();
+  group.name = "entity-detector-pickup";
+  group.add(createDetectorModel());
+
+  const marker = new THREE.Mesh(
+    new THREE.RingGeometry(0.38, 0.52, 32),
+    new THREE.MeshBasicMaterial({
+      color: 0xff8b68,
+      transparent: true,
+      opacity: 0.12,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  marker.rotation.x = -Math.PI / 2;
+  marker.position.y = 0.018;
+  group.add(marker);
+  scene.add(group);
+
+  let active = false;
+  let respawnTimer = 0;
+  let pickupCount = 0;
+
+  function chooseCandidate() {
+    return candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
+  }
+
+  function placeAtRandomPosition() {
+    const candidate = chooseCandidate();
+    if (!candidate) {
+      group.visible = false;
+      active = false;
+      return;
+    }
+    group.position.set(candidate.x, 0, candidate.z);
+    group.rotation.y = Math.random() * Math.PI * 2;
+    group.visible = true;
+    active = true;
+  }
+
+  placeAtRandomPosition();
+
+  return {
+    inspect(camera) {
+      if (!active || !camera) return null;
+      camera.getWorldDirection(inspectForward);
+      inspectToItem.set(group.position.x, group.position.y + 0.26, group.position.z).sub(camera.position);
+      const distance = inspectToItem.length();
+      if (distance > DETECTOR_INSPECT_DISTANCE) return null;
+
+      inspectToItem.normalize();
+      const maxAngle = Math.min(0.15, Math.max(0.055, Math.atan2(0.5, distance)));
+      if (inspectForward.dot(inspectToItem) < Math.cos(maxAngle)) return null;
+
+      return {
+        id: "detector",
+        name: "ENTITY DETECTOR",
+        effect: "WIDE ENTITY PING / 5s SCAN",
+        action: "F / BUTTON PICK UP",
+        distance,
+      };
+    },
+
+    update(delta, elapsed, playerPosition) {
+      if (!active) {
+        respawnTimer -= delta;
+        if (respawnTimer <= 0) placeAtRandomPosition();
+        return {
+          visible: false,
+          available: false,
+          distance: Infinity,
+          respawn: Math.max(0, respawnTimer),
+        };
+      }
+
+      group.position.y = Math.sin(elapsed * 2.1 + 0.8) * 0.018;
+      marker.material.opacity = 0.08 + Math.sin(elapsed * 3.4) * 0.038 + 0.04;
+      const distance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
+      return {
+        visible: true,
+        available: distance <= DETECTOR_PICKUP_RADIUS,
+        distance,
+        respawn: 0,
+      };
+    },
+
+    tryPickup(playerPosition) {
+      if (!active) return { pickedUp: false };
+      const distance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
+      if (distance > DETECTOR_PICKUP_RADIUS) return { pickedUp: false };
+      pickupCount += 1;
+      active = false;
+      group.visible = false;
+      respawnTimer = DETECTOR_RESPAWN_MIN + Math.random() * DETECTOR_RESPAWN_VARIANCE;
+      return {
+        pickedUp: true,
+        itemId: "detector",
+        count: pickupCount,
+      };
+    },
+  };
+}
+
+function createBacteriaModel() {
+  const group = new THREE.Group();
+  group.name = "bacteria-lifeform";
+
+  const bodyMaterial = new THREE.MeshStandardMaterial({
+    color: 0x050303,
+    emissive: 0x170403,
+    emissiveIntensity: 0.18,
+    roughness: 0.86,
+    metalness: 0,
+  });
+  const sinewMaterial = new THREE.MeshStandardMaterial({
+    color: 0x16100e,
+    emissive: 0x3b0906,
+    emissiveIntensity: 0.22,
+    roughness: 0.74,
+    metalness: 0,
+  });
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xff3d22,
+    transparent: true,
+    opacity: 0.78,
+  });
+
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 1.45, 10), bodyMaterial);
+  torso.position.y = 1.12;
+  torso.rotation.z = 0.08;
+  group.add(torso);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 10), bodyMaterial);
+  head.position.set(0.03, 1.94, 0);
+  head.scale.set(0.78, 1.12, 0.7);
+  group.add(head);
+
+  const maw = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.024, 0.035), glowMaterial);
+  maw.position.set(0.03, 1.9, -0.145);
+  group.add(maw);
+
+  const limbs = [
+    [[-0.12, 1.58, 0], [-0.6, 0.72, -0.12], 0.028, 0.02],
+    [[0.13, 1.54, 0], [0.55, 0.68, -0.1], 0.028, 0.02],
+    [[-0.08, 0.56, 0], [-0.36, 0.02, -0.08], 0.036, 0.024],
+    [[0.09, 0.56, 0], [0.34, 0.02, -0.07], 0.036, 0.024],
+    [[0.01, 1.72, 0.02], [-0.2, 1.2, 0.34], 0.015, 0.009],
+    [[0.02, 1.76, 0.02], [0.26, 1.12, 0.3], 0.015, 0.009],
+  ];
+  limbs.forEach(([start, end, top, bottom]) => {
+    group.add(createLimbSegment(start, end, top, bottom, sinewMaterial));
+  });
+
+  for (let i = 0; i < 7; i += 1) {
+    const tendril = createLimbSegment(
+      [(Math.random() - 0.5) * 0.16, 1.4 + Math.random() * 0.45, 0.03],
+      [(Math.random() - 0.5) * 0.64, 0.55 + Math.random() * 0.55, 0.18 + Math.random() * 0.28],
+      0.009,
+      0.004,
+      sinewMaterial,
+    );
+    group.add(tendril);
+  }
+
+  return group;
+}
+
+function chooseBacteriaSpawn({ cols, rows, isCellOpen, getCellCenter, targetPosition, spawnPosition }) {
+  const candidates = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      if (!isCellOpen(col, row)) continue;
+      const center = getCellCenter(col, row);
+      const fromExit = Math.hypot(center.x - targetPosition.x, center.z - targetPosition.z);
+      const fromSpawn = Math.hypot(center.x - spawnPosition.x, center.z - spawnPosition.z);
+      if (fromExit <= BACTERIA_SPAWN_MAX_FROM_EXIT && fromSpawn >= BACTERIA_SPAWN_MIN_FROM_PLAYER) {
+        candidates.push({ ...center, score: fromExit + Math.random() * CELL_SIZE });
+      }
+    }
+  }
+  return candidates.sort((a, b) => a.score - b.score)[0] ?? targetPosition;
+}
+
+function resolveEntityStep(position, deltaX, deltaZ, isWalkable) {
+  const nextX = position.x + deltaX;
+  const nextZ = position.z + deltaZ;
+  if (isWalkable(nextX, nextZ, 0.32)) return { x: nextX, z: nextZ };
+  if (Math.abs(deltaX) > Math.abs(deltaZ)) {
+    if (isWalkable(nextX, position.z, 0.32)) return { x: nextX, z: position.z };
+    if (isWalkable(position.x, nextZ, 0.32)) return { x: position.x, z: nextZ };
+  } else {
+    if (isWalkable(position.x, nextZ, 0.32)) return { x: position.x, z: nextZ };
+    if (isWalkable(nextX, position.z, 0.32)) return { x: nextX, z: position.z };
+  }
+  return { x: position.x, z: position.z };
+}
+
+function createBacteriaEntity(scene, { spawnPosition, isWalkable, speed = 1.05 }) {
+  const group = createBacteriaModel();
+  group.position.set(spawnPosition.x, 0, spawnPosition.z);
+  group.rotation.y = Math.random() * Math.PI * 2;
+  scene.add(group);
+
+  let contact = false;
+  return {
+    update(delta, elapsed, playerPosition) {
+      const dx = playerPosition.x - group.position.x;
+      const dz = playerPosition.z - group.position.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance > 0.001 && !contact) {
+        const step = Math.min(distance, speed * delta);
+        const resolved = resolveEntityStep(
+          group.position,
+          (dx / distance) * step,
+          (dz / distance) * step,
+          isWalkable,
+        );
+        group.position.x = resolved.x;
+        group.position.z = resolved.z;
+        group.rotation.y = Math.atan2(dx, dz);
+      }
+
+      const sway = Math.sin(elapsed * 2.1) * 0.04;
+      group.position.y = Math.sin(elapsed * 3.6) * 0.025;
+      group.rotation.z = sway;
+      contact = contact || distance <= BACTERIA_CONTACT_RADIUS;
+      return {
+        id: "bacteria",
+        active: true,
+        contact,
+        distance,
+        x: group.position.x,
+        y: 1.45,
+        z: group.position.z,
       };
     },
   };
@@ -1734,6 +2106,18 @@ function createLevelZeroScene() {
     getCellCenter: cellCenter,
     avoidPositions: [spawnCell, exitPosition],
   });
+  const superAlmondWater = createAlmondWaterPickup(scene, {
+    cols: COLS,
+    rows: ROWS,
+    isCellOpen: isOpenCell,
+    getCellCenter: cellCenter,
+    avoidPositions: [spawnCell, exitPosition],
+    variant: "super",
+    respawnMin: SUPER_ALMOND_WATER_RESPAWN_MIN,
+    respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
+    initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
+    respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+  });
   const flashlight = createFlashlightPickup(scene, {
     cols: COLS,
     rows: ROWS,
@@ -1785,6 +2169,7 @@ function createLevelZeroScene() {
     scene.fog.density = 0.0095 + (1 - flicker) * 0.004;
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
+    const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
 
     return {
@@ -1792,8 +2177,13 @@ function createLevelZeroScene() {
       exitReached,
       flicker,
       lightState: updateLightState(delta, flicker),
-      focusItem: getFocusedItem(almondWater.inspect(camera), flashlight.inspect(camera)),
+      focusItem: getFocusedItem(
+        almondWater.inspect(camera),
+        superAlmondWater.inspect(camera),
+        flashlight.inspect(camera),
+      ),
       almondWater: almondWaterState,
+      superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
     };
   }
@@ -1809,7 +2199,7 @@ function createLevelZeroScene() {
     spawn,
     isWalkable,
     update,
-    tryPickup: (playerPosition) => tryPickupItems(playerPosition, flashlight, almondWater),
+    tryPickup: (playerPosition) => tryPickupItems(playerPosition, superAlmondWater, flashlight, almondWater),
   };
 }
 
@@ -1824,6 +2214,8 @@ const LEVEL_ONE_MIN_FIXTURE_DISTANCE = CELL_SIZE * 4.15;
 const LEVEL_ONE_DARK_ZONES = [
   { col: 1, row: 16, width: 8, height: 5 },
   { col: 23, row: 11, width: 10, height: 6 },
+  { col: 9, row: 19, width: 8, height: 4 },
+  { col: 18, row: 4, width: 6, height: 5 },
 ];
 
 const LEVEL_ONE_SUPPLY_ZONES = [
@@ -2656,6 +3048,19 @@ function createLevelOneScene() {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
   });
+  const superAlmondWater = createAlmondWaterPickup(scene, {
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    variant: "super",
+    respawnMin: SUPER_ALMOND_WATER_RESPAWN_MIN,
+    respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
+    initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
+    respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+  });
   const flashlight = createFlashlightPickup(scene, {
     cols: LEVEL_ONE_COLS,
     rows: LEVEL_ONE_ROWS,
@@ -2663,6 +3068,26 @@ function createLevelOneScene() {
     getCellCenter: levelOneCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+  });
+  const detector = createDetectorPickup(scene, {
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+  });
+  const bacteria = createBacteriaEntity(scene, {
+    spawnPosition: chooseBacteriaSpawn({
+      cols: LEVEL_ONE_COLS,
+      rows: LEVEL_ONE_ROWS,
+      isCellOpen: isLevelOneOpenCell,
+      getCellCenter: levelOneCellCenter,
+      targetPosition,
+      spawnPosition: spawnCell,
+    }),
+    isWalkable,
+    speed: 1.0,
   });
 
   let objectiveReached = false;
@@ -2710,15 +3135,27 @@ function createLevelOneScene() {
     scene.fog.density = 0.012 + (1 - flicker) * 0.009;
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
+    const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
+    const detectorState = detector.update(delta, elapsed, playerPosition);
+    const bacteriaState = bacteria.update(delta, elapsed, playerPosition);
 
     return {
       exitDistance: Math.round(exitDistance),
       exitReached: objectiveReached,
+      entityContact: bacteriaState.contact,
       flicker,
       almondWater: almondWaterState,
+      superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
-      focusItem: getFocusedItem(almondWater.inspect(camera), flashlight.inspect(camera)),
+      detector: detectorState,
+      entities: [bacteriaState],
+      focusItem: getFocusedItem(
+        almondWater.inspect(camera),
+        superAlmondWater.inspect(camera),
+        detector.inspect(camera),
+        flashlight.inspect(camera),
+      ),
       lightState: updateLightState(delta, flicker),
       statusText: objectiveReached
         ? "ELEVATOR ONLINE"
@@ -2740,7 +3177,8 @@ function createLevelOneScene() {
     spawn,
     isWalkable,
     update,
-    tryPickup: (playerPosition) => tryPickupItems(playerPosition, flashlight, almondWater),
+    tryPickup: (playerPosition) =>
+      tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
   };
 }
 
@@ -2756,6 +3194,8 @@ const LEVEL_TWO_DARK_ZONES = [
   { col: 12, row: 13, width: 5, height: 4 },
   { col: 24, row: 14, width: 4, height: 4 },
   { col: 31, row: 17, width: 4, height: 3 },
+  { col: 18, row: 5, width: 5, height: 5 },
+  { col: 7, row: 17, width: 5, height: 4 },
 ];
 
 function createLevelTwoLayout() {
@@ -3685,6 +4125,19 @@ function createLevelTwoScene() {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
   });
+  const superAlmondWater = createAlmondWaterPickup(scene, {
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    getCellCenter: levelTwoCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    variant: "super",
+    respawnMin: SUPER_ALMOND_WATER_RESPAWN_MIN,
+    respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
+    initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
+    respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+  });
   const flashlight = createFlashlightPickup(scene, {
     cols: LEVEL_TWO_COLS,
     rows: LEVEL_TWO_ROWS,
@@ -3692,6 +4145,26 @@ function createLevelTwoScene() {
     getCellCenter: levelTwoCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+  });
+  const detector = createDetectorPickup(scene, {
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    getCellCenter: levelTwoCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+  });
+  const bacteria = createBacteriaEntity(scene, {
+    spawnPosition: chooseBacteriaSpawn({
+      cols: LEVEL_TWO_COLS,
+      rows: LEVEL_TWO_ROWS,
+      isCellOpen: isLevelTwoOpenCell,
+      getCellCenter: levelTwoCellCenter,
+      targetPosition,
+      spawnPosition: spawnCell,
+    }),
+    isWalkable,
+    speed: 1.08,
   });
 
   let objectiveReached = false;
@@ -3748,15 +4221,27 @@ function createLevelTwoScene() {
     scene.fog.density = 0.016 + (1 - flicker) * 0.01;
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
+    const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
+    const detectorState = detector.update(delta, elapsed, playerPosition);
+    const bacteriaState = bacteria.update(delta, elapsed, playerPosition);
 
     return {
       exitDistance: Math.round(exitDistance),
       exitReached: objectiveReached,
+      entityContact: bacteriaState.contact,
       flicker,
       almondWater: almondWaterState,
+      superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
-      focusItem: getFocusedItem(almondWater.inspect(camera), flashlight.inspect(camera)),
+      detector: detectorState,
+      entities: [bacteriaState],
+      focusItem: getFocusedItem(
+        almondWater.inspect(camera),
+        superAlmondWater.inspect(camera),
+        detector.inspect(camera),
+        flashlight.inspect(camera),
+      ),
       lightState: updateLightState(delta, flicker),
       statusText: objectiveReached
         ? "SERVICE LOCKED"
@@ -3772,13 +4257,455 @@ function createLevelTwoScene() {
     levelName: "PIPE DREAMS",
     viewModelName: getViewModelName(viewModel),
     colliderCount: propColliders.length,
+    nextLevel: 3,
+    scene,
+    camera,
+    spawn,
+    isWalkable,
+    update,
+    tryPickup: (playerPosition) =>
+      tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
+  };
+}
+
+function createLevelThreeBrickTexture() {
+  return makeTexture(
+    512,
+    (context, size) => {
+      context.fillStyle = "#514334";
+      context.fillRect(0, 0, size, size);
+      const random = createSeededRandom(0x3e3001);
+      for (let y = 0; y < size; y += 48) {
+        const offset = (y / 48) % 2 === 0 ? 0 : 64;
+        for (let x = -offset; x < size; x += 128) {
+          context.fillStyle = `rgba(${70 + random() * 34},${54 + random() * 24},${38 + random() * 20},0.5)`;
+          context.fillRect(x + 1, y + 1, 126, 46);
+        }
+      }
+      context.strokeStyle = "rgba(18,16,13,0.42)";
+      context.lineWidth = 3;
+      for (let y = 0; y <= size; y += 48) {
+        context.beginPath();
+        context.moveTo(0, y);
+        context.lineTo(size, y);
+        context.stroke();
+      }
+      for (let y = 0; y < size; y += 48) {
+        const offset = (y / 48) % 2 === 0 ? 0 : 64;
+        for (let x = -offset; x < size; x += 128) {
+          context.beginPath();
+          context.moveTo(x, y);
+          context.lineTo(x, y + 48);
+          context.stroke();
+        }
+      }
+      drawSpeckles(context, size, 900, 0.13, "10,8,6", random);
+      drawSpeckles(context, size, 260, 0.1, "154,102,62", random);
+    },
+    2.8,
+    2.1,
+  );
+}
+
+function createLevelThreeFloorTexture() {
+  return makeTexture(
+    512,
+    (context, size) => {
+      const random = createSeededRandom(0x3e3002);
+      context.fillStyle = "#393b34";
+      context.fillRect(0, 0, size, size);
+      context.strokeStyle = "rgba(12,13,12,0.5)";
+      context.lineWidth = 3;
+      for (let x = 0; x <= size; x += 96) {
+        context.beginPath();
+        context.moveTo(x, 0);
+        context.lineTo(x + (random() - 0.5) * 10, size);
+        context.stroke();
+      }
+      for (let y = 0; y <= size; y += 96) {
+        context.beginPath();
+        context.moveTo(0, y);
+        context.lineTo(size, y + (random() - 0.5) * 10);
+        context.stroke();
+      }
+      context.globalAlpha = 0.22;
+      context.fillStyle = "#1d1f1c";
+      for (let i = 0; i < 18; i += 1) {
+        context.fillRect(random() * size, random() * size, 90 + random() * 190, 10 + random() * 32);
+      }
+      context.globalAlpha = 1;
+      drawSpeckles(context, size, 1200, 0.16, "8,8,7", random);
+      drawSpeckles(context, size, 260, 0.08, "181,126,70", random);
+    },
+    12,
+    8,
+  );
+}
+
+function createLevelThreeCeilingTexture() {
+  return makeTexture(
+    512,
+    (context, size) => {
+      const random = createSeededRandom(0x3e3003);
+      context.fillStyle = "#282c27";
+      context.fillRect(0, 0, size, size);
+      context.strokeStyle = "rgba(8,9,8,0.45)";
+      context.lineWidth = 3;
+      for (let y = 0; y <= size; y += 96) {
+        context.beginPath();
+        context.moveTo(0, y);
+        context.lineTo(size, y);
+        context.stroke();
+      }
+      for (let x = 0; x <= size; x += 128) {
+        context.beginPath();
+        context.moveTo(x, 0);
+        context.lineTo(x, size);
+        context.stroke();
+      }
+      drawSpeckles(context, size, 850, 0.13, "8,8,8", random);
+      drawSpeckles(context, size, 180, 0.08, "104,96,72", random);
+    },
+    8,
+    6,
+  );
+}
+
+function addLevelThreeElectricalDetails(scene) {
+  const colliders = [];
+  const panelMaterial = new THREE.MeshStandardMaterial({
+    color: 0x27302d,
+    emissive: 0x07140f,
+    emissiveIntensity: 0.18,
+    roughness: 0.62,
+    metalness: 0.32,
+  });
+  const warningMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb96c22,
+    emissive: 0x3a1602,
+    emissiveIntensity: 0.2,
+    roughness: 0.58,
+    metalness: 0.18,
+  });
+  const cableMaterial = new THREE.MeshStandardMaterial({
+    color: 0x050505,
+    emissive: 0x020101,
+    emissiveIntensity: 0.1,
+    roughness: 0.72,
+    metalness: 0.28,
+  });
+
+  const panels = [
+    { col: 7, row: 3 },
+    { col: 14, row: 8 },
+    { col: 21, row: 10 },
+    { col: 30, row: 19 },
+    { col: 34, row: 19 },
+  ];
+  panels.forEach((location, index) => {
+    const center = levelTwoCellCenter(location.col, location.row);
+    const mount = getLevelTwoTargetMount(center);
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.18, 0.12), panelMaterial);
+    panel.position.set(mount.x, 1.25, mount.z);
+    panel.rotation.y = mount.rotation;
+    scene.add(panel);
+
+    for (let i = 0; i < 4; i += 1) {
+      const switchMesh = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.04, 0.035), warningMaterial);
+      switchMesh.position.copy(panel.position);
+      switchMesh.position.y = 0.88 + i * 0.18;
+      switchMesh.position.x += Math.cos(mount.rotation) * (-0.26 + (i % 2) * 0.52);
+      switchMesh.position.z -= Math.sin(mount.rotation) * (-0.26 + (i % 2) * 0.52);
+      switchMesh.rotation.y = mount.rotation;
+      scene.add(switchMesh);
+    }
+
+    if (index % 2 === 0) {
+      const sign = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.25, 0.36),
+        new THREE.MeshStandardMaterial({
+          map: createWideSignTexture("HIGH VOLTAGE", "#2a1705", "#ffcf5e"),
+          emissive: 0x4a2504,
+          emissiveIntensity: 0.3,
+          roughness: 0.58,
+          side: THREE.DoubleSide,
+        }),
+      );
+      sign.position.set(mount.x, 2.12, mount.z);
+      sign.rotation.y = mount.rotation;
+      scene.add(sign);
+    }
+  });
+
+  const generators = [
+    { col: 12, row: 13, x: -0.35, z: 0.48, rot: 0.12 },
+    { col: 26, row: 14, x: 0.52, z: -0.4, rot: -0.2 },
+    { col: 8, row: 18, x: -0.2, z: 0.48, rot: 0.32 },
+  ];
+  generators.forEach((gen) => {
+    const center = levelTwoCellCenter(gen.col, gen.row);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.82, 0.78), panelMaterial);
+    mesh.position.set(center.x + gen.x, 0.43, center.z + gen.z);
+    mesh.rotation.y = gen.rot;
+    scene.add(mesh);
+    colliders.push({
+      minX: mesh.position.x - 0.78,
+      maxX: mesh.position.x + 0.78,
+      minZ: mesh.position.z - 0.68,
+      maxZ: mesh.position.z + 0.68,
+    });
+
+    const coil = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.018, 8, 28), warningMaterial);
+    coil.position.set(mesh.position.x, 0.72, mesh.position.z - 0.41);
+    coil.rotation.y = gen.rot;
+    scene.add(coil);
+  });
+
+  const cableGeometry = new THREE.CylinderGeometry(0.035, 0.035, 1, 8);
+  const cables = [
+    { col: 5, row: 3, axis: "x", length: CELL_SIZE * 9, y: CEILING_Y - 0.22, offsetZ: 0.88 },
+    { col: 14, row: 7, axis: "z", length: CELL_SIZE * 8, y: CEILING_Y - 0.26, offsetX: -0.9 },
+    { col: 19, row: 19, axis: "x", length: CELL_SIZE * 18, y: CEILING_Y - 0.24, offsetZ: -0.88 },
+    { col: 30, row: 15, axis: "z", length: CELL_SIZE * 8, y: 2.62, offsetX: 1.05 },
+  ];
+  cables.forEach((cable) => {
+    const center = levelTwoCellCenter(cable.col, cable.row);
+    const mesh = new THREE.Mesh(cableGeometry, cableMaterial);
+    mesh.scale.y = cable.length;
+    mesh.position.set(center.x + (cable.offsetX ?? 0), cable.y, center.z + (cable.offsetZ ?? 0));
+    if (cable.axis === "x") mesh.rotation.z = Math.PI / 2;
+    if (cable.axis === "z") mesh.rotation.x = Math.PI / 2;
+    scene.add(mesh);
+  });
+
+  return colliders;
+}
+
+function addLevelThreeBreakerDoor(scene, position) {
+  const mount = getLevelTwoTargetMount(position);
+  const doorMaterial = new THREE.MeshStandardMaterial({
+    color: 0x171b18,
+    emissive: 0x06120d,
+    emissiveIntensity: 0.2,
+    roughness: 0.62,
+    metalness: 0.34,
+  });
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.55, 2.1, 0.14), doorMaterial);
+  door.position.set(mount.x, 1.06, mount.z);
+  door.rotation.y = mount.rotation;
+  scene.add(door);
+
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.65, 0.45),
+    new THREE.MeshStandardMaterial({
+      map: createWideSignTexture("BREAKER EXIT", "#1a1508", "#ffe77a"),
+      emissive: 0x604208,
+      emissiveIntensity: 0.36,
+      roughness: 0.56,
+      side: THREE.DoubleSide,
+    }),
+  );
+  sign.position.set(mount.x, 2.42, mount.z);
+  sign.rotation.y = mount.rotation;
+  scene.add(sign);
+}
+
+function createLevelThreeScene() {
+  const scene = new THREE.Scene();
+  const FOG_COLOR = 0x242620;
+  scene.background = new THREE.Color(FOG_COLOR);
+  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.017);
+
+  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 78);
+  const spawnCell = levelTwoCellCenter(3, 3);
+  const targetPosition = levelTwoCellCenter(36, 20);
+  const spawn = {
+    x: spawnCell.x,
+    z: spawnCell.z,
+    yaw: -Math.PI * 0.34,
+  };
+  camera.position.set(spawn.x, 1.62, spawn.z);
+  camera.rotation.order = "YXZ";
+  camera.rotation.y = spawn.yaw;
+  const viewModel = attachFirstPersonViewModel(camera);
+  scene.add(camera);
+
+  const { northSouth, eastWest, fixturePositions } = collectLevelTwoTransforms();
+  fixturePositions.forEach((fixture, index) => {
+    fixture.color = index % 5 === 0 ? 0xff4d36 : 0xffd68a;
+    fixture.baseIntensity *= index % 4 === 0 ? 0.72 : 0.92;
+    fixture.range *= index % 4 === 0 ? 0.78 : 0.9;
+  });
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(LEVEL_TWO_COLS * CELL_SIZE, LEVEL_TWO_ROWS * CELL_SIZE),
+    new THREE.MeshStandardMaterial({
+      map: createLevelThreeFloorTexture(),
+      color: 0xffffff,
+      roughness: 0.92,
+    }),
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, 0, 0);
+  scene.add(floor);
+
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(LEVEL_TWO_COLS * CELL_SIZE, LEVEL_TWO_ROWS * CELL_SIZE),
+    new THREE.MeshStandardMaterial({
+      map: createLevelThreeCeilingTexture(),
+      color: 0xffffff,
+      roughness: 0.82,
+    }),
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set(0, CEILING_Y, 0);
+  scene.add(ceiling);
+
+  const wallMaterial = new THREE.MeshStandardMaterial({
+    map: createLevelThreeBrickTexture(),
+    color: 0xffffff,
+    roughness: 0.88,
+  });
+  addInstancedBoxes(
+    scene,
+    new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
+    wallMaterial,
+    northSouth,
+  );
+  addInstancedBoxes(
+    scene,
+    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
+    wallMaterial,
+    eastWest,
+  );
+
+  scene.add(new THREE.HemisphereLight(0xffe0aa, 0x20251f, 0.72));
+  const fill = new THREE.DirectionalLight(0xffb86e, 0.12);
+  fill.position.set(-8, CEILING_Y - 0.4, 12);
+  scene.add(fill);
+
+  const fixtures = createLevelTwoLights(scene, fixturePositions);
+  const updateLightState = createStableLightState("VOLT", {
+    dimBelow: 0.32,
+    normalAbove: 0.5,
+    dimDelay: 0.45,
+    normalDelay: 0.8,
+  });
+  addLevelThreeBreakerDoor(scene, targetPosition);
+  addLevelTwoDarkPockets(scene);
+  const propColliders = addLevelThreeElectricalDetails(scene);
+  const almondWater = createAlmondWaterPickup(scene, {
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    getCellCenter: levelTwoCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+  });
+  const superAlmondWater = createAlmondWaterPickup(scene, {
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    getCellCenter: levelTwoCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    variant: "super",
+    respawnMin: SUPER_ALMOND_WATER_RESPAWN_MIN,
+    respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
+    initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
+    respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+  });
+  const flashlight = createFlashlightPickup(scene, {
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    getCellCenter: levelTwoCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+  });
+
+  let objectiveReached = false;
+
+  function isWalkable(x, z, radius = 0.36) {
+    const corner = radius * 0.72;
+    const samples = [
+      [0, 0],
+      [radius, 0],
+      [-radius, 0],
+      [0, radius],
+      [0, -radius],
+      [corner, corner],
+      [-corner, corner],
+      [corner, -corner],
+      [-corner, -corner],
+    ];
+    const isInOpenCells = samples.every(([offsetX, offsetZ]) => {
+      const cell = levelTwoWorldToCell(x + offsetX, z + offsetZ);
+      return isLevelTwoOpenCell(cell.col, cell.row);
+    });
+    if (!isInOpenCells) return false;
+    return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
+  }
+
+  function update(delta, elapsed, playerPosition) {
+    let lightTotal = 0;
+    fixtures.forEach((fixture, index) => {
+      const hum = 0.74 + Math.sin(elapsed * 1.42 + fixture.phase) * 0.08;
+      const surge = Math.sin(elapsed * fixture.speed + fixture.phase * 1.3) > 0.94 ? 1.32 : 1;
+      const brownout = index % 4 === 0 && Math.sin(elapsed * 2.1 + fixture.phase) > 0.72 ? 0.44 : 1;
+      const pulse = Math.max(0.18, hum * surge * brownout - fixture.weak);
+      fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.7;
+      updateFixturePointLight(fixture, pulse, 1.02);
+      lightTotal += pulse;
+    });
+
+    const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.42;
+    const exitDistance = Math.hypot(
+      playerPosition.x - targetPosition.x,
+      playerPosition.z - targetPosition.z,
+    );
+    if (exitDistance < LEVEL_TWO_EXIT_TRIGGER_RADIUS) objectiveReached = true;
+    scene.fog.density = 0.017 + (1 - flicker) * 0.012;
+    updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
+    const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
+    const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
+    const flashlightState = flashlight.update(delta, elapsed, playerPosition);
+
+    return {
+      exitDistance: Math.round(exitDistance),
+      exitReached: objectiveReached,
+      flicker,
+      almondWater: almondWaterState,
+      superAlmondWater: superAlmondWaterState,
+      flashlight: flashlightState,
+      entities: [],
+      focusItem: getFocusedItem(
+        almondWater.inspect(camera),
+        superAlmondWater.inspect(camera),
+        flashlight.inspect(camera),
+      ),
+      lightState: updateLightState(delta, flicker),
+      statusText: objectiveReached
+        ? "BREAKER OPEN"
+        : exitDistance < 8
+          ? "BREAKER TRACE"
+          : "ELECTRICAL STATION",
+    };
+  }
+
+  return {
+    level: 3,
+    levelLabel: "LEVEL 3",
+    levelName: "ELECTRICAL STATION",
+    viewModelName: getViewModelName(viewModel),
+    colliderCount: propColliders.length,
     nextLevel: null,
     scene,
     camera,
     spawn,
     isWalkable,
     update,
-    tryPickup: (playerPosition) => tryPickupItems(playerPosition, flashlight, almondWater),
+    tryPickup: (playerPosition) => tryPickupItems(playerPosition, superAlmondWater, flashlight, almondWater),
   };
 }
 
@@ -3786,5 +4713,6 @@ export function createBackroomsScene(level = 0) {
   const levelInfo = getBackroomsLevelInfo(level);
   if (levelInfo.level === 1) return createLevelOneScene();
   if (levelInfo.level === 2) return createLevelTwoScene();
+  if (levelInfo.level === 3) return createLevelThreeScene();
   return createLevelZeroScene();
 }

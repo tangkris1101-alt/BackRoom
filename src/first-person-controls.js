@@ -10,7 +10,10 @@ const STAMINA_RECOVERY_DELAY = 0.55;
 const MIN_SPRINT_STAMINA = 0;
 const ALMOND_WATER_STAMINA_BONUS = 50;
 const ALMOND_WATER_EFFECT_DURATION = 45;
-const MAX_STAMINA_LIMIT = MAX_STAMINA + ALMOND_WATER_STAMINA_BONUS;
+const ALMOND_WATER_MAX_STAMINA = MAX_STAMINA + ALMOND_WATER_STAMINA_BONUS;
+const SUPER_ALMOND_WATER_MAX_STAMINA = 250;
+const SUPER_ALMOND_WATER_EFFECT_DURATION = 25;
+const SUPER_ALMOND_WATER_RECOVERY_MULTIPLIER = 2;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -54,6 +57,7 @@ export class FirstPersonControls {
     this.stamina = MAX_STAMINA;
     this.staminaRecoveryDelay = 0;
     this.almondWaterTimer = 0;
+    this.superAlmondWaterTimer = 0;
     this.isSprinting = false;
     this.walkCycle = 0;
     this.walkBobStrength = 0;
@@ -115,8 +119,7 @@ export class FirstPersonControls {
     this.verticalVelocity = 0;
     this.isGrounded = true;
     this.jumpQueued = false;
-    if (this.almondWaterTimer <= 0) this.staminaMax = MAX_STAMINA;
-    this.stamina = this.staminaMax;
+    this.refreshStaminaModifiers({ fill: true });
     this.staminaRecoveryDelay = 0;
     this.isSprinting = false;
     this.isMoving = false;
@@ -179,6 +182,9 @@ export class FirstPersonControls {
     this.canvas.dataset.staminaBaseMax = MAX_STAMINA.toFixed(0);
     this.canvas.dataset.almondWaterActive = String(this.almondWaterTimer > 0);
     this.canvas.dataset.almondWaterRemaining = this.almondWaterTimer.toFixed(1);
+    this.canvas.dataset.superAlmondWaterActive = String(this.superAlmondWaterTimer > 0);
+    this.canvas.dataset.superAlmondWaterRemaining = this.superAlmondWaterTimer.toFixed(1);
+    this.canvas.dataset.staminaRecoveryMultiplier = this.getStaminaRecoveryMultiplier().toFixed(1);
     this.canvas.dataset.sprinting = String(this.isSprinting);
     this.canvas.dataset.moving = String(this.isMoving);
     this.canvas.dataset.movementSpeed = this.movementSpeed.toFixed(3);
@@ -399,13 +405,31 @@ export class FirstPersonControls {
     }
   }
 
-  updateAlmondWaterEffect(delta) {
-    if (this.almondWaterTimer <= 0) return;
-    this.almondWaterTimer = Math.max(0, this.almondWaterTimer - delta);
-    if (this.almondWaterTimer === 0) {
-      this.staminaMax = MAX_STAMINA;
-      this.stamina = Math.min(this.stamina, this.staminaMax);
+  getStaminaRecoveryMultiplier() {
+    return this.superAlmondWaterTimer > 0 ? SUPER_ALMOND_WATER_RECOVERY_MULTIPLIER : 1;
+  }
+
+  getCurrentStaminaMax() {
+    if (this.superAlmondWaterTimer > 0) return SUPER_ALMOND_WATER_MAX_STAMINA;
+    if (this.almondWaterTimer > 0) return ALMOND_WATER_MAX_STAMINA;
+    return MAX_STAMINA;
+  }
+
+  refreshStaminaModifiers({ fill = false } = {}) {
+    this.staminaMax = this.getCurrentStaminaMax();
+    this.stamina = fill ? this.staminaMax : Math.min(this.stamina, this.staminaMax);
+  }
+
+  updateStaminaEffects(delta) {
+    const previousMax = this.staminaMax;
+    if (this.almondWaterTimer > 0) {
+      this.almondWaterTimer = Math.max(0, this.almondWaterTimer - delta);
     }
+    if (this.superAlmondWaterTimer > 0) {
+      this.superAlmondWaterTimer = Math.max(0, this.superAlmondWaterTimer - delta);
+    }
+    this.refreshStaminaModifiers({ fill: false });
+    if (this.staminaMax < previousMax) this.stamina = Math.min(this.stamina, this.staminaMax);
   }
 
   updateHeadBob(delta, horizontalDistance, hasMovementInput) {
@@ -431,7 +455,7 @@ export class FirstPersonControls {
   }
 
   update(delta) {
-    this.updateAlmondWaterEffect(delta);
+    this.updateStaminaEffects(delta);
     let inputX = this.joystickInput.x;
     let inputY = this.joystickInput.y;
     this.isSprinting = false;
@@ -485,7 +509,9 @@ export class FirstPersonControls {
     if (!this.isSprinting) {
       this.staminaRecoveryDelay = Math.max(0, this.staminaRecoveryDelay - delta);
       if (this.staminaRecoveryDelay === 0) {
-        const recoveryRate = hasMovementInput ? STAMINA_RECOVERY_RATE * 0.72 : STAMINA_RECOVERY_RATE;
+        const recoveryRate =
+          (hasMovementInput ? STAMINA_RECOVERY_RATE * 0.72 : STAMINA_RECOVERY_RATE) *
+          this.getStaminaRecoveryMultiplier();
         this.stamina = Math.min(this.staminaMax, this.stamina + recoveryRate * delta);
       }
     }
@@ -507,14 +533,59 @@ export class FirstPersonControls {
       almondWaterActive: this.almondWaterTimer > 0,
       almondWaterRemaining: this.almondWaterTimer,
       almondWaterDuration: ALMOND_WATER_EFFECT_DURATION,
+      superAlmondWaterActive: this.superAlmondWaterTimer > 0,
+      superAlmondWaterRemaining: this.superAlmondWaterTimer,
+      superAlmondWaterDuration: SUPER_ALMOND_WATER_EFFECT_DURATION,
+      staminaRecoveryMultiplier: this.getStaminaRecoveryMultiplier(),
+      activeBuffs: this.getActiveBuffs(),
     };
   }
 
+  getActiveBuffs() {
+    if (this.superAlmondWaterTimer > 0) {
+      return [
+        {
+          id: "super-almond-water",
+          remaining: this.superAlmondWaterTimer,
+          duration: SUPER_ALMOND_WATER_EFFECT_DURATION,
+          staminaMax: SUPER_ALMOND_WATER_MAX_STAMINA,
+          recoveryMultiplier: SUPER_ALMOND_WATER_RECOVERY_MULTIPLIER,
+        },
+      ];
+    }
+
+    if (this.almondWaterTimer > 0) {
+      return [
+        {
+          id: "almond-water",
+          remaining: this.almondWaterTimer,
+          duration: ALMOND_WATER_EFFECT_DURATION,
+          staminaMax: ALMOND_WATER_MAX_STAMINA,
+          recoveryMultiplier: 1,
+        },
+      ];
+    }
+
+    return [];
+  }
+
   drinkAlmondWater(bonus = ALMOND_WATER_STAMINA_BONUS) {
-    const temporaryBonus = Math.max(0, Math.min(bonus, MAX_STAMINA_LIMIT - MAX_STAMINA));
-    this.staminaMax = Math.min(MAX_STAMINA_LIMIT, MAX_STAMINA + temporaryBonus);
+    if (this.superAlmondWaterTimer <= 0) {
+      const temporaryBonus = Math.max(0, Math.min(bonus, ALMOND_WATER_MAX_STAMINA - MAX_STAMINA));
+      this.almondWaterTimer = ALMOND_WATER_EFFECT_DURATION;
+      this.staminaMax = Math.min(ALMOND_WATER_MAX_STAMINA, MAX_STAMINA + temporaryBonus);
+    }
     this.stamina = this.staminaMax;
-    this.almondWaterTimer = ALMOND_WATER_EFFECT_DURATION;
+    this.staminaRecoveryDelay = 0;
+    this.isSprinting = false;
+    this.syncCameraState();
+    return this.getState();
+  }
+
+  drinkSuperAlmondWater() {
+    this.superAlmondWaterTimer = SUPER_ALMOND_WATER_EFFECT_DURATION;
+    this.almondWaterTimer = 0;
+    this.refreshStaminaModifiers({ fill: true });
     this.staminaRecoveryDelay = 0;
     this.isSprinting = false;
     this.syncCameraState();
