@@ -19,6 +19,10 @@
             <option value="2">LEVEL 2</option>
           </select>
           <span id="status-text">NO SIGNAL</span>
+          <select id="language-select" class="language-select" aria-label="Language">
+            <option value="zh-CN">简体中文</option>
+            <option value="en">English</option>
+          </select>
         </div>
         <div class="hud-stack">
           <div class="meters" aria-live="polite">
@@ -32,6 +36,13 @@
               <div id="stamina-fill" class="stamina-meter__fill"></div>
             </div>
             <span id="stamina-readout">150/150</span>
+          </div>
+          <div id="flashlight-meter" class="flashlight-meter" aria-label="Flashlight battery" hidden>
+            <span class="flashlight-meter__label">LIGHT</span>
+            <div class="flashlight-meter__track">
+              <div id="flashlight-fill" class="flashlight-meter__fill"></div>
+            </div>
+            <span id="flashlight-readout">--</span>
           </div>
         </div>
       </header>
@@ -64,6 +75,9 @@
       </button>
       <button id="use-button" class="use-button" type="button" aria-label="Pick up" hidden>
         <span>F</span>
+      </button>
+      <button id="flashlight-button" class="flashlight-button" type="button" aria-label="Toggle flashlight" hidden>
+        <span></span>
       </button>
     </main>
     <script type="module" src="/src/main.js"></script>

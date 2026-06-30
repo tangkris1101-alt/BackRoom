@@ -59,6 +59,8 @@ export class FirstPersonControls {
     this.walkBobStrength = 0;
     this.headBobY = 0;
     this.rollOffset = 0;
+    this.isMoving = false;
+    this.movementSpeed = 0;
 
     this.onCanvasPointerDown = this.onCanvasPointerDown.bind(this);
     this.onCanvasPointerMove = this.onCanvasPointerMove.bind(this);
@@ -117,6 +119,8 @@ export class FirstPersonControls {
     this.stamina = this.staminaMax;
     this.staminaRecoveryDelay = 0;
     this.isSprinting = false;
+    this.isMoving = false;
+    this.movementSpeed = 0;
     this.yaw = this.spawn.yaw;
     this.pitch = -0.025;
     this.applyRotation();
@@ -176,6 +180,8 @@ export class FirstPersonControls {
     this.canvas.dataset.almondWaterActive = String(this.almondWaterTimer > 0);
     this.canvas.dataset.almondWaterRemaining = this.almondWaterTimer.toFixed(1);
     this.canvas.dataset.sprinting = String(this.isSprinting);
+    this.canvas.dataset.moving = String(this.isMoving);
+    this.canvas.dataset.movementSpeed = this.movementSpeed.toFixed(3);
     this.canvas.dataset.headBob = this.headBobY.toFixed(3);
   }
 
@@ -305,6 +311,8 @@ export class FirstPersonControls {
   onBlur() {
     this.keys.clear();
     this.isSprinting = false;
+    this.isMoving = false;
+    this.movementSpeed = 0;
     this.resetJoystick();
   }
 
@@ -402,6 +410,8 @@ export class FirstPersonControls {
 
   updateHeadBob(delta, horizontalDistance, hasMovementInput) {
     const moving = hasMovementInput && horizontalDistance > 0.0001 && this.isGrounded;
+    this.isMoving = moving;
+    this.movementSpeed = delta > 0 ? horizontalDistance / delta : 0;
     const targetStrength = moving ? 1 : 0;
     const blend = Math.min(1, delta * (moving ? 10 : 7));
     this.walkBobStrength += (targetStrength - this.walkBobStrength) * blend;
@@ -491,6 +501,9 @@ export class FirstPersonControls {
       staminaMax: this.staminaMax,
       staminaBaseMax: MAX_STAMINA,
       sprinting: this.isSprinting,
+      moving: this.isMoving,
+      grounded: this.isGrounded,
+      movementSpeed: this.movementSpeed,
       almondWaterActive: this.almondWaterTimer > 0,
       almondWaterRemaining: this.almondWaterTimer,
       almondWaterDuration: ALMOND_WATER_EFFECT_DURATION,

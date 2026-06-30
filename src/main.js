@@ -8,8 +8,10 @@ const canvas = document.querySelector("#scene");
 const joystick = document.querySelector("#joystick");
 const jumpButton = document.querySelector("#jump-button");
 const useButton = document.querySelector("#use-button");
+const flashlightButton = document.querySelector("#flashlight-button");
 const statusText = document.querySelector("#status-text");
 const levelSelect = document.querySelector("#level-select");
+const languageSelect = document.querySelector("#language-select");
 const distanceReadout = document.querySelector("#distance-readout");
 const lightReadout = document.querySelector("#light-readout");
 const fpsReadout = document.querySelector("#fps-readout");
@@ -17,6 +19,9 @@ const hud = document.querySelector(".hud");
 const staminaMeter = document.querySelector(".stamina-meter");
 const staminaFill = document.querySelector("#stamina-fill");
 const staminaReadout = document.querySelector("#stamina-readout");
+const flashlightMeter = document.querySelector("#flashlight-meter");
+const flashlightFill = document.querySelector("#flashlight-fill");
+const flashlightReadout = document.querySelector("#flashlight-readout");
 const loadingOverlay = document.querySelector("#loading-overlay");
 const loadingFill = document.querySelector("#loading-fill");
 const loadingStatus = document.querySelector("#loading-status");
@@ -36,8 +41,38 @@ const FPS_LOW_THRESHOLD = 48;
 const FPS_HIGH_THRESHOLD = 58;
 const OVERLAY_FADE_MS = 460;
 const LEVEL_TRANSITION_MS = 1250;
+const FLASHLIGHT_BATTERY_MAX = 100;
+const FLASHLIGHT_DRAIN_RATE = 3.4;
+const LANGUAGE_STORAGE_KEY = "backrooms-language";
 
-[hud, joystick, jumpButton, useButton, loadingOverlay].forEach((element) => {
+const ITEM_TEXT = {
+  "zh-CN": {
+    "almond-water": {
+      name: "杏仁水",
+      effect: "+50 疾跑上限 / 45秒",
+      action: "F / 按钮拾取并饮用",
+    },
+    flashlight: {
+      name: "手电筒",
+      effect: "照亮前方 / 电量有限",
+      action: "F / 按钮拾取 · 拾取后按 E 开关",
+    },
+  },
+  en: {
+    "almond-water": {
+      name: "ALMOND WATER",
+      effect: "+50 STAMINA CAPACITY / 45s",
+      action: "F / BUTTON PICK UP",
+    },
+    flashlight: {
+      name: "FLASHLIGHT",
+      effect: "FORWARD BEAM / LIMITED BATTERY",
+      action: "F / BUTTON PICK UP · E TO TOGGLE AFTER PICKUP",
+    },
+  },
+};
+
+[hud, joystick, jumpButton, useButton, flashlightButton, loadingOverlay].forEach((element) => {
   element?.removeAttribute("hidden");
 });
 exitOverlay?.setAttribute("hidden", "");
@@ -53,12 +88,25 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.18;
 
+const flashlightLight = new THREE.SpotLight(0xfff2c5, 0, 34, 0.46, 0.6, 1.85);
+flashlightLight.position.set(0.18, -0.12, -0.16);
+flashlightLight.name = "player-flashlight";
+const flashlightTarget = new THREE.Object3D();
+flashlightTarget.position.set(0, -0.16, -1);
+
 function getInitialLevel() {
   const level = Number(new URLSearchParams(window.location.search).get("level"));
   return getBackroomsLevelInfo(level).level;
 }
 
 let world = createBackroomsScene(getInitialLevel());
+function attachFlashlightToCamera(camera) {
+  camera.add(flashlightLight);
+  camera.add(flashlightTarget);
+  flashlightLight.target = flashlightTarget;
+}
+
+attachFlashlightToCamera(world.camera);
 const controls = new FirstPersonControls({
   camera: world.camera,
   canvas,
@@ -79,6 +127,21 @@ let exitComplete = false;
 let levelTransition = null;
 let pickupFlashUntil = 0;
 let pickupFlashText = "";
+let flashlightOwned = false;
+let flashlightOn = false;
+let flashlightBattery = 0;
+let currentLanguage = "zh-CN";
+
+try {
+  const savedLanguage = window.localStorage?.getItem(LANGUAGE_STORAGE_KEY);
+  if (savedLanguage === "zh-CN" || savedLanguage === "en") currentLanguage = savedLanguage;
+} catch {
+  currentLanguage = "zh-CN";
+}
+
+if (languageSelect) languageSelect.value = currentLanguage;
+document.documentElement.lang = currentLanguage;
+canvas.dataset.language = currentLanguage;
 
 function syncLevelHud() {
   if (levelSelect) levelSelect.value = String(world.level);
@@ -116,6 +179,7 @@ function updateLevelUrl(level) {
 function loadLevel(level, { updateUrl = false } = {}) {
   const previousWorld = world;
   world = createBackroomsScene(level);
+  attachFlashlightToCamera(world.camera);
   controls.setWorld({
     camera: world.camera,
     isWalkable: world.isWalkable,
@@ -178,6 +242,18 @@ levelSelect?.addEventListener("change", () => {
   canvas.dataset.exitReached = "false";
   hideExitOverlay();
   loadLevel(nextLevel, { updateUrl: true });
+});
+
+languageSelect?.addEventListener("change", () => {
+  const nextLanguage = languageSelect.value === "en" ? "en" : "zh-CN";
+  currentLanguage = nextLanguage;
+  document.documentElement.lang = nextLanguage;
+  canvas.dataset.language = nextLanguage;
+  try {
+    window.localStorage?.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
+  } catch {
+    // Language fallback is non-critical.
+  }
 });
 
 function resize() {
@@ -254,15 +330,70 @@ function updateStaminaHud(controlState) {
   canvas.dataset.sprinting = String(controlState.sprinting);
 }
 
+function updateFlashlightHud() {
+  const ratio = FLASHLIGHT_BATTERY_MAX > 0 ? flashlightBattery / FLASHLIGHT_BATTERY_MAX : 0;
+  if (flashlightMeter) {
+    flashlightMeter.hidden = !flashlightOwned;
+    flashlightMeter.dataset.state = ratio < 0.18 ? "low" : flashlightOn ? "on" : "ready";
+  }
+  if (flashlightFill) flashlightFill.style.transform = `scaleX(${Math.max(0, ratio).toFixed(3)})`;
+  if (flashlightReadout) flashlightReadout.textContent = flashlightOwned ? `${Math.round(flashlightBattery)}%` : "--";
+  if (flashlightButton) {
+    flashlightButton.classList.toggle("is-visible", flashlightOwned);
+    flashlightButton.classList.toggle("is-active", flashlightOn);
+    flashlightButton.disabled = !flashlightOwned || flashlightBattery <= 0;
+  }
+  canvas.dataset.flashlightOwned = String(flashlightOwned);
+  canvas.dataset.flashlightOn = String(flashlightOn);
+  canvas.dataset.flashlightBattery = String(Math.round(flashlightBattery));
+}
+
+function updateFlashlight(delta) {
+  if (flashlightOn) {
+    flashlightBattery = Math.max(0, flashlightBattery - FLASHLIGHT_DRAIN_RATE * delta);
+    if (flashlightBattery <= 0) flashlightOn = false;
+  }
+
+  const ratio = FLASHLIGHT_BATTERY_MAX > 0 ? flashlightBattery / FLASHLIGHT_BATTERY_MAX : 0;
+  flashlightLight.intensity = flashlightOwned && flashlightOn && flashlightBattery > 0 ? 4.8 * Math.max(0.44, ratio) : 0;
+  flashlightLight.distance = 20 + ratio * 18;
+  updateFlashlightHud();
+}
+
+function toggleFlashlight() {
+  if (!flashlightOwned || flashlightBattery <= 0) return;
+  flashlightOn = !flashlightOn;
+  updateFlashlightHud();
+}
+
+function acquireFlashlight(count) {
+  const wasOwned = flashlightOwned;
+  flashlightOwned = true;
+  flashlightOn = false;
+  flashlightBattery = FLASHLIGHT_BATTERY_MAX;
+  pickupFlashText = wasOwned ? "FLASHLIGHT BATTERY FULL" : "FLASHLIGHT ACQUIRED";
+  pickupFlashUntil = clock.elapsedTime + 1.7;
+  canvas.dataset.flashlightPickups = String(count ?? 1);
+  updateFlashlightHud();
+}
+
 function updatePickupHud(metrics) {
-  const pickup = metrics.almondWater;
-  const canDrink = Boolean(pickup?.available);
-  useButton?.classList.toggle("is-visible", canDrink);
-  if (useButton) useButton.disabled = !canDrink;
-  canvas.dataset.almondWaterVisible = String(Boolean(pickup?.visible));
+  const almondWater = metrics.almondWater;
+  const flashlight = metrics.flashlight;
+  const canDrink = Boolean(almondWater?.available);
+  const canTakeFlashlight = Boolean(flashlight?.available);
+  const canUse = canDrink || canTakeFlashlight;
+  useButton?.classList.toggle("is-visible", canUse);
+  if (useButton) useButton.disabled = !canUse;
+  canvas.dataset.almondWaterVisible = String(Boolean(almondWater?.visible));
   canvas.dataset.almondWaterAvailable = String(canDrink);
-  canvas.dataset.almondWaterDistance = Number.isFinite(pickup?.distance)
-    ? String(Math.round(pickup.distance))
+  canvas.dataset.almondWaterDistance = Number.isFinite(almondWater?.distance)
+    ? String(Math.round(almondWater.distance))
+    : "";
+  canvas.dataset.flashlightVisible = String(Boolean(flashlight?.visible));
+  canvas.dataset.flashlightAvailable = String(canTakeFlashlight);
+  canvas.dataset.flashlightDistance = Number.isFinite(flashlight?.distance)
+    ? String(Math.round(flashlight.distance))
     : "";
 }
 
@@ -275,9 +406,10 @@ function updateItemInfo(metrics) {
     if (!hasFocus) itemInfo.hidden = true;
   }
   if (hasFocus) {
-    if (itemInfoName) itemInfoName.textContent = item.name;
-    if (itemInfoEffect) itemInfoEffect.textContent = item.effect;
-    if (itemInfoAction) itemInfoAction.textContent = item.action;
+    const localized = ITEM_TEXT[currentLanguage]?.[item.id] ?? item;
+    if (itemInfoName) itemInfoName.textContent = localized.name ?? item.name;
+    if (itemInfoEffect) itemInfoEffect.textContent = localized.effect ?? item.effect;
+    if (itemInfoAction) itemInfoAction.textContent = localized.action ?? item.action;
   }
   canvas.dataset.focusItem = hasFocus ? item.id : "";
   canvas.dataset.focusItemDistance = Number.isFinite(item?.distance)
@@ -285,17 +417,22 @@ function updateItemInfo(metrics) {
     : "";
 }
 
-function useAlmondWater() {
+function usePickup() {
   if (exitComplete || levelTransition) return;
   const pickup = world.tryPickup?.(world.camera.position);
   if (!pickup?.pickedUp) return;
 
-  const controlState = controls.drinkAlmondWater(pickup.staminaBonus);
-  pickupFlashText = `ALMOND WATER ${Math.ceil(controlState.almondWaterRemaining)}s`;
-  pickupFlashUntil = clock.elapsedTime + 1.7;
+  if (pickup.itemId === "flashlight") {
+    acquireFlashlight(pickup.count);
+  } else {
+    const controlState = controls.drinkAlmondWater(pickup.staminaBonus);
+    pickupFlashText = `ALMOND WATER ${Math.ceil(controlState.almondWaterRemaining)}s`;
+    pickupFlashUntil = clock.elapsedTime + 1.7;
+    canvas.dataset.almondWaterDrinks = String(pickup.count);
+  }
+
   useButton?.classList.add("is-active");
   window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
-  canvas.dataset.almondWaterDrinks = String(pickup.count);
 }
 
 function updateHud(metrics, controlState, elapsed) {
@@ -304,7 +441,9 @@ function updateHud(metrics, controlState, elapsed) {
   statusText.textContent =
     elapsed < pickupFlashUntil
       ? pickupFlashText
-      : metrics.almondWater?.available
+      : metrics.flashlight?.available
+        ? "FLASHLIGHT"
+        : metrics.almondWater?.available
         ? "ALMOND WATER"
         : metrics.statusText ??
           (metrics.exitReached
@@ -325,6 +464,7 @@ function animate() {
   if (!exitComplete && !levelTransition) controls.update(delta);
   const controlState = controls.getState();
   const metrics = world.update(delta, elapsed, world.camera.position);
+  updateFlashlight(delta);
   if (metrics.exitReached && !exitComplete && !levelTransition) {
     if (world.nextLevel !== null && world.nextLevel !== undefined) {
       beginLevelTransition(world.nextLevel);
@@ -334,7 +474,7 @@ function animate() {
       canvas.dataset.exitReached = "true";
     }
   }
-  ambientHum.update(metrics.flicker);
+  ambientHum.update(metrics.flicker, controlState);
   updateHud(metrics, controlState, elapsed);
   updatePerformanceReadout(delta);
   updateLoadingOverlay();
@@ -353,17 +493,26 @@ function startAudioOnce() {
 }
 
 function onUseKeyDown(event) {
-  if (event.code !== "KeyF") return;
+  if (event.code !== "KeyF" && event.code !== "KeyE") return;
   const tagName = event.target?.tagName;
   if (tagName === "INPUT" || tagName === "SELECT" || tagName === "TEXTAREA") return;
   event.preventDefault();
-  useAlmondWater();
+  if (event.code === "KeyE") {
+    toggleFlashlight();
+    return;
+  }
+  usePickup();
 }
 
 useButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
-  useAlmondWater();
+  usePickup();
+});
+flashlightButton?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  toggleFlashlight();
 });
 window.addEventListener("resize", resize);
 window.addEventListener("pointerdown", startAudioOnce, { passive: true });
