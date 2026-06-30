@@ -261,6 +261,7 @@ let pickupFlashText = "";
 let flashlightOwned = false;
 let flashlightOn = false;
 let flashlightBattery = 0;
+let detectorOwned = false;
 let detectorActiveTimer = 0;
 let detectorCooldownTimer = 0;
 let currentLanguage = "zh-CN";
