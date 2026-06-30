@@ -29,6 +29,10 @@ const DETECTOR_RESPAWN_VARIANCE = 42;
 const BACTERIA_CONTACT_RADIUS = 0.74;
 const BACTERIA_SPAWN_MIN_FROM_PLAYER = CELL_SIZE * 7;
 const BACTERIA_SPAWN_MAX_FROM_EXIT = CELL_SIZE * 6.4;
+const HOUND_CONTACT_RADIUS = 0.86;
+const ENTITY_INSPECT_DISTANCE = 10.5;
+const INTERACTION_RADIUS = 3.0;
+const INTERACTION_INSPECT_DISTANCE = 8.0;
 
 const LAYOUT_COLS = 31;
 const LAYOUT_ROWS = 27;
@@ -38,6 +42,7 @@ const LEVEL_INFOS = new Map([
   [1, { level: 1, levelLabel: "LEVEL 1", levelName: "HABITABLE ZONE" }],
   [2, { level: 2, levelLabel: "LEVEL 2", levelName: "PIPE DREAMS" }],
   [3, { level: 3, levelLabel: "LEVEL 3", levelName: "ELECTRICAL STATION" }],
+  [4, { level: 4, levelLabel: "LEVEL 4", levelName: "ABANDONED OFFICE" }],
 ]);
 
 export function getBackroomsLevelInfo(level = 0) {
@@ -1618,6 +1623,90 @@ function createBacteriaModel() {
   return group;
 }
 
+function createHoundModel() {
+  const group = new THREE.Group();
+  group.name = "hound-entity";
+
+  const hideMaterial = new THREE.MeshStandardMaterial({
+    color: 0x0b0807,
+    emissive: 0x150605,
+    emissiveIntensity: 0.22,
+    roughness: 0.9,
+    metalness: 0,
+  });
+  const sinewMaterial = new THREE.MeshStandardMaterial({
+    color: 0x231512,
+    emissive: 0x260706,
+    emissiveIntensity: 0.18,
+    roughness: 0.82,
+  });
+  const eyeMaterial = new THREE.MeshBasicMaterial({
+    color: 0xff4b24,
+    transparent: true,
+    opacity: 0.88,
+  });
+
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.78, 8, 16), hideMaterial);
+  body.position.set(0, 0.72, 0);
+  body.rotation.z = Math.PI / 2;
+  body.scale.set(1.12, 0.78, 0.88);
+  group.add(body);
+
+  const chest = new THREE.Mesh(new THREE.SphereGeometry(0.24, 18, 12), hideMaterial);
+  chest.position.set(0, 0.78, -0.34);
+  chest.scale.set(0.92, 1.1, 0.82);
+  group.add(chest);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 12), hideMaterial);
+  head.position.set(0, 0.94, -0.62);
+  head.scale.set(0.82, 0.74, 1.34);
+  group.add(head);
+
+  const snout = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.09, 0.2, 10), sinewMaterial);
+  snout.rotation.x = Math.PI / 2;
+  snout.position.set(0, 0.9, -0.78);
+  group.add(snout);
+
+  [-1, 1].forEach((side) => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.026, 10, 8), eyeMaterial);
+    eye.position.set(side * 0.064, 0.99, -0.76);
+    group.add(eye);
+
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.16, 8), hideMaterial);
+    ear.position.set(side * 0.11, 1.08, -0.6);
+    ear.rotation.z = -side * 0.34;
+    group.add(ear);
+  });
+
+  [
+    [-0.18, -0.32],
+    [0.18, -0.32],
+    [-0.18, 0.32],
+    [0.18, 0.32],
+  ].forEach(([x, z], index) => {
+    const upper = createLimbSegment(
+      [x, 0.62, z],
+      [x * 1.18, 0.32, z - (index < 2 ? 0.18 : -0.1)],
+      0.042,
+      0.03,
+      sinewMaterial,
+    );
+    const lower = createLimbSegment(
+      [x * 1.18, 0.32, z - (index < 2 ? 0.18 : -0.1)],
+      [x * 1.34, 0.06, z - (index < 2 ? 0.28 : -0.2)],
+      0.028,
+      0.02,
+      sinewMaterial,
+    );
+    group.add(upper, lower);
+  });
+
+  const tail = createLimbSegment([0, 0.8, 0.48], [0.08, 0.92, 0.84], 0.032, 0.012, sinewMaterial);
+  group.add(tail);
+
+  return group;
+}
+
 function chooseBacteriaSpawn({
   cols,
   rows,
@@ -1736,6 +1825,145 @@ function createBacteriaEntity(scene, { spawnPosition, isWalkable, speed = 1.05, 
       };
     },
   };
+}
+
+function createHoundEntity(scene, { spawnPosition, isWalkable, speed = 1.45, id = "hound" }) {
+  const group = createHoundModel();
+  group.position.set(spawnPosition.x, 0, spawnPosition.z);
+  group.rotation.y = Math.random() * Math.PI * 2;
+  scene.add(group);
+
+  let contact = false;
+  return {
+    update(delta, elapsed, playerPosition) {
+      const dx = playerPosition.x - group.position.x;
+      const dz = playerPosition.z - group.position.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance > 0.001 && !contact) {
+        const surge = 0.78 + Math.sin(elapsed * 1.9) * 0.12;
+        const step = Math.min(distance, speed * surge * delta);
+        const resolved = resolveEntityStep(
+          group.position,
+          (dx / distance) * step,
+          (dz / distance) * step,
+          isWalkable,
+        );
+        group.position.x = resolved.x;
+        group.position.z = resolved.z;
+        group.rotation.y = Math.atan2(dx, dz);
+      }
+
+      const gait = Math.sin(elapsed * 7.2) * 0.035;
+      group.position.y = Math.abs(Math.sin(elapsed * 5.4)) * 0.028;
+      group.rotation.z = gait;
+      contact = contact || distance <= HOUND_CONTACT_RADIUS;
+      return {
+        id,
+        active: true,
+        contact,
+        distance,
+        x: group.position.x,
+        y: 0.9,
+        z: group.position.z,
+      };
+    },
+  };
+}
+
+function inspectWorldPoint(camera, target, { distanceLimit, height = 1.2, radius = 0.55 }) {
+  if (!camera || !target) return null;
+  camera.getWorldDirection(inspectForward);
+  inspectToItem.set(target.x, (target.y ?? 0) + height, target.z).sub(camera.position);
+  const distance = inspectToItem.length();
+  if (distance > distanceLimit) return null;
+  inspectToItem.normalize();
+  const maxAngle = Math.min(0.18, Math.max(0.045, Math.atan2(radius, distance)));
+  if (inspectForward.dot(inspectToItem) < Math.cos(maxAngle)) return null;
+  return distance;
+}
+
+function getFocusedEntity(camera, entities = []) {
+  const inspected = entities
+    .filter((entity) => entity?.active)
+    .map((entity) => {
+      const distance = inspectWorldPoint(
+        camera,
+        { x: entity.x, y: 0, z: entity.z },
+        {
+          distanceLimit: ENTITY_INSPECT_DISTANCE,
+          height: entity.y ?? 1.2,
+          radius: entity.id === "hound" ? 0.8 : 0.58,
+        },
+      );
+      return distance === null
+        ? null
+        : {
+            id: entity.id,
+            type: "entity",
+            distance,
+            active: entity.active,
+          };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.distance - b.distance);
+  return inspected[0] ?? null;
+}
+
+function createInteractionSpot({
+  id,
+  position,
+  radius = INTERACTION_RADIUS,
+  inspectDistance = INTERACTION_INSPECT_DISTANCE,
+  inspectHeight = 1.18,
+  inspectRadius = 0.68,
+  responseKey,
+}) {
+  let interactionCount = 0;
+  return {
+    id,
+    inspect(camera, playerPosition) {
+      const aimDistance = inspectWorldPoint(camera, position, {
+        distanceLimit: inspectDistance,
+        height: inspectHeight,
+        radius: inspectRadius,
+      });
+      if (aimDistance === null) return null;
+      const distance = Math.hypot(playerPosition.x - position.x, playerPosition.z - position.z);
+      return {
+        id,
+        type: "interaction",
+        distance: aimDistance,
+        available: distance <= radius,
+        rangeDistance: distance,
+      };
+    },
+    interact(playerPosition) {
+      const distance = Math.hypot(playerPosition.x - position.x, playerPosition.z - position.z);
+      if (distance > radius) return { interacted: false };
+      interactionCount += 1;
+      return {
+        interacted: true,
+        id,
+        textKey: responseKey ?? `${id}Response`,
+        count: interactionCount,
+      };
+    },
+  };
+}
+
+function getFocusedInteraction(camera, playerPosition, interactions = []) {
+  return interactions
+    .map((interaction) => interaction.inspect(camera, playerPosition))
+    .filter(Boolean)
+    .sort((a, b) => a.distance - b.distance)[0] ?? null;
+}
+
+function tryInteractWithSpots(playerPosition, ...interactions) {
+  for (const interaction of interactions) {
+    const result = interaction.interact(playerPosition);
+    if (result?.interacted) return result;
+  }
+  return { interacted: false };
 }
 
 function getFocusedItem(...items) {
@@ -3125,6 +3353,15 @@ function createLevelOneScene() {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
   });
+  const interactions = [
+    createInteractionSpot({
+      id: "level-one-elevator-panel",
+      position: targetPosition,
+      inspectHeight: 1.6,
+      inspectRadius: 0.75,
+      responseKey: "levelOneElevatorResponse",
+    }),
+  ];
   const bacteria = createBacteriaEntity(scene, {
     spawnPosition: chooseBacteriaSpawn({
       cols: LEVEL_ONE_COLS,
@@ -3135,7 +3372,7 @@ function createLevelOneScene() {
       spawnPosition: spawnCell,
     })[0] ?? spawnCell,
     isWalkable,
-    speed: 1.0,
+    speed: 1.16,
   });
 
   let objectiveReached = false;
@@ -3187,17 +3424,20 @@ function createLevelOneScene() {
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const bacteriaState = bacteria.update(delta, elapsed, playerPosition);
+    const entities = [bacteriaState];
 
     return {
       exitDistance: Math.round(exitDistance),
       exitReached: objectiveReached,
-      entityContact: bacteriaState.contact,
+      entityContact: entities.some((entity) => entity.contact),
       flicker,
       almondWater: almondWaterState,
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
-      entities: [bacteriaState],
+      entities,
+      focusEntity: getFocusedEntity(camera, entities),
+      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
@@ -3227,6 +3467,7 @@ function createLevelOneScene() {
     update,
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
+    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
   };
 }
 
@@ -4202,17 +4443,50 @@ function createLevelTwoScene() {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
   });
-  const bacteria = createBacteriaEntity(scene, {
-    spawnPosition: chooseBacteriaSpawn({
+  const interactions = [
+    createInteractionSpot({
+      id: "level-two-valve",
+      position: levelTwoCellCenter(28, 5),
+      inspectHeight: 1.45,
+      inspectRadius: 0.72,
+      responseKey: "levelTwoValveResponse",
+    }),
+    createInteractionSpot({
+      id: "level-two-service-door",
+      position: targetPosition,
+      inspectHeight: 1.65,
+      inspectRadius: 0.8,
+      responseKey: "levelTwoServiceDoorResponse",
+    }),
+  ];
+  const bacteriaSpawn =
+    chooseBacteriaSpawn({
       cols: LEVEL_TWO_COLS,
       rows: LEVEL_TWO_ROWS,
       isCellOpen: isLevelTwoOpenCell,
       getCellCenter: levelTwoCellCenter,
       targetPosition,
       spawnPosition: spawnCell,
-    })[0] ?? spawnCell,
+    })[0] ?? targetPosition;
+  const bacteria = createBacteriaEntity(scene, {
+    spawnPosition: bacteriaSpawn,
     isWalkable,
-    speed: 1.08,
+    speed: 1.22,
+  });
+  const hound = createHoundEntity(scene, {
+    spawnPosition:
+      chooseBacteriaSpawn({
+      cols: LEVEL_TWO_COLS,
+      rows: LEVEL_TWO_ROWS,
+      isCellOpen: isLevelTwoOpenCell,
+      getCellCenter: levelTwoCellCenter,
+      targetPosition,
+      spawnPosition: spawnCell,
+        avoidPositions: [bacteriaSpawn],
+        minSeparation: CELL_SIZE * 7,
+      })[0] ?? targetPosition,
+    isWalkable,
+    speed: 1.34,
   });
 
   let objectiveReached = false;
@@ -4273,17 +4547,21 @@ function createLevelTwoScene() {
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const bacteriaState = bacteria.update(delta, elapsed, playerPosition);
+    const houndState = hound.update(delta, elapsed, playerPosition);
+    const entities = [bacteriaState, houndState];
 
     return {
       exitDistance: Math.round(exitDistance),
       exitReached: objectiveReached,
-      entityContact: bacteriaState.contact,
+      entityContact: entities.some((entity) => entity.contact),
       flicker,
       almondWater: almondWaterState,
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
-      entities: [bacteriaState],
+      entities,
+      focusEntity: getFocusedEntity(camera, entities),
+      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
@@ -4313,6 +4591,7 @@ function createLevelTwoScene() {
     update,
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
+    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
   };
 }
 
@@ -4679,6 +4958,22 @@ function createLevelThreeScene() {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
   });
+  const interactions = [
+    createInteractionSpot({
+      id: "level-three-breaker",
+      position: targetPosition,
+      inspectHeight: 1.72,
+      inspectRadius: 0.86,
+      responseKey: "levelThreeBreakerResponse",
+    }),
+    createInteractionSpot({
+      id: "level-three-generator",
+      position: levelTwoCellCenter(14, 12),
+      inspectHeight: 0.78,
+      inspectRadius: 0.9,
+      responseKey: "levelThreeGeneratorResponse",
+    }),
+  ];
   const bacteriaSpawns = pickBacteriaSpawnPositions({
     cols: LEVEL_TWO_COLS,
     rows: LEVEL_TWO_ROWS,
@@ -4686,16 +4981,31 @@ function createLevelThreeScene() {
     getCellCenter: levelTwoCellCenter,
     targetPosition,
     spawnPosition: spawnCell,
-    count: 3,
+    count: 2,
   });
   const bacteria = bacteriaSpawns.map((spawnPosition) =>
     createBacteriaEntity(scene, {
       spawnPosition,
       isWalkable,
-      speed: 2.1,
+      speed: 1.48,
       id: "super-bacteria",
     }),
   );
+  const hound = createHoundEntity(scene, {
+    spawnPosition:
+      chooseBacteriaSpawn({
+        cols: LEVEL_TWO_COLS,
+        rows: LEVEL_TWO_ROWS,
+        isCellOpen: isLevelTwoOpenCell,
+        getCellCenter: levelTwoCellCenter,
+        targetPosition,
+        spawnPosition: spawnCell,
+        avoidPositions: bacteriaSpawns,
+        minSeparation: CELL_SIZE * 7,
+      })[0] ?? targetPosition,
+    isWalkable,
+    speed: 1.62,
+  });
 
   let objectiveReached = false;
 
@@ -4745,7 +5055,9 @@ function createLevelThreeScene() {
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const bacteriaStates = bacteria.map((b) => b.update(delta, elapsed, playerPosition));
-    const entityContact = bacteriaStates.some((state) => state.contact);
+    const houndState = hound.update(delta, elapsed, playerPosition);
+    const entities = [...bacteriaStates, houndState];
+    const entityContact = entities.some((state) => state.contact);
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -4756,7 +5068,9 @@ function createLevelThreeScene() {
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
-      entities: bacteriaStates,
+      entities,
+      focusEntity: getFocusedEntity(camera, entities),
+      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
@@ -4778,6 +5092,530 @@ function createLevelThreeScene() {
     levelName: "ELECTRICAL STATION",
     viewModelName: getViewModelName(viewModel),
     colliderCount: propColliders.length,
+    nextLevel: 4,
+    scene,
+    camera,
+    spawn,
+    isWalkable,
+    update,
+    tryPickup: (playerPosition) =>
+      tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
+    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+  };
+}
+
+function createLevelFourCarpetTexture() {
+  const random = createSeededRandom(0x4f4f04);
+  return makeTexture(
+    512,
+    (context, size) => {
+      context.fillStyle = "#858f86";
+      context.fillRect(0, 0, size, size);
+      for (let y = 0; y < size; y += 42) {
+        context.fillStyle = "rgba(42,48,44,0.12)";
+        context.fillRect(0, y, size, 2);
+      }
+      for (let x = 0; x < size; x += 42) {
+        context.fillStyle = "rgba(220,224,210,0.08)";
+        context.fillRect(x, 0, 1, size);
+      }
+      for (let i = 0; i < 24; i += 1) {
+        const x = random() * size;
+        const y = random() * size;
+        const radius = 28 + random() * 72;
+        const stain = context.createRadialGradient(x, y, 0, x, y, radius);
+        stain.addColorStop(0, "rgba(32,38,34,0.11)");
+        stain.addColorStop(1, "rgba(32,38,34,0)");
+        context.fillStyle = stain;
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+      }
+      drawSpeckles(context, size, 1800, 0.07, "36,42,38", random);
+      drawSpeckles(context, size, 520, 0.05, "210,214,200", random);
+    },
+    12,
+    10,
+  );
+}
+
+function createLevelFourWallTexture() {
+  const random = createSeededRandom(0x0ff1ce);
+  return makeTexture(
+    512,
+    (context, size) => {
+      context.fillStyle = "#c9c4ae";
+      context.fillRect(0, 0, size, size);
+      for (let x = 0; x < size; x += 128) {
+        context.fillStyle = "rgba(90,84,68,0.08)";
+        context.fillRect(x, 0, 2, size);
+      }
+      for (let i = 0; i < 10; i += 1) {
+        const x = random() * size;
+        const y = random() * size;
+        const radius = 20 + random() * 50;
+        const stain = context.createRadialGradient(x, y, 0, x, y, radius);
+        stain.addColorStop(0, "rgba(88,80,60,0.08)");
+        stain.addColorStop(1, "rgba(88,80,60,0)");
+        context.fillStyle = stain;
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+      }
+      drawSpeckles(context, size, 520, 0.08, "80,74,58", random);
+    },
+    2.6,
+    1.15,
+  );
+}
+
+function createLevelFourCeilingTexture() {
+  const random = createSeededRandom(0xce1414);
+  return makeTexture(
+    512,
+    (context, size) => {
+      context.fillStyle = "#d8d4bf";
+      context.fillRect(0, 0, size, size);
+      context.strokeStyle = "rgba(72,70,58,0.32)";
+      context.lineWidth = 6;
+      context.strokeRect(0, 0, size, size);
+      context.strokeStyle = "rgba(255,255,240,0.13)";
+      context.lineWidth = 1.4;
+      context.strokeRect(10, 10, size - 20, size - 20);
+      drawSpeckles(context, size, 1700, 0.08, "92,88,72", random);
+    },
+    18,
+    16,
+  );
+}
+
+function addLevelFourStairDoor(scene, position) {
+  const mount = getLevelOneTargetMount(position);
+  const doorMaterial = new THREE.MeshStandardMaterial({
+    color: 0x27333a,
+    emissive: 0x071013,
+    emissiveIntensity: 0.16,
+    roughness: 0.7,
+    metalness: 0.18,
+  });
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.72, 2.45, 0.09), doorMaterial);
+  door.position.set(mount.x, 1.22, mount.z);
+  door.rotation.y = mount.rotation;
+  scene.add(door);
+
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.25, 0.58),
+    new THREE.MeshStandardMaterial({
+      map: createWideSignTexture("STAIRS", "#102316", "#c7ffd6"),
+      color: 0xffffff,
+      emissive: 0x4aff7b,
+      emissiveIntensity: 0.38,
+      roughness: 0.44,
+      side: THREE.DoubleSide,
+    }),
+  );
+  sign.position.set(mount.x, 2.58, mount.z);
+  sign.rotation.y = mount.rotation;
+  scene.add(sign);
+}
+
+function addLevelFourOfficeDetails(scene) {
+  const colliders = [];
+  const interactions = [];
+  const partitionMaterial = new THREE.MeshStandardMaterial({
+    color: 0x9fa69b,
+    emissive: 0x202820,
+    emissiveIntensity: 0.12,
+    roughness: 0.9,
+  });
+  const deskMaterial = new THREE.MeshStandardMaterial({
+    color: 0x4b3a2c,
+    emissive: 0x0f0905,
+    emissiveIntensity: 0.08,
+    roughness: 0.76,
+  });
+  const chairMaterial = new THREE.MeshStandardMaterial({
+    color: 0x151719,
+    roughness: 0.72,
+    metalness: 0.18,
+  });
+  const glassMaterial = new THREE.MeshBasicMaterial({
+    color: 0x050606,
+    transparent: true,
+    opacity: 0.72,
+    depthWrite: false,
+  });
+
+  const addCollider = (x, z, halfX, halfZ) => {
+    colliders.push({ minX: x - halfX, maxX: x + halfX, minZ: z - halfZ, maxZ: z + halfZ });
+  };
+
+  const cubicles = [
+    { col: 7, row: 19 },
+    { col: 11, row: 19 },
+    { col: 15, row: 18 },
+    { col: 20, row: 20 },
+    { col: 24, row: 18 },
+    { col: 7, row: 11 },
+    { col: 12, row: 10 },
+    { col: 18, row: 11 },
+    { col: 23, row: 9 },
+    { col: 27, row: 13 },
+  ];
+
+  cubicles.forEach((cubicle, index) => {
+    const center = levelOneCellCenter(cubicle.col, cubicle.row);
+    const group = new THREE.Group();
+    group.position.set(center.x, 0, center.z);
+
+    const wallA = new THREE.Mesh(new THREE.BoxGeometry(2.35, 1.24, 0.09), partitionMaterial);
+    wallA.position.set(0, 0.62, -0.92);
+    group.add(wallA);
+    const wallB = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.24, 1.86), partitionMaterial);
+    wallB.position.set(-1.12, 0.62, 0);
+    group.add(wallB);
+
+    const desk = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.16, 0.62), deskMaterial);
+    desk.position.set(0.24, 0.68, -0.46);
+    group.add(desk);
+
+    const chair = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.58, 0.44), chairMaterial);
+    chair.position.set(0.38, 0.32, 0.32);
+    group.add(chair);
+
+    scene.add(group);
+    addCollider(center.x - 0.45, center.z - 0.44, 1.3, 0.8);
+    if (index === 2 || index === 8) {
+      interactions.push(
+        createInteractionSpot({
+          id: index === 2 ? "level-four-terminal" : "level-four-files",
+          position: { x: center.x + 0.24, z: center.z - 0.46 },
+          inspectHeight: 0.78,
+          inspectRadius: 0.75,
+          responseKey: index === 2 ? "levelFourTerminalResponse" : "levelFourFilesResponse",
+        }),
+      );
+    }
+  });
+
+  const vendingPositions = [
+    { col: 4, row: 6, id: "level-four-vending", color: 0x24424a },
+    { col: 29, row: 6, id: "level-four-water-cooler", color: 0xb7d6e2 },
+  ];
+  vendingPositions.forEach((spot) => {
+    const center = levelOneCellCenter(spot.col, spot.row);
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.88, 1.72, 0.52),
+      new THREE.MeshStandardMaterial({
+        color: spot.color,
+        emissive: spot.id.includes("water") ? 0x1b3842 : 0x0b1c20,
+        emissiveIntensity: 0.18,
+        roughness: 0.58,
+        metalness: 0.08,
+      }),
+    );
+    body.position.set(center.x, 0.86, center.z);
+    scene.add(body);
+    addCollider(center.x, center.z, 0.48, 0.34);
+    interactions.push(
+      createInteractionSpot({
+        id: spot.id,
+        position: center,
+        inspectHeight: 0.95,
+        inspectRadius: 0.74,
+        responseKey:
+          spot.id === "level-four-water-cooler"
+            ? "levelFourWaterCoolerResponse"
+            : "levelFourVendingResponse",
+      }),
+    );
+  });
+
+  [
+    { col: 2, row: 4, rotation: 0 },
+    { col: 11, row: 2, rotation: 0 },
+    { col: 21, row: 2, rotation: 0 },
+    { col: 30, row: 8, rotation: -Math.PI / 2 },
+    { col: 30, row: 17, rotation: -Math.PI / 2 },
+  ].forEach((windowSpot) => {
+    const center = levelOneCellCenter(windowSpot.col, windowSpot.row);
+    const mount = getLevelOneTargetMount(center);
+    const windowMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.08), glassMaterial);
+    windowMesh.position.set(mount.x, 1.82, mount.z);
+    windowMesh.rotation.y = mount.rotation;
+    scene.add(windowMesh);
+  });
+
+  [
+    { col: 5, row: 21, text: "M.E.G. OUTPOST", bg: "#17231f", fg: "#c8ffe0" },
+    { col: 26, row: 15, text: "NO WINDOWS", bg: "#201a16", fg: "#ffd2a4" },
+  ].forEach((sign) => {
+    const center = levelOneCellCenter(sign.col, sign.row);
+    const mount = getLevelOneTargetMount(center);
+    const signMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.42, 0.58),
+      new THREE.MeshStandardMaterial({
+        map: createWideSignTexture(sign.text, sign.bg, sign.fg),
+        color: 0xffffff,
+        emissive: 0x2b392e,
+        emissiveIntensity: 0.16,
+        roughness: 0.62,
+        side: THREE.DoubleSide,
+      }),
+    );
+    signMesh.position.set(mount.x, 2.22, mount.z);
+    signMesh.rotation.y = mount.rotation;
+    scene.add(signMesh);
+  });
+
+  return { colliders, interactions };
+}
+
+function createLevelFourScene() {
+  const scene = new THREE.Scene();
+  const FOG_COLOR = 0xb8b9a7;
+  scene.background = new THREE.Color(FOG_COLOR);
+  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0088);
+
+  const cameraFar =
+    Math.hypot(LEVEL_ONE_COLS * CELL_SIZE, LEVEL_ONE_ROWS * CELL_SIZE) + CELL_SIZE * 2;
+  const camera = new THREE.PerspectiveCamera(74, 1, 0.05, cameraFar);
+  const viewModel = attachFirstPersonViewModel(camera);
+  scene.add(camera);
+
+  const spawnCell = levelOneCellCenter(LEVEL_ONE_START_CELL.col, LEVEL_ONE_START_CELL.row);
+  const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: -Math.PI * 0.12 };
+  const targetPosition = levelOneCellCenter(LEVEL_ONE_TARGET_CELL.col, LEVEL_ONE_TARGET_CELL.row);
+
+  const floorMaterial = new THREE.MeshStandardMaterial({
+    map: createLevelFourCarpetTexture(),
+    color: 0xdfe4d7,
+    emissive: 0x596454,
+    emissiveIntensity: 0.18,
+    roughness: 0.97,
+  });
+  const wallMaterial = new THREE.MeshStandardMaterial({
+    map: createLevelFourWallTexture(),
+    color: 0xf1ecd9,
+    emissive: 0x545046,
+    emissiveIntensity: 0.16,
+    roughness: 0.92,
+  });
+  const ceilingMaterial = new THREE.MeshStandardMaterial({
+    map: createLevelFourCeilingTexture(),
+    color: 0xf4f0d9,
+    emissive: 0x807a60,
+    emissiveIntensity: 0.32,
+    roughness: 0.86,
+  });
+  const wallCapMaterial = new THREE.MeshStandardMaterial({
+    color: 0xaaa189,
+    emissive: 0x332f26,
+    emissiveIntensity: 0.08,
+    roughness: 0.96,
+  });
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(LEVEL_ONE_COLS * CELL_SIZE, LEVEL_ONE_ROWS * CELL_SIZE),
+    floorMaterial,
+  );
+  floor.rotation.x = -Math.PI / 2;
+  scene.add(floor);
+
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(LEVEL_ONE_COLS * CELL_SIZE, LEVEL_ONE_ROWS * CELL_SIZE),
+    ceilingMaterial,
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set(0, CEILING_Y, 0);
+  scene.add(ceiling);
+
+  const { northSouth, eastWest, fixturePositions } = collectLevelOneTransforms();
+  fixturePositions.forEach((fixture, index) => {
+    fixture.color = index % 6 === 0 ? 0xd8fff0 : 0xfff7da;
+    fixture.baseIntensity *= index % 5 === 0 ? 0.66 : 0.9;
+    fixture.range *= 0.92;
+    fixture.weak = Math.max(fixture.weak, index % 5 === 0 ? 0.18 : 0.05);
+  });
+
+  const wallMaterials = [
+    wallMaterial,
+    wallMaterial,
+    wallCapMaterial,
+    wallCapMaterial,
+    wallMaterial,
+    wallMaterial,
+  ];
+  addInstancedBoxes(
+    scene,
+    new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
+    wallMaterials,
+    northSouth,
+  );
+  addInstancedBoxes(
+    scene,
+    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
+    wallMaterials,
+    eastWest,
+  );
+
+  scene.add(new THREE.HemisphereLight(0xffffee, 0x8d9b8a, 1.28));
+  const fill = new THREE.DirectionalLight(0xf3ffe4, 0.18);
+  fill.position.set(12, CEILING_Y - 0.3, -14);
+  scene.add(fill);
+
+  const fixtures = createLevelOneLights(scene, fixturePositions);
+  const updateLightState = createStableLightState("QUIET", {
+    dimBelow: 0.46,
+    normalAbove: 0.62,
+    dimDelay: 0.62,
+    normalDelay: 0.86,
+  });
+  addLevelFourStairDoor(scene, targetPosition);
+  const { colliders: propColliders, interactions: propInteractions } = addLevelFourOfficeDetails(scene);
+  const interactions = [
+    ...propInteractions,
+    createInteractionSpot({
+      id: "level-four-stair-door",
+      position: targetPosition,
+      inspectHeight: 1.58,
+      inspectRadius: 0.82,
+      responseKey: "levelFourStairDoorResponse",
+    }),
+  ];
+
+  const almondWater = createAlmondWaterPickup(scene, {
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+  });
+  const superAlmondWater = createAlmondWaterPickup(scene, {
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    variant: "super",
+    respawnMin: SUPER_ALMOND_WATER_RESPAWN_MIN,
+    respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
+    initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
+    respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+  });
+  const flashlight = createFlashlightPickup(scene, {
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+  });
+  const detector = createDetectorPickup(scene, {
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+  });
+  const hound = createHoundEntity(scene, {
+    spawnPosition:
+      chooseBacteriaSpawn({
+        cols: LEVEL_ONE_COLS,
+        rows: LEVEL_ONE_ROWS,
+        isCellOpen: isLevelOneOpenCell,
+        getCellCenter: levelOneCellCenter,
+        targetPosition,
+        spawnPosition: spawnCell,
+      })[0] ?? targetPosition,
+    isWalkable,
+    speed: 1.06,
+  });
+
+  let objectiveReached = false;
+
+  function isWalkable(x, z, radius = 0.36) {
+    const corner = radius * 0.72;
+    const samples = [
+      [0, 0],
+      [radius, 0],
+      [-radius, 0],
+      [0, radius],
+      [0, -radius],
+      [corner, corner],
+      [-corner, corner],
+      [corner, -corner],
+      [-corner, -corner],
+    ];
+    const isInOpenCells = samples.every(([offsetX, offsetZ]) => {
+      const cell = levelOneWorldToCell(x + offsetX, z + offsetZ);
+      return isLevelOneOpenCell(cell.col, cell.row);
+    });
+    if (!isInOpenCells) return false;
+    return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
+  }
+
+  function update(delta, elapsed, playerPosition) {
+    let lightTotal = 0;
+    fixtures.forEach((fixture, index) => {
+      const hum = 0.88 + Math.sin(elapsed * 1.05 + fixture.phase) * 0.035;
+      const staleTube = index % 5 === 0 && Math.sin(elapsed * fixture.speed + fixture.phase) > 0.94 ? 0.55 : 1;
+      const pulse = Math.max(0.42, hum * staleTube - fixture.weak);
+      fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.4;
+      updateFixturePointLight(fixture, pulse, 0.96);
+      lightTotal += pulse;
+    });
+    const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.82;
+    const exitDistance = Math.hypot(
+      playerPosition.x - targetPosition.x,
+      playerPosition.z - targetPosition.z,
+    );
+    if (exitDistance < LEVEL_ONE_EXIT_TRIGGER_RADIUS) objectiveReached = true;
+    scene.fog.density = 0.0086 + (1 - flicker) * 0.006;
+    updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
+    const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
+    const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
+    const flashlightState = flashlight.update(delta, elapsed, playerPosition);
+    const detectorState = detector.update(delta, elapsed, playerPosition);
+    const houndState = hound.update(delta, elapsed, playerPosition);
+    const entities = [houndState];
+
+    return {
+      exitDistance: Math.round(exitDistance),
+      exitReached: objectiveReached,
+      entityContact: entities.some((entity) => entity.contact),
+      flicker,
+      almondWater: almondWaterState,
+      superAlmondWater: superAlmondWaterState,
+      flashlight: flashlightState,
+      detector: detectorState,
+      entities,
+      focusEntity: getFocusedEntity(camera, entities),
+      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
+      focusItem: getFocusedItem(
+        almondWater.inspect(camera),
+        superAlmondWater.inspect(camera),
+        detector.inspect(camera),
+        flashlight.inspect(camera),
+      ),
+      lightState: updateLightState(delta, flicker),
+      statusText: objectiveReached
+        ? "STAIRWELL CLEAR"
+        : exitDistance < 8
+          ? "STAIR TRACE"
+          : "ABANDONED OFFICE",
+    };
+  }
+
+  return {
+    level: 4,
+    levelLabel: "LEVEL 4",
+    levelName: "ABANDONED OFFICE",
+    viewModelName: getViewModelName(viewModel),
+    colliderCount: propColliders.length,
     nextLevel: null,
     scene,
     camera,
@@ -4786,6 +5624,7 @@ function createLevelThreeScene() {
     update,
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
+    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
   };
 }
 
@@ -4794,5 +5633,6 @@ export function createBackroomsScene(level = 0) {
   if (levelInfo.level === 1) return createLevelOneScene();
   if (levelInfo.level === 2) return createLevelTwoScene();
   if (levelInfo.level === 3) return createLevelThreeScene();
+  if (levelInfo.level === 4) return createLevelFourScene();
   return createLevelZeroScene();
 }

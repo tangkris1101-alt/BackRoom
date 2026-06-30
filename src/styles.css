@@ -439,6 +439,12 @@ body {
   color: rgba(255, 226, 201, 0.76);
 }
 
+.entity-marker--hound {
+  border-color: rgba(255, 170, 94, 0.9);
+  color: #ffd7a8;
+  box-shadow: 0 0 18px rgba(255, 122, 48, 0.22);
+}
+
 .item-info {
   position: fixed;
   left: 50%;
@@ -471,6 +477,16 @@ body {
   border-color: rgba(150, 255, 175, 0.55);
   box-shadow: 0 0 24px rgba(0, 0, 0, 0.34), 0 0 26px rgba(140, 255, 160, 0.34),
     inset 0 0 18px rgba(230, 245, 174, 0.04);
+}
+
+.item-info[data-info-type="entity"] {
+  border-color: rgba(255, 92, 70, 0.36);
+  background: rgba(20, 5, 5, 0.72);
+}
+
+.item-info[data-info-type="interaction"] {
+  border-color: rgba(170, 220, 255, 0.34);
+  background: rgba(8, 18, 24, 0.7);
 }
 
 .item-info__pickup-key {

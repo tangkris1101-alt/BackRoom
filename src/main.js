@@ -128,6 +128,182 @@ const ITEM_TEXT = {
   },
 };
 
+const ENTITY_TEXT = {
+  "zh-CN": {
+    bacteria: {
+      name: "\u7ec6\u83cc\u5b9e\u4f53",
+      marker: "\u7ec6\u83cc",
+      effect: "\u7626\u957f\u3001\u4f4e\u901f\u8ffd\u51fb\uff1b\u63a5\u89e6\u5373\u5931\u8d25",
+      action: "\u4fdd\u6301\u8ddd\u79bb",
+      failSubtitle: "\u63a5\u89e6\u7ec6\u83cc\u5b9e\u4f53",
+    },
+    "super-bacteria": {
+      name: "\u8d85\u7ea7\u7ec6\u83cc",
+      marker: "\u8d85\u7ea7\u7ec6\u83cc",
+      effect: "\u66f4\u5f3a\u7684\u7535\u7ad9\u5b9e\u4f53\uff1b\u63a5\u89e6\u5373\u5931\u8d25",
+      action: "\u4fdd\u6301\u8ddd\u79bb",
+      failSubtitle: "\u63a5\u89e6\u8d85\u7ea7\u7ec6\u83cc\u5b9e\u4f53",
+    },
+    hound: {
+      name: "\u730e\u72ac\u5b9e\u4f53",
+      marker: "\u730e\u72ac",
+      effect: "\u56db\u8db3\u8ffd\u51fb\uff1b\u901f\u5ea6\u6bd4\u7ec6\u83cc\u66f4\u5feb",
+      action: "\u907f\u5f00\u76f4\u7ebf\u8ddd\u79bb",
+      failSubtitle: "\u88ab\u730e\u72ac\u5b9e\u4f53\u6355\u83b7",
+    },
+  },
+  en: {
+    bacteria: {
+      name: "BACTERIA ENTITY",
+      marker: "BACTERIA",
+      effect: "Tall slow pursuer; contact is fatal.",
+      action: "KEEP DISTANCE",
+      failSubtitle: "BACTERIA CONTACT",
+    },
+    "super-bacteria": {
+      name: "SUPER BACTERIA",
+      marker: "SUPER BACTERIA",
+      effect: "Stronger station entity; contact is fatal.",
+      action: "KEEP DISTANCE",
+      failSubtitle: "SUPER BACTERIA CONTACT",
+    },
+    hound: {
+      name: "HOUND",
+      marker: "HOUND",
+      effect: "Quadruped pursuer; faster than Bacteria.",
+      action: "BREAK LINE OF SIGHT",
+      failSubtitle: "HOUND CONTACT",
+    },
+  },
+};
+
+const INTERACTION_TEXT = {
+  "zh-CN": {
+    "level-one-elevator-panel": {
+      name: "\u7535\u68af\u9762\u677f",
+      effect: "\u663e\u793a\u51fa\u53e3\u540c\u6b65\u72b6\u6001",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u7535\u68af\u8fd8\u5728\u7b49\u5f85\u7a33\u5b9a\u4fe1\u53f7",
+    },
+    "level-two-valve": {
+      name: "\u538b\u529b\u9600",
+      effect: "\u7ba1\u9053\u538b\u529b\u4e0d\u7a33\u5b9a",
+      action: "F / \u6309\u94ae\u8f6c\u52a8",
+      response: "\u9600\u95e8\u53ea\u662f\u53d1\u51fa\u7a7a\u6d1e\u7684\u6469\u64e6\u58f0",
+    },
+    "level-two-service-door": {
+      name: "\u7ef4\u4fee\u95e8",
+      effect: "\u95e8\u9501\u88ab\u7ba1\u9053\u70ed\u6c14\u5361\u4f4f",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u95e8\u540e\u4f20\u6765\u4f4e\u9891\u7ba1\u9053\u58f0",
+    },
+    "level-three-breaker": {
+      name: "\u65ad\u8def\u5668",
+      effect: "\u51fa\u53e3\u4f9b\u7535\u70b9",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u7535\u5f27\u95ea\u8fc7\uff0c\u51fa\u53e3\u4fe1\u53f7\u77ed\u6682\u589e\u5f3a",
+    },
+    "level-three-generator": {
+      name: "\u53d1\u7535\u673a",
+      effect: "\u58f0\u97f3\u4e0d\u7a33\uff0c\u4f46\u4ecd\u5728\u8fd0\u884c",
+      action: "F / \u6309\u94ae\u503e\u542c",
+      response: "\u53d1\u7535\u673a\u8282\u594f\u5ffd\u7136\u4e71\u4e86\u4e00\u62cd",
+    },
+    "level-four-terminal": {
+      name: "\u529e\u516c\u7ec8\u7aef",
+      effect: "\u5c4f\u5e55\u53ea\u5269\u4e00\u884c\u8b66\u544a",
+      action: "F / \u6309\u94ae\u9605\u8bfb",
+      response: "\u7ec8\u7aef\u663e\u793a\uff1a\u4e0d\u8981\u76f8\u4fe1\u7a97\u5916\u7684\u5149",
+    },
+    "level-four-files": {
+      name: "\u6587\u4ef6\u5806",
+      effect: "\u4e0a\u9762\u53ea\u6709\u91cd\u590d\u7684\u697c\u5c42\u56fe",
+      action: "F / \u6309\u94ae\u7ffb\u770b",
+      response: "\u6bcf\u5f20\u56fe\u7684\u51fa\u53e3\u90fd\u88ab\u624b\u5199\u5708\u6389",
+    },
+    "level-four-vending": {
+      name: "\u81ea\u52a8\u552e\u8d27\u673a",
+      effect: "\u5df2\u65e0\u8d27\uff0c\u4ecd\u5728\u8f7b\u58f0\u8fd0\u8f6c",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u9000\u5e01\u53e3\u91cc\u53ea\u6709\u7070\u5c18",
+    },
+    "level-four-water-cooler": {
+      name: "\u996e\u6c34\u673a",
+      effect: "\u6846\u4f53\u6e29\u51b7\uff0c\u6c34\u6876\u5df2\u7a7a",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u6c34\u6ce1\u58f0\u505c\u4e86\uff0c\u50cf\u662f\u6709\u4eba\u5728\u542c",
+    },
+    "level-four-stair-door": {
+      name: "\u697c\u68af\u95e8",
+      effect: "\u901a\u5f80\u66f4\u6df1\u7684\u529e\u516c\u533a",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u95e8\u628a\u624b\u5f88\u51b7\uff0c\u697c\u68af\u95f4\u91cc\u6ca1\u6709\u56de\u58f0",
+    },
+  },
+  en: {
+    "level-one-elevator-panel": {
+      name: "ELEVATOR PANEL",
+      effect: "Shows unstable exit synchronization.",
+      action: "F / BUTTON INSPECT",
+      response: "The elevator is still waiting for a stable signal.",
+    },
+    "level-two-valve": {
+      name: "PRESSURE VALVE",
+      effect: "Pipe pressure is unstable.",
+      action: "F / BUTTON TURN",
+      response: "The valve answers with a hollow scrape.",
+    },
+    "level-two-service-door": {
+      name: "SERVICE DOOR",
+      effect: "Heat and pressure have jammed the lock.",
+      action: "F / BUTTON INSPECT",
+      response: "A low pipe drone leaks through the door.",
+    },
+    "level-three-breaker": {
+      name: "BREAKER",
+      effect: "Exit power junction.",
+      action: "F / BUTTON INSPECT",
+      response: "An arc snaps across the breaker; the exit signal spikes.",
+    },
+    "level-three-generator": {
+      name: "GENERATOR",
+      effect: "Unsteady, but still running.",
+      action: "F / BUTTON LISTEN",
+      response: "The generator rhythm skips for one beat.",
+    },
+    "level-four-terminal": {
+      name: "OFFICE TERMINAL",
+      effect: "Only one warning line remains.",
+      action: "F / BUTTON READ",
+      response: "Terminal: DO NOT TRUST THE LIGHT OUTSIDE.",
+    },
+    "level-four-files": {
+      name: "FILE STACK",
+      effect: "Repeated floor plans with no dates.",
+      action: "F / BUTTON READ",
+      response: "Every printed exit is circled by hand.",
+    },
+    "level-four-vending": {
+      name: "VENDING MACHINE",
+      effect: "Empty, still humming.",
+      action: "F / BUTTON INSPECT",
+      response: "Only dust sits in the coin return.",
+    },
+    "level-four-water-cooler": {
+      name: "WATER COOLER",
+      effect: "Cold frame, empty bottle.",
+      action: "F / BUTTON INSPECT",
+      response: "The bubbling stops, as if something is listening.",
+    },
+    "level-four-stair-door": {
+      name: "STAIR DOOR",
+      effect: "Leads deeper into the office level.",
+      action: "F / BUTTON INSPECT",
+      response: "The handle is cold; no echo comes back.",
+    },
+  },
+};
+
 const BUFF_TEXT = {
   "zh-CN": {
     "almond-water": {
@@ -855,10 +1031,9 @@ function updateEntityMarkers(metrics) {
         const marker = document.createElement("div");
         marker.className = "entity-marker";
         if (entity.id === "super-bacteria") marker.classList.add("entity-marker--super");
+        if (entity.id === "hound") marker.classList.add("entity-marker--hound");
         const name = document.createElement("strong");
-        name.textContent = formatLocalizedStatus(
-          entity.id === "super-bacteria" ? "superBacteriaMarker" : "bacteriaMarker",
-        );
+        name.textContent = getLocalizedText(ENTITY_TEXT, entity.id)?.marker ?? entity.id.toUpperCase();
         const distance = document.createElement("span");
         distance.textContent = `${Math.round(entity.distance)}m`;
         marker.style.left = `${x}px`;
@@ -1104,7 +1279,8 @@ function updatePickupHud(metrics) {
   const canDrinkSuper = Boolean(superAlmondWater?.available);
   const canTakeFlashlight = Boolean(flashlight?.available);
   const canTakeDetector = Boolean(detector?.available);
-  const canUse = canDrink || canDrinkSuper || canTakeFlashlight || canTakeDetector;
+  const canInteract = Boolean(metrics.focusInteraction?.available);
+  const canUse = canDrink || canDrinkSuper || canTakeFlashlight || canTakeDetector || canInteract;
   useButton?.classList.toggle("is-visible", canUse);
   if (useButton) useButton.disabled = !canUse;
   canvas.dataset.almondWaterVisible = String(Boolean(almondWater?.visible));
@@ -1127,6 +1303,8 @@ function updatePickupHud(metrics) {
   canvas.dataset.detectorDistance = Number.isFinite(detector?.distance)
     ? String(Math.round(detector.distance))
     : "";
+  canvas.dataset.focusInteraction = metrics.focusInteraction?.id ?? "";
+  canvas.dataset.focusInteractionAvailable = String(canInteract);
 }
 
 function findNearestPickupable(metrics) {
@@ -1142,23 +1320,29 @@ function findNearestPickupable(metrics) {
 }
 
 function updateItemInfo(metrics) {
-  const item = metrics.focusItem;
+  const item = metrics.focusItem ?? metrics.focusInteraction ?? metrics.focusEntity;
   const pickupable = findNearestPickupable(metrics);
+  const canInteract = Boolean(metrics.focusInteraction?.available);
   const hasFocus = Boolean(item);
   const canPickup = Boolean(pickupable);
   if (itemInfo) {
     if (hasFocus) itemInfo.hidden = false;
     itemInfo.classList.toggle("is-visible", hasFocus);
-    itemInfo.classList.toggle("is-pickup-ready", canPickup);
+    itemInfo.classList.toggle("is-pickup-ready", canPickup || canInteract);
+    itemInfo.dataset.infoType = item?.type ?? "item";
     if (!hasFocus) itemInfo.hidden = true;
   }
   if (hasFocus) {
-    const localized = getLocalizedText(ITEM_TEXT, item.id) ?? item;
+    const collection =
+      item.type === "entity" ? ENTITY_TEXT : item.type === "interaction" ? INTERACTION_TEXT : ITEM_TEXT;
+    const localized = getLocalizedText(collection, item.id) ?? item;
     if (itemInfoName) itemInfoName.textContent = localized.name ?? item.name;
     if (itemInfoEffect) itemInfoEffect.textContent = localized.effect ?? item.effect;
     if (itemInfoAction) itemInfoAction.textContent = localized.action ?? item.action;
   }
-  canvas.dataset.focusItem = hasFocus ? item.id : "";
+  canvas.dataset.focusItem = metrics.focusItem?.id ?? "";
+  canvas.dataset.focusEntity = metrics.focusEntity?.id ?? "";
+  canvas.dataset.focusInfoType = item?.type ?? "";
   canvas.dataset.focusItemDistance = Number.isFinite(item?.distance)
     ? String(Math.round(item.distance * 10) / 10)
     : "";
@@ -1188,6 +1372,19 @@ function usePickup() {
   if (exitComplete || levelTransition || isPaused) return;
   const pickup = world.tryPickup?.(world.camera.position);
   if (!pickup?.pickedUp) {
+    if (lastMetrics?.focusInteraction?.available) {
+      const interaction = world.interact?.(world.camera.position);
+      if (interaction?.interacted) {
+        const localized = getLocalizedText(INTERACTION_TEXT, interaction.id);
+        pickupFlashText = localized.response ?? localized.name ?? "INTERACTION";
+        pickupFlashUntil = clock.elapsedTime + 1.9;
+        useButton?.classList.add("is-active");
+        window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
+        canvas.dataset.lastInteraction = interaction.id;
+        canvas.dataset.lastInteractionCount = String(interaction.count ?? 1);
+        return;
+      }
+    }
     flashPickupHint("pickupEmpty", 900);
     return;
   }
@@ -1327,7 +1524,10 @@ function updateHud(metrics, controlState, elapsed) {
               : "NO SIGNAL");
   updatePickupHud(metrics);
   updateItemInfo(metrics);
-  showItemInfoPickupKey(Boolean(metrics.focusItem) && Boolean(findNearestPickupable(metrics)));
+  showItemInfoPickupKey(
+    (Boolean(metrics.focusItem) && Boolean(findNearestPickupable(metrics))) ||
+      Boolean(metrics.focusInteraction?.available),
+  );
   updateStaminaHud(controlState);
   updateBuffCards(controlState);
 }
@@ -1363,12 +1563,12 @@ function animate() {
   updateDetector(delta, metrics);
   if (metrics.entityContact && !gameFailed && !exitComplete && !levelTransition) {
     const contactEntity = (metrics.entities ?? []).find((entity) => entity?.contact);
-    const isSuper = contactEntity?.id === "super-bacteria";
+    const entityText = getLocalizedText(ENTITY_TEXT, contactEntity?.id);
     gameFailed = true;
     canvas.dataset.gameFailed = "true";
     showExitOverlay(
       formatLocalizedStatus("bacteriaFailTitle"),
-      formatLocalizedStatus(isSuper ? "superBacteriaFailSubtitle" : "bacteriaFailSubtitle"),
+      entityText.failSubtitle ?? formatLocalizedStatus("bacteriaFailSubtitle"),
     );
   }
   if (metrics.exitReached && !gameFailed && !exitComplete && !levelTransition) {
