@@ -279,6 +279,7 @@ let detectorActiveTimer = 0;
 let detectorCooldownTimer = 0;
 let currentLanguage = "zh-CN";
 const detectorProjection = new THREE.Vector3();
+let lastMetrics = null;
 
 const INVENTORY_DEFS = {
   flashlight: { id: "flashlight", type: "toggle", unique: true, stackable: false },
@@ -604,6 +605,9 @@ languageSelect?.addEventListener("change", () => {
   canvas.dataset.language = nextLanguage;
   updateBuffCards(controls.getState());
   updateDetectorHud();
+  renderInventoryBar();
+  updateActionButtonState();
+  if (lastMetrics) updateItemInfo(lastMetrics);
   if (isPaused) {
     if (pauseTitle) pauseTitle.textContent = formatLocalizedStatus("pauseTitle");
     if (pauseSubtitle) pauseSubtitle.textContent = formatLocalizedStatus("pauseSubtitle");
@@ -1354,6 +1358,7 @@ function animate() {
     lastDrinkCancelledUntil = clock.elapsedTime + 1.4;
   }
   const metrics = world.update(delta, elapsed, world.camera.position);
+  lastMetrics = metrics;
   updateFlashlight(delta);
   updateDetector(delta, metrics);
   if (metrics.entityContact && !gameFailed && !exitComplete && !levelTransition) {
