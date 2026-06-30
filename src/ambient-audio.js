@@ -129,8 +129,8 @@ export function createAmbientHum() {
     const speed = Math.max(0, movementState.movementSpeed ?? 0);
     const sprinting = Boolean(movementState.sprinting);
     const stepInterval = sprinting
-      ? Math.max(0.22, 0.32 - speed * 0.02)
-      : Math.max(0.36, 0.5 - speed * 0.028);
+      ? Math.max(0.4, 0.5 - speed * 0.012)
+      : Math.max(0.58, 0.72 - speed * 0.025);
     if (now - lastStepAt >= stepInterval) {
       playFootstep({ sprinting });
       lastStepAt = now;

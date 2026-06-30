@@ -51,6 +51,16 @@ const inventoryBar = document.querySelector("#inventory-bar");
 const inventorySlots = document.querySelector("#inventory-slots");
 const inventoryPrev = document.querySelector("#inventory-prev");
 const inventoryNext = document.querySelector("#inventory-next");
+const tutorialOverlay = document.querySelector("#tutorial-overlay");
+const tutorialSkip = document.querySelector("#tutorial-skip");
+const tutorialPrev = document.querySelector("#tutorial-prev");
+const tutorialNext = document.querySelector("#tutorial-next");
+const tutorialPages = document.querySelector(".tutorial-pages");
+const tutorialDots = document.querySelectorAll(".tutorial-pagination__dot");
+const TUTORIAL_SEEN_KEY = "backrooms-tutorial-seen";
+const TUTORIAL_TOTAL_PAGES = 4;
+let tutorialPage = 0;
+let tutorialActive = false;
 
 const MAX_PIXEL_RATIO = 1.25;
 const MIN_PIXEL_RATIO = 0.75;
@@ -281,6 +291,122 @@ const INVENTORY_DEFS = {
     stackable: true,
   },
 };
+
+const ITEM_ICON_SVG = {
+  flashlight: `<defs>
+      <linearGradient id="fl-body" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#8a9088"/><stop offset="0.35" stop-color="#3a4038"/>
+        <stop offset="0.65" stop-color="#3a4038"/><stop offset="1" stop-color="#5a6058"/>
+      </linearGradient>
+      <radialGradient id="fl-lens" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stop-color="#fffbe0"/><stop offset="0.3" stop-color="#ffd870"/>
+        <stop offset="0.7" stop-color="#c87020"/><stop offset="1" stop-color="#804000"/>
+      </radialGradient>
+    </defs>
+    <rect x="6" y="42" width="14" height="16" rx="2" fill="#3a3530" stroke="#1a1410" stroke-width="0.6"/>
+    <rect x="20" y="38" width="60" height="24" rx="3" fill="url(#fl-body)" stroke="#1a1410" stroke-width="0.7"/>
+    <rect x="48" y="32" width="14" height="6" rx="1" fill="#1a1410"/>
+    <circle cx="55" cy="35" r="1.6" fill="#ff8060"/>
+    <line x1="22" y1="42" x2="78" y2="42" stroke="#1a1410" stroke-width="0.4" opacity="0.5"/>
+    <line x1="22" y1="58" x2="78" y2="58" stroke="#1a1410" stroke-width="0.4" opacity="0.5"/>
+    <circle cx="82" cy="50" r="14" fill="url(#fl-lens)" stroke="#804000" stroke-width="0.7"/>
+    <circle cx="82" cy="50" r="9" fill="none" stroke="#ffe8a0" stroke-width="0.6" opacity="0.6"/>
+    <circle cx="82" cy="50" r="4" fill="#fffbe0"/>
+    <path d="M 92 38 L 100 30 M 92 50 L 100 50 M 92 62 L 100 70" stroke="#fffbe0" stroke-width="0.8" opacity="0.35" fill="none"/>`,
+
+  "almond-water": `<defs>
+      <linearGradient id="aw-body" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#dcf2a8"/><stop offset="0.4" stop-color="#a8d878"/>
+        <stop offset="1" stop-color="#7aa848"/>
+      </linearGradient>
+    </defs>
+    <rect x="38" y="6" width="24" height="10" rx="1.5" fill="#4a6a3c" stroke="#2c4a1c" stroke-width="0.7"/>
+    <rect x="40" y="9" width="20" height="1.6" fill="#2c4a1c"/>
+    <rect x="40" y="16" width="20" height="8" fill="#88b858" stroke="#5a8050" stroke-width="0.6"/>
+    <path d="M 30 24 L 70 24 L 70 86 Q 70 92 64 92 L 36 92 Q 30 92 30 86 Z" fill="url(#aw-body)" stroke="#5a8050" stroke-width="1"/>
+    <rect x="30" y="44" width="40" height="26" fill="#f8f4dc" stroke="#5a8050" stroke-width="0.6"/>
+    <text x="50" y="54" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="6" font-weight="900" fill="#2c4a1c">ALMOND</text>
+    <text x="50" y="62" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="6" font-weight="900" fill="#2c4a1c">WATER</text>
+    <text x="50" y="68" text-anchor="middle" font-family="Arial, sans-serif" font-size="2.6" font-weight="700" fill="#5a8050">+50 STAMINA</text>
+    <rect x="34" y="28" width="3" height="58" fill="#fff" opacity="0.35"/>
+    <rect x="62" y="28" width="2" height="58" fill="#000" opacity="0.15"/>`,
+
+  "super-almond-water": `<defs>
+      <linearGradient id="saw-body" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#fff8d0"/><stop offset="0.4" stop-color="#ffd570"/>
+        <stop offset="1" stop-color="#c89020"/>
+      </linearGradient>
+    </defs>
+    <rect x="38" y="6" width="24" height="10" rx="1.5" fill="#9a6714" stroke="#704000" stroke-width="0.7"/>
+    <rect x="40" y="9" width="20" height="1.6" fill="#704000"/>
+    <rect x="40" y="16" width="20" height="8" fill="#d8a030" stroke="#9a6714" stroke-width="0.6"/>
+    <path d="M 30 24 L 70 24 L 70 86 Q 70 92 64 92 L 36 92 Q 30 92 30 86 Z" fill="url(#saw-body)" stroke="#9a6714" stroke-width="1"/>
+    <rect x="30" y="42" width="40" height="28" fill="#fff8d0" stroke="#9a6714" stroke-width="0.6"/>
+    <text x="50" y="51" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="5.2" font-weight="900" fill="#704000">SUPER</text>
+    <text x="50" y="59" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="6" font-weight="900" fill="#704000">ALMOND</text>
+    <text x="50" y="67" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="5.2" font-weight="900" fill="#704000">WATER</text>
+    <text x="50" y="71.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="2.4" font-weight="700" fill="#9a6714">250 CAP ×2</text>
+    <rect x="34" y="28" width="3" height="58" fill="#fff" opacity="0.4"/>
+    <rect x="62" y="28" width="2" height="58" fill="#000" opacity="0.15"/>`,
+
+  detector: `<defs>
+      <linearGradient id="det-body" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#5a5550"/><stop offset="1" stop-color="#252220"/>
+      </linearGradient>
+      <linearGradient id="det-screen" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#5a1818"/><stop offset="0.5" stop-color="#3a0808"/>
+        <stop offset="1" stop-color="#1a0404"/>
+      </linearGradient>
+      <radialGradient id="det-glow" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stop-color="#ff8060" stop-opacity="0.5"/>
+        <stop offset="1" stop-color="#ff8060" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect x="36" y="3" width="2.5" height="13" fill="#5a5048"/>
+    <circle cx="37.25" cy="3" r="3" fill="#ff8060"/>
+    <circle cx="37.25" cy="3" r="4.5" fill="#ff8060" opacity="0.35"/>
+    <rect x="28" y="14" width="18" height="4" rx="1" fill="#3a3530" stroke="#1a1410" stroke-width="0.4"/>
+    <rect x="12" y="22" width="76" height="68" rx="6" fill="url(#det-body)" stroke="#1a1410" stroke-width="1"/>
+    <rect x="14" y="24" width="72" height="3" fill="#3a3530" opacity="0.6"/>
+    <rect x="18" y="32" width="64" height="32" rx="3" fill="url(#det-screen)" stroke="#1a0808" stroke-width="0.7"/>
+    <rect x="20" y="34" width="60" height="28" fill="url(#det-glow)"/>
+    <line x1="18" y1="48" x2="82" y2="48" stroke="#ff8060" stroke-width="1" opacity="0.85"/>
+    <line x1="50" y1="32" x2="50" y2="64" stroke="#ff8060" stroke-width="1" opacity="0.85"/>
+    <circle cx="50" cy="48" r="7" fill="none" stroke="#ff8060" stroke-width="1.4"/>
+    <circle cx="50" cy="48" r="2.5" fill="#ff8060"/>
+    <rect x="18" y="70" width="9" height="9" rx="1.5" fill="#1a1410" stroke="#3a3530" stroke-width="0.5"/>
+    <rect x="20" y="72" width="5" height="3" rx="0.5" fill="#5a5048"/>
+    <rect x="30" y="70" width="9" height="9" rx="1.5" fill="#1a1410" stroke="#3a3530" stroke-width="0.5"/>
+    <rect x="32" y="72" width="5" height="3" rx="0.5" fill="#5a5048"/>
+    <rect x="42" y="70" width="9" height="9" rx="1.5" fill="#1a1410" stroke="#3a3530" stroke-width="0.5"/>
+    <rect x="44" y="72" width="5" height="3" rx="0.5" fill="#5a5048"/>
+    <rect x="54" y="70" width="9" height="9" rx="1.5" fill="#1a1410" stroke="#3a3530" stroke-width="0.5"/>
+    <rect x="56" y="72" width="5" height="3" rx="0.5" fill="#5a5048"/>
+    <rect x="66" y="70" width="9" height="9" rx="1.5" fill="#1a1410" stroke="#3a3530" stroke-width="0.5"/>
+    <rect x="68" y="72" width="5" height="3" rx="0.5" fill="#5a5048"/>
+    <circle cx="78" cy="27" r="2" fill="#80ff60"/>
+    <circle cx="78" cy="27" r="4" fill="#80ff60" opacity="0.35"/>
+    <rect x="14" y="84" width="72" height="4" rx="2" fill="#1a1410"/>`,
+};
+
+let iconIdCounter = 0;
+function createItemIcon(type) {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.classList.add("inventory-slot__svg");
+  const slotId = iconIdCounter++;
+  let content = ITEM_ICON_SVG[type];
+  if (content) {
+    content = content
+      .replace(/id="(fl-body|fl-lens|aw-body|saw-body|det-body|det-screen|det-glow)"/g, `id="$1-${slotId}"`)
+      .replace(/url\(#(fl-body|fl-lens|aw-body|saw-body|det-body|det-screen|det-glow)\)/g, `url(#$1-${slotId})`);
+    svg.innerHTML = content;
+  }
+  return svg;
+}
+
 const inventory = [];
 let equippedIndex = -1;
 let lastDrinkCancelled = false;
@@ -779,40 +905,50 @@ function renderInventoryBar() {
   inventoryPrev?.removeAttribute("hidden");
   inventoryNext?.removeAttribute("hidden");
 
-  const safeEquippedIndex = equippedIndex >= 0 && equippedIndex < inventory.length ? equippedIndex : 0;
+  const safeEquippedIndex =
+    equippedIndex >= 0 && equippedIndex < inventory.length ? equippedIndex : 0;
   const fragment = document.createDocumentFragment();
-  for (let offset = 0; offset < inventory.length; offset += 1) {
-    const index = (safeEquippedIndex + offset) % inventory.length;
-    const entry = inventory[index];
-    const def = INVENTORY_DEFS[entry.id];
-    const isMain = offset === 0;
-    const slot = document.createElement("div");
-    slot.className = `inventory-slot ${isMain ? "inventory-slot--main" : "inventory-slot--side"}`;
-    slot.dataset.type = entry.id;
 
-    const icon = document.createElement("div");
-    icon.className = "inventory-slot__icon";
-    slot.append(icon);
-
-    if (def?.stackable && entry.count > 1) {
-      const count = document.createElement("span");
-      count.className = "inventory-slot__count";
-      count.textContent = String(entry.count);
-      slot.append(count);
-    }
-
-    if (isMain) {
-      const name = document.createElement("span");
-      name.className = "inventory-slot__name";
-      const localized = getLocalizedText(STATUS_TEXT, entry.id);
-      name.textContent = localized || entry.id;
-      slot.append(name);
-    }
-
-    fragment.append(slot);
+  for (let i = 1; i <= safeEquippedIndex; i += 1) {
+    fragment.append(createInventorySlot(inventory[safeEquippedIndex - i], -i));
   }
+  fragment.append(createInventorySlot(inventory[safeEquippedIndex], 0));
+  for (let i = 1; i < inventory.length - safeEquippedIndex; i += 1) {
+    fragment.append(createInventorySlot(inventory[safeEquippedIndex + i], i));
+  }
+
   inventorySlots.replaceChildren(fragment);
   updateActionButtonState();
+}
+
+function createInventorySlot(entry, position) {
+  const def = INVENTORY_DEFS[entry.id];
+  const slot = document.createElement("div");
+  slot.className = "inventory-slot";
+  slot.dataset.type = entry.id;
+  slot.dataset.position = String(position);
+
+  const icon = document.createElement("div");
+  icon.className = "inventory-slot__icon";
+  icon.appendChild(createItemIcon(entry.id));
+  slot.append(icon);
+
+  if (def?.stackable && entry.count > 1) {
+    const count = document.createElement("span");
+    count.className = "inventory-slot__count";
+    count.textContent = String(entry.count);
+    slot.append(count);
+  }
+
+  if (position === 0) {
+    const name = document.createElement("span");
+    name.className = "inventory-slot__name";
+    const localized = getLocalizedText(STATUS_TEXT, entry.id);
+    name.textContent = localized || entry.id;
+    slot.append(name);
+  }
+
+  return slot;
 }
 
 function updateActionButtonState() {
@@ -888,6 +1024,47 @@ function handlePointerLockChange() {
     return;
   }
   setPauseState(true, { fromUnlock: true });
+}
+
+function updateTutorialPage() {
+  if (!tutorialPages) return;
+  tutorialPages.style.transform = `translateX(-${tutorialPage * 100}%)`;
+  tutorialDots.forEach((dot, i) => {
+    dot.classList.toggle("is-active", i === tutorialPage);
+  });
+  if (tutorialPrev) {
+    tutorialPrev.disabled = tutorialPage === 0;
+  }
+  if (tutorialNext) {
+    const isLast = tutorialPage === TUTORIAL_TOTAL_PAGES - 1;
+    tutorialNext.textContent = isLast ? "开始游戏" : "下一步 →";
+    tutorialNext.classList.toggle("tutorial-nav__btn--primary", isLast);
+  }
+}
+
+function showTutorial() {
+  if (!tutorialOverlay) return;
+  tutorialPage = 0;
+  updateTutorialPage();
+  tutorialOverlay.removeAttribute("hidden");
+  tutorialOverlay.classList.add("is-visible");
+  tutorialActive = true;
+  canvas.dataset.tutorial = "true";
+}
+
+function hideTutorial({ markSeen = true } = {}) {
+  if (!tutorialOverlay) return;
+  tutorialOverlay.classList.remove("is-visible");
+  tutorialOverlay.setAttribute("hidden", "");
+  tutorialActive = false;
+  delete canvas.dataset.tutorial;
+  if (markSeen) {
+    try {
+      window.localStorage?.setItem(TUTORIAL_SEEN_KEY, "true");
+    } catch {
+      // ignore storage errors
+    }
+  }
 }
 
 function acquireFlashlight(count) {
@@ -1363,7 +1540,61 @@ window.addEventListener("blur", () => {
 });
 document.addEventListener("pointerlockchange", handlePointerLockChange);
 
+tutorialSkip?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  hideTutorial();
+});
+
+tutorialOverlay?.addEventListener("pointerdown", (event) => {
+  if (event.target === tutorialOverlay) hideTutorial();
+});
+
+tutorialPrev?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (tutorialPage > 0) {
+    tutorialPage -= 1;
+    updateTutorialPage();
+  }
+});
+
+tutorialNext?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (tutorialPage < TUTORIAL_TOTAL_PAGES - 1) {
+    tutorialPage += 1;
+    updateTutorialPage();
+  } else {
+    hideTutorial();
+  }
+});
+
+tutorialDots.forEach((dot) => {
+  dot.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = Number(dot.dataset.dot);
+    if (Number.isFinite(target)) {
+      tutorialPage = target;
+      updateTutorialPage();
+    }
+  });
+});
+
 syncLevelHud();
 resize();
 renderInventoryBar();
 animate();
+
+// Show tutorial on first launch (after a short delay so loading overlay has time to settle)
+window.setTimeout(() => {
+  if (isPaused || exitComplete) return;
+  let seen = false;
+  try {
+    seen = window.localStorage?.getItem(TUTORIAL_SEEN_KEY) === "true";
+  } catch {
+    seen = false;
+  }
+  if (!seen) showTutorial();
+}, 600);

@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Backrooms</title>
-    <script type="module" crossorigin src="./assets/app-BEbgWp04.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/app-CimHW8ye.css">
+    <script type="module" crossorigin src="./assets/app-BVL76svv.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/app-COJBOEJ5.css">
   </head>
   <body>
     <main id="app" aria-label="Backrooms 3D scene">
@@ -89,6 +89,129 @@
       <div id="pause-overlay" class="pause-overlay" aria-live="polite" hidden>
         <strong id="pause-title">已暂停</strong>
         <span id="pause-subtitle">按 ESC 或点击继续</span>
+      </div>
+
+      <div id="tutorial-overlay" class="tutorial-overlay" aria-live="polite" hidden>
+        <article class="tutorial-modal" role="dialog" aria-label="新手教程">
+          <button id="tutorial-skip" class="tutorial-skip" type="button" aria-label="跳过教程">
+            <span>跳过</span>
+          </button>
+          <div class="tutorial-stage">
+            <div class="tutorial-pages">
+              <section class="tutorial-page is-active" data-page="0">
+                <div class="tutorial-page__art">
+                  <div class="tutorial-keypad">
+                    <kbd class="tutorial-key tutorial-key--wide">W</kbd>
+                    <div class="tutorial-keypad__row">
+                      <kbd class="tutorial-key">A</kbd>
+                      <kbd class="tutorial-key">S</kbd>
+                      <kbd class="tutorial-key">D</kbd>
+                    </div>
+                  </div>
+                  <div class="tutorial-modifier">
+                    <kbd class="tutorial-key tutorial-key--wide">Shift</kbd>
+                    <span class="tutorial-modifier__label">冲刺</span>
+                  </div>
+                </div>
+                <h2 class="tutorial-page__title">移动</h2>
+                <p class="tutorial-page__desc">
+                  使用 <kbd class="tutorial-key tutorial-key--inline">W</kbd>
+                  <kbd class="tutorial-key tutorial-key--inline">A</kbd>
+                  <kbd class="tutorial-key tutorial-key--inline">S</kbd>
+                  <kbd class="tutorial-key tutorial-key--inline">D</kbd>
+                  在场景中移动；按住
+                  <kbd class="tutorial-key tutorial-key--inline">Shift</kbd>
+                  加速冲刺（消耗体力）。
+                </p>
+              </section>
+
+              <section class="tutorial-page" data-page="1">
+                <div class="tutorial-page__art">
+                  <div class="tutorial-jump">
+                    <kbd class="tutorial-key tutorial-key--xl">Space</kbd>
+                    <div class="tutorial-jump__arrow">↑</div>
+                  </div>
+                </div>
+                <h2 class="tutorial-page__title">跳跃</h2>
+                <p class="tutorial-page__desc">
+                  按下
+                  <kbd class="tutorial-key tutorial-key--inline">Space</kbd>
+                  进行跳跃。跳跃可以越过低矮的障碍，也能让你在被细菌追逐时争取逃脱时间。
+                </p>
+              </section>
+
+              <section class="tutorial-page" data-page="2">
+                <div class="tutorial-page__art">
+                  <div class="tutorial-itemkeys">
+                    <div class="tutorial-itemkeys__row">
+                      <kbd class="tutorial-key tutorial-key--wide">F</kbd>
+                      <span class="tutorial-itemkeys__hint">拾取</span>
+                    </div>
+                    <div class="tutorial-itemkeys__row">
+                      <kbd class="tutorial-key tutorial-key--wide">E</kbd>
+                      <span class="tutorial-itemkeys__hint">使用</span>
+                    </div>
+                    <div class="tutorial-itemkeys__row">
+                      <kbd class="tutorial-key">←</kbd>
+                      <kbd class="tutorial-key">→</kbd>
+                      <span class="tutorial-itemkeys__hint">切换</span>
+                    </div>
+                  </div>
+                </div>
+                <h2 class="tutorial-page__title">道具使用</h2>
+                <p class="tutorial-page__desc">
+                  靠近道具按
+                  <kbd class="tutorial-key tutorial-key--inline">F</kbd>
+                  拾取到背包。拾取后默认装备，按
+                  <kbd class="tutorial-key tutorial-key--inline">E</kbd>
+                  使用；水类道具需要<strong>长按 E</strong> 1 秒饮用。
+                  <kbd class="tutorial-key tutorial-key--inline">←</kbd>
+                  <kbd class="tutorial-key tutorial-key--inline">→</kbd>
+                  切换装备。
+                </p>
+              </section>
+
+              <section class="tutorial-page" data-page="3">
+                <div class="tutorial-page__art tutorial-page__art--threat">
+                  <svg viewBox="0 0 100 100" class="tutorial-threat" aria-hidden="true">
+                    <ellipse cx="50" cy="35" rx="14" ry="18" fill="#0a0505" stroke="#5a0a0a" stroke-width="1"/>
+                    <ellipse cx="50" cy="32" rx="3" ry="2" fill="#ff3d22"/>
+                    <ellipse cx="50" cy="36" rx="2" ry="1" fill="#ff8060" opacity="0.7"/>
+                    <path d="M 38 50 Q 32 70 38 88 M 50 52 Q 50 75 50 92 M 62 50 Q 68 70 62 88" stroke="#0a0505" stroke-width="3" fill="none"/>
+                    <circle cx="30" cy="50" r="1.5" fill="#0a0505"/>
+                    <circle cx="70" cy="50" r="1.5" fill="#0a0505"/>
+                    <circle cx="44" cy="80" r="1.5" fill="#0a0505"/>
+                    <circle cx="56" cy="80" r="1.5" fill="#0a0505"/>
+                  </svg>
+                </div>
+                <h2 class="tutorial-page__title">实体威胁</h2>
+                <p class="tutorial-page__desc">
+                  关卡 1+ 会出现<strong style="color:#ff8060">细菌实体</strong>，
+                  关卡 3 还会出现更快的<strong style="color:#ff5040">超级细菌</strong>。
+                  被接触会导致游戏失败。装备
+                  <kbd class="tutorial-key tutorial-key--inline">E</kbd>
+                  探测仪可以 5 秒扫描定位它们。
+                </p>
+              </section>
+            </div>
+          </div>
+          <footer class="tutorial-footer">
+            <div class="tutorial-pagination" role="tablist">
+              <span class="tutorial-pagination__dot is-active" data-dot="0"></span>
+              <span class="tutorial-pagination__dot" data-dot="1"></span>
+              <span class="tutorial-pagination__dot" data-dot="2"></span>
+              <span class="tutorial-pagination__dot" data-dot="3"></span>
+            </div>
+            <div class="tutorial-nav">
+              <button id="tutorial-prev" class="tutorial-nav__btn" type="button" disabled>
+                ← 上一步
+              </button>
+              <button id="tutorial-next" class="tutorial-nav__btn" type="button">
+                下一步 →
+              </button>
+            </div>
+          </footer>
+        </article>
       </div>
 
       <section id="inventory-bar" class="inventory-bar" aria-label="Inventory" hidden>
