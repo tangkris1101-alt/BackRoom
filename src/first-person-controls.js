@@ -3,6 +3,14 @@ import * as THREE from "three";
 const PLAYER_RADIUS = 0.36;
 const GRAVITY = 11.5;
 const JUMP_VELOCITY = 4.4;
+const MAX_STAMINA = 150;
+const STAMINA_DRAIN_RATE = 30;
+const STAMINA_RECOVERY_RATE = 20;
+const STAMINA_RECOVERY_DELAY = 0.55;
+const MIN_SPRINT_STAMINA = 0;
+const ALMOND_WATER_STAMINA_BONUS = 50;
+const ALMOND_WATER_EFFECT_DURATION = 45;
+const MAX_STAMINA_LIMIT = MAX_STAMINA + ALMOND_WATER_STAMINA_BONUS;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -23,7 +31,7 @@ export class FirstPersonControls {
     this.spawn = spawn;
     this.eyeHeight = 1.62;
     this.moveSpeed = 3.05;
-    this.sprintMultiplier = 1.55;
+    this.sprintMultiplier = 1.65;
     this.lookSensitivity = 0.0028;
     this.touchSensitivity = 0.004;
     this.yaw = spawn.yaw;
@@ -39,8 +47,18 @@ export class FirstPersonControls {
     this.isLocked = false;
     this.verticalVelocity = 0;
     this.groundY = this.eyeHeight;
+    this.bodyY = this.eyeHeight;
     this.isGrounded = true;
     this.jumpQueued = false;
+    this.staminaMax = MAX_STAMINA;
+    this.stamina = MAX_STAMINA;
+    this.staminaRecoveryDelay = 0;
+    this.almondWaterTimer = 0;
+    this.isSprinting = false;
+    this.walkCycle = 0;
+    this.walkBobStrength = 0;
+    this.headBobY = 0;
+    this.rollOffset = 0;
 
     this.onCanvasPointerDown = this.onCanvasPointerDown.bind(this);
     this.onCanvasPointerMove = this.onCanvasPointerMove.bind(this);
@@ -86,14 +104,32 @@ export class FirstPersonControls {
   }
 
   reset() {
-    this.camera.position.set(this.spawn.x, this.eyeHeight, this.spawn.z);
+    this.bodyY = this.eyeHeight;
+    this.headBobY = 0;
+    this.rollOffset = 0;
+    this.walkCycle = 0;
+    this.walkBobStrength = 0;
+    this.camera.position.set(this.spawn.x, this.bodyY, this.spawn.z);
     this.verticalVelocity = 0;
     this.isGrounded = true;
     this.jumpQueued = false;
+    if (this.almondWaterTimer <= 0) this.staminaMax = MAX_STAMINA;
+    this.stamina = this.staminaMax;
+    this.staminaRecoveryDelay = 0;
+    this.isSprinting = false;
     this.yaw = this.spawn.yaw;
     this.pitch = -0.025;
     this.applyRotation();
     this.syncCameraState();
+  }
+
+  setWorld({ camera, isWalkable, spawn }) {
+    this.camera = camera;
+    this.isWalkable = isWalkable;
+    this.spawn = spawn;
+    this.keys.clear();
+    this.resetJoystick();
+    this.reset();
   }
 
   canRequestPointerLock() {
@@ -123,7 +159,7 @@ export class FirstPersonControls {
     this.camera.rotation.order = "YXZ";
     this.camera.rotation.y = this.yaw;
     this.camera.rotation.x = this.pitch;
-    this.camera.rotation.z = 0;
+    this.camera.rotation.z = this.rollOffset;
     this.syncCameraState();
   }
 
@@ -134,6 +170,13 @@ export class FirstPersonControls {
     this.canvas.dataset.cameraYaw = this.yaw.toFixed(3);
     this.canvas.dataset.cameraPitch = this.pitch.toFixed(3);
     this.canvas.dataset.grounded = String(this.isGrounded);
+    this.canvas.dataset.stamina = this.stamina.toFixed(0);
+    this.canvas.dataset.staminaMax = this.staminaMax.toFixed(0);
+    this.canvas.dataset.staminaBaseMax = MAX_STAMINA.toFixed(0);
+    this.canvas.dataset.almondWaterActive = String(this.almondWaterTimer > 0);
+    this.canvas.dataset.almondWaterRemaining = this.almondWaterTimer.toFixed(1);
+    this.canvas.dataset.sprinting = String(this.isSprinting);
+    this.canvas.dataset.headBob = this.headBobY.toFixed(3);
   }
 
   queueJump() {
@@ -240,7 +283,16 @@ export class FirstPersonControls {
       return;
     }
 
-    if (["KeyW", "KeyA", "KeyS", "KeyD", "ShiftLeft", "ShiftRight"].includes(event.code)) {
+    if (
+      [
+        "KeyW",
+        "KeyA",
+        "KeyS",
+        "KeyD",
+        "ShiftLeft",
+        "ShiftRight",
+      ].includes(event.code)
+    ) {
       event.preventDefault();
       this.keys.add(event.code);
     }
@@ -252,6 +304,7 @@ export class FirstPersonControls {
 
   onBlur() {
     this.keys.clear();
+    this.isSprinting = false;
     this.resetJoystick();
   }
 
@@ -329,18 +382,50 @@ export class FirstPersonControls {
     this.jumpQueued = false;
 
     this.verticalVelocity -= GRAVITY * delta;
-    this.camera.position.y += this.verticalVelocity * delta;
+    this.bodyY += this.verticalVelocity * delta;
 
-    if (this.camera.position.y <= this.groundY) {
-      this.camera.position.y = this.groundY;
+    if (this.bodyY <= this.groundY) {
+      this.bodyY = this.groundY;
       this.verticalVelocity = 0;
       this.isGrounded = true;
     }
   }
 
+  updateAlmondWaterEffect(delta) {
+    if (this.almondWaterTimer <= 0) return;
+    this.almondWaterTimer = Math.max(0, this.almondWaterTimer - delta);
+    if (this.almondWaterTimer === 0) {
+      this.staminaMax = MAX_STAMINA;
+      this.stamina = Math.min(this.stamina, this.staminaMax);
+    }
+  }
+
+  updateHeadBob(delta, horizontalDistance, hasMovementInput) {
+    const moving = hasMovementInput && horizontalDistance > 0.0001 && this.isGrounded;
+    const targetStrength = moving ? 1 : 0;
+    const blend = Math.min(1, delta * (moving ? 10 : 7));
+    this.walkBobStrength += (targetStrength - this.walkBobStrength) * blend;
+
+    if (moving) {
+      const targetSpeed = this.moveSpeed * (this.isSprinting ? this.sprintMultiplier : 1);
+      const speedRatio = horizontalDistance / Math.max(delta * targetSpeed, 0.0001);
+      const cadence = (this.isSprinting ? 10.35 : 9.4) * Math.min(1.18, Math.max(0.55, speedRatio));
+      this.walkCycle += cadence * delta;
+    }
+
+    const verticalAmplitude = this.isSprinting ? 0.038 : 0.032;
+    const rollAmplitude = this.isSprinting ? 0.014 : 0.012;
+    this.headBobY = Math.sin(this.walkCycle * 2) * verticalAmplitude * this.walkBobStrength;
+    this.rollOffset = Math.sin(this.walkCycle) * rollAmplitude * this.walkBobStrength;
+    this.camera.position.y = this.bodyY + this.headBobY;
+  }
+
   update(delta) {
+    this.updateAlmondWaterEffect(delta);
     let inputX = this.joystickInput.x;
     let inputY = this.joystickInput.y;
+    this.isSprinting = false;
+    let horizontalDistance = 0;
 
     if (this.keys.has("KeyA")) inputX -= 1;
     if (this.keys.has("KeyD")) inputX += 1;
@@ -348,7 +433,9 @@ export class FirstPersonControls {
     if (this.keys.has("KeyS")) inputY -= 1;
 
     const inputLength = Math.hypot(inputX, inputY);
+    let hasMovementInput = false;
     if (inputLength >= 0.01) {
+      hasMovementInput = true;
       if (inputLength > 1) {
         inputX /= inputLength;
         inputY /= inputLength;
@@ -358,19 +445,66 @@ export class FirstPersonControls {
       this.right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).normalize();
       this.move.copy(this.forward).multiplyScalar(inputY).addScaledVector(this.right, inputX);
 
-      const sprinting = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
-      const distance = this.moveSpeed * (sprinting ? this.sprintMultiplier : 1) * delta;
+      const wantsKeyboardSprint =
+        inputY > 0.35 &&
+        this.keys.has("KeyW") &&
+        (this.keys.has("ShiftLeft") || this.keys.has("ShiftRight"));
+      const wantsJoystickSprint =
+        this.joystickPointerId !== null && this.joystickInput.y > 0.88;
+      const wantsSprint = wantsKeyboardSprint || wantsJoystickSprint;
+      this.isSprinting = wantsSprint && this.stamina > MIN_SPRINT_STAMINA;
+      if (this.isSprinting) {
+        this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN_RATE * delta);
+        this.staminaRecoveryDelay = STAMINA_RECOVERY_DELAY;
+      }
+
+      const distance = this.moveSpeed * (this.isSprinting ? this.sprintMultiplier : 1) * delta;
       this.move.normalize().multiplyScalar(distance);
 
+      const currentX = this.camera.position.x;
+      const currentZ = this.camera.position.z;
       const resolved = this.resolveMove(
-        this.camera.position.x + this.move.x,
-        this.camera.position.z + this.move.z,
+        currentX + this.move.x,
+        currentZ + this.move.z,
       );
+      horizontalDistance = Math.hypot(resolved.x - currentX, resolved.z - currentZ);
       this.camera.position.x = resolved.x;
       this.camera.position.z = resolved.z;
     }
 
+    if (!this.isSprinting) {
+      this.staminaRecoveryDelay = Math.max(0, this.staminaRecoveryDelay - delta);
+      if (this.staminaRecoveryDelay === 0) {
+        const recoveryRate = hasMovementInput ? STAMINA_RECOVERY_RATE * 0.72 : STAMINA_RECOVERY_RATE;
+        this.stamina = Math.min(this.staminaMax, this.stamina + recoveryRate * delta);
+      }
+    }
+
     this.updateVerticalMotion(delta);
+    this.updateHeadBob(delta, horizontalDistance, hasMovementInput);
+    this.applyRotation();
+  }
+
+  getState() {
+    return {
+      stamina: this.stamina,
+      staminaMax: this.staminaMax,
+      staminaBaseMax: MAX_STAMINA,
+      sprinting: this.isSprinting,
+      almondWaterActive: this.almondWaterTimer > 0,
+      almondWaterRemaining: this.almondWaterTimer,
+      almondWaterDuration: ALMOND_WATER_EFFECT_DURATION,
+    };
+  }
+
+  drinkAlmondWater(bonus = ALMOND_WATER_STAMINA_BONUS) {
+    const temporaryBonus = Math.max(0, Math.min(bonus, MAX_STAMINA_LIMIT - MAX_STAMINA));
+    this.staminaMax = Math.min(MAX_STAMINA_LIMIT, MAX_STAMINA + temporaryBonus);
+    this.stamina = this.staminaMax;
+    this.almondWaterTimer = ALMOND_WATER_EFFECT_DURATION;
+    this.staminaRecoveryDelay = 0;
+    this.isSprinting = false;
     this.syncCameraState();
+    return this.getState();
   }
 }
