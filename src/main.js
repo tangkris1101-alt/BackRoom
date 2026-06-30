@@ -166,6 +166,7 @@ const STATUS_TEXT = {
     pauseSubtitle: "按 ESC 或点击继续",
     inventoryHint: "← → 切换 / E 使用",
     inventoryEmpty: "背包为空",
+    pickupEmpty: "无物品可拾取",
   },
   en: {
     "almond-water": "ALMOND WATER",
@@ -192,6 +193,7 @@ const STATUS_TEXT = {
     pauseSubtitle: "ESC / TAP TO RESUME",
     inventoryHint: "← → SWITCH / E USE",
     inventoryEmpty: "INVENTORY EMPTY",
+    pickupEmpty: "NO ITEM IN RANGE",
   },
 };
 
@@ -756,7 +758,11 @@ function updateDetector(delta, metrics) {
 function renderInventoryBar() {
   if (!inventoryBar || !inventorySlots) return;
   const hasItems = inventory.length > 0;
-  inventoryBar.classList.toggle("is-visible", hasItems);
+  inventoryBar.classList.toggle("is-visible", true);
+  inventoryBar.classList.toggle("is-empty", !hasItems);
+  if (inventorySlots) {
+    inventorySlots.dataset.emptyText = formatLocalizedStatus("inventoryEmpty");
+  }
   if (!hasItems) {
     inventorySlots.replaceChildren();
     inventoryPrev?.setAttribute("hidden", "");
@@ -909,12 +915,27 @@ function updatePickupHud(metrics) {
     : "";
 }
 
+function findNearestPickupable(metrics) {
+  const candidates = [
+    metrics.almondWater,
+    metrics.superAlmondWater,
+    metrics.flashlight,
+    metrics.detector,
+  ].filter((item) => item && Number.isFinite(item.distance) && item.available);
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.distance - b.distance);
+  return candidates[0];
+}
+
 function updateItemInfo(metrics) {
   const item = metrics.focusItem;
+  const pickupable = findNearestPickupable(metrics);
   const hasFocus = Boolean(item);
+  const canPickup = Boolean(pickupable);
   if (itemInfo) {
     if (hasFocus) itemInfo.hidden = false;
     itemInfo.classList.toggle("is-visible", hasFocus);
+    itemInfo.classList.toggle("is-pickup-ready", canPickup);
     if (!hasFocus) itemInfo.hidden = true;
   }
   if (hasFocus) {
@@ -927,12 +948,35 @@ function updateItemInfo(metrics) {
   canvas.dataset.focusItemDistance = Number.isFinite(item?.distance)
     ? String(Math.round(item.distance * 10) / 10)
     : "";
+  canvas.dataset.pickupAvailable = String(canPickup);
+}
+
+function showItemInfoPickupKey(show) {
+  if (!itemInfo) return;
+  const existing = itemInfo.querySelector(".item-info__pickup-key");
+  if (!show) {
+    existing?.remove();
+    return;
+  }
+  if (existing) return;
+  const key = document.createElement("span");
+  key.className = "item-info__pickup-key";
+  key.textContent = currentLanguage === "en" ? "F" : "F";
+  itemInfo.prepend(key);
+}
+
+function flashPickupHint(textKey, durationMs = 1100) {
+  pickupFlashText = formatLocalizedStatus(textKey);
+  pickupFlashUntil = clock.elapsedTime + durationMs / 1000;
 }
 
 function usePickup() {
-  if (exitComplete || levelTransition) return;
+  if (exitComplete || levelTransition || isPaused) return;
   const pickup = world.tryPickup?.(world.camera.position);
-  if (!pickup?.pickedUp) return;
+  if (!pickup?.pickedUp) {
+    flashPickupHint("pickupEmpty", 900);
+    return;
+  }
 
   if (pickup.itemId === "flashlight") {
     acquireFlashlight(pickup.count);
@@ -1005,6 +1049,7 @@ function updateHud(metrics, controlState, elapsed) {
               : "NO SIGNAL");
   updatePickupHud(metrics);
   updateItemInfo(metrics);
+  showItemInfoPickupKey(Boolean(metrics.focusItem) && Boolean(findNearestPickupable(metrics)));
   updateStaminaHud(controlState);
   updateBuffCards(controlState);
 }
