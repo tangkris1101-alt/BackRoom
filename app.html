@@ -52,6 +52,13 @@
             </div>
             <span id="detector-readout">--</span>
           </div>
+          <div id="drinking-meter" class="drinking-meter" aria-label="Drinking" hidden>
+            <span class="drinking-meter__label">DRINK</span>
+            <div class="drinking-meter__track">
+              <div id="drinking-fill" class="drinking-meter__fill"></div>
+            </div>
+            <span id="drinking-readout">--</span>
+          </div>
           <div id="buff-list" class="buff-list" aria-live="polite" hidden></div>
         </div>
       </header>
@@ -77,6 +84,21 @@
         <span>LEVEL 0 SIGNAL LOST</span>
       </div>
 
+      <div id="pause-overlay" class="pause-overlay" aria-live="polite" hidden>
+        <strong id="pause-title">已暂停</strong>
+        <span id="pause-subtitle">按 ESC 或点击继续</span>
+      </div>
+
+      <section id="inventory-bar" class="inventory-bar" aria-label="Inventory" hidden>
+        <button id="inventory-prev" class="inventory-nav inventory-nav--prev" type="button" aria-label="Previous item" hidden>
+          <span></span>
+        </button>
+        <div id="inventory-slots" class="inventory-slots"></div>
+        <button id="inventory-next" class="inventory-nav inventory-nav--next" type="button" aria-label="Next item" hidden>
+          <span></span>
+        </button>
+      </section>
+
       <div id="joystick" class="joystick" aria-label="Move" hidden>
         <div class="joystick__knob"></div>
       </div>
@@ -86,10 +108,16 @@
       <button id="use-button" class="use-button" type="button" aria-label="Pick up" hidden>
         <span>F</span>
       </button>
+      <button id="action-button" class="action-button" type="button" aria-label="Use equipped item" hidden disabled>
+        <span>E</span>
+      </button>
       <button id="flashlight-button" class="flashlight-button" type="button" aria-label="Toggle flashlight" hidden>
         <span></span>
       </button>
       <button id="detector-button" class="detector-button" type="button" aria-label="Use detector" hidden>
+        <span></span>
+      </button>
+      <button id="pause-button" class="pause-button" type="button" aria-label="Pause" hidden>
         <span></span>
       </button>
     </main>

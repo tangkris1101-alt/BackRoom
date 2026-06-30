@@ -1618,7 +1618,16 @@ function createBacteriaModel() {
   return group;
 }
 
-function chooseBacteriaSpawn({ cols, rows, isCellOpen, getCellCenter, targetPosition, spawnPosition }) {
+function chooseBacteriaSpawn({
+  cols,
+  rows,
+  isCellOpen,
+  getCellCenter,
+  targetPosition,
+  spawnPosition,
+  avoidPositions = [],
+  minSeparation = CELL_SIZE * 5,
+}) {
   const candidates = [];
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
@@ -1626,12 +1635,51 @@ function chooseBacteriaSpawn({ cols, rows, isCellOpen, getCellCenter, targetPosi
       const center = getCellCenter(col, row);
       const fromExit = Math.hypot(center.x - targetPosition.x, center.z - targetPosition.z);
       const fromSpawn = Math.hypot(center.x - spawnPosition.x, center.z - spawnPosition.z);
-      if (fromExit <= BACTERIA_SPAWN_MAX_FROM_EXIT && fromSpawn >= BACTERIA_SPAWN_MIN_FROM_PLAYER) {
+      const farFromAvoids = avoidPositions.every(
+        (avoid) => Math.hypot(center.x - avoid.x, center.z - avoid.z) >= minSeparation,
+      );
+      if (
+        fromExit <= BACTERIA_SPAWN_MAX_FROM_EXIT &&
+        fromSpawn >= BACTERIA_SPAWN_MIN_FROM_PLAYER &&
+        farFromAvoids
+      ) {
         candidates.push({ ...center, score: fromExit + Math.random() * CELL_SIZE });
       }
     }
   }
-  return candidates.sort((a, b) => a.score - b.score)[0] ?? targetPosition;
+  candidates.sort((a, b) => a.score - b.score);
+  return candidates;
+}
+
+function pickBacteriaSpawnPositions({
+  cols,
+  rows,
+  isCellOpen,
+  getCellCenter,
+  targetPosition,
+  spawnPosition,
+  count,
+}) {
+  const ranked = chooseBacteriaSpawn({
+    cols,
+    rows,
+    isCellOpen,
+    getCellCenter,
+    targetPosition,
+    spawnPosition,
+  });
+  const picked = [];
+  for (const candidate of ranked) {
+    if (picked.length >= count) break;
+    const farFromPicked = picked.every(
+      (used) => Math.hypot(candidate.x - used.x, candidate.z - used.z) >= CELL_SIZE * 6,
+    );
+    if (farFromPicked) picked.push(candidate);
+  }
+  while (picked.length < count && ranked.length > 0) {
+    picked.push(ranked[picked.length % ranked.length]);
+  }
+  return picked;
 }
 
 function resolveEntityStep(position, deltaX, deltaZ, isWalkable) {
@@ -1648,7 +1696,7 @@ function resolveEntityStep(position, deltaX, deltaZ, isWalkable) {
   return { x: position.x, z: position.z };
 }
 
-function createBacteriaEntity(scene, { spawnPosition, isWalkable, speed = 1.05 }) {
+function createBacteriaEntity(scene, { spawnPosition, isWalkable, speed = 1.05, id = "bacteria" }) {
   const group = createBacteriaModel();
   group.position.set(spawnPosition.x, 0, spawnPosition.z);
   group.rotation.y = Math.random() * Math.PI * 2;
@@ -1678,7 +1726,7 @@ function createBacteriaEntity(scene, { spawnPosition, isWalkable, speed = 1.05 }
       group.rotation.z = sway;
       contact = contact || distance <= BACTERIA_CONTACT_RADIUS;
       return {
-        id: "bacteria",
+        id,
         active: true,
         contact,
         distance,
@@ -3085,7 +3133,7 @@ function createLevelOneScene() {
       getCellCenter: levelOneCellCenter,
       targetPosition,
       spawnPosition: spawnCell,
-    }),
+    })[0] ?? spawnCell,
     isWalkable,
     speed: 1.0,
   });
@@ -4162,7 +4210,7 @@ function createLevelTwoScene() {
       getCellCenter: levelTwoCellCenter,
       targetPosition,
       spawnPosition: spawnCell,
-    }),
+    })[0] ?? spawnCell,
     isWalkable,
     speed: 1.08,
   });
@@ -4623,6 +4671,31 @@ function createLevelThreeScene() {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
   });
+  const detector = createDetectorPickup(scene, {
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    getCellCenter: levelTwoCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+  });
+  const bacteriaSpawns = pickBacteriaSpawnPositions({
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    getCellCenter: levelTwoCellCenter,
+    targetPosition,
+    spawnPosition: spawnCell,
+    count: 3,
+  });
+  const bacteria = bacteriaSpawns.map((spawnPosition) =>
+    createBacteriaEntity(scene, {
+      spawnPosition,
+      isWalkable,
+      speed: 2.1,
+      id: "super-bacteria",
+    }),
+  );
 
   let objectiveReached = false;
 
@@ -4670,18 +4743,24 @@ function createLevelThreeScene() {
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
     const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
+    const detectorState = detector.update(delta, elapsed, playerPosition);
+    const bacteriaStates = bacteria.map((b) => b.update(delta, elapsed, playerPosition));
+    const entityContact = bacteriaStates.some((state) => state.contact);
 
     return {
       exitDistance: Math.round(exitDistance),
       exitReached: objectiveReached,
+      entityContact,
       flicker,
       almondWater: almondWaterState,
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
-      entities: [],
+      detector: detectorState,
+      entities: bacteriaStates,
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
+        detector.inspect(camera),
         flashlight.inspect(camera),
       ),
       lightState: updateLightState(delta, flicker),
@@ -4705,7 +4784,8 @@ function createLevelThreeScene() {
     spawn,
     isWalkable,
     update,
-    tryPickup: (playerPosition) => tryPickupItems(playerPosition, superAlmondWater, flashlight, almondWater),
+    tryPickup: (playerPosition) =>
+      tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
   };
 }
 

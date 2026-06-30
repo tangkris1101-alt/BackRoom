@@ -14,6 +14,9 @@ const ALMOND_WATER_MAX_STAMINA = MAX_STAMINA + ALMOND_WATER_STAMINA_BONUS;
 const SUPER_ALMOND_WATER_MAX_STAMINA = 250;
 const SUPER_ALMOND_WATER_EFFECT_DURATION = 25;
 const SUPER_ALMOND_WATER_RECOVERY_MULTIPLIER = 2;
+const ALMOND_WATER_DRINK_DURATION = 1.0;
+const DRINK_MOVE_MULTIPLIER = 0.5;
+const DRINK_ON_COMPLETE_EVENT = "backrooms:drink-complete";
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -59,6 +62,11 @@ export class FirstPersonControls {
     this.almondWaterTimer = 0;
     this.superAlmondWaterTimer = 0;
     this.isSprinting = false;
+    this.isDrinking = false;
+    this.drinkTimer = 0;
+    this.drinkItemId = null;
+    this.drinkStaminaBonus = ALMOND_WATER_STAMINA_BONUS;
+    this.drinkCancelled = false;
     this.walkCycle = 0;
     this.walkBobStrength = 0;
     this.headBobY = 0;
@@ -122,6 +130,10 @@ export class FirstPersonControls {
     this.refreshStaminaModifiers({ fill: true });
     this.staminaRecoveryDelay = 0;
     this.isSprinting = false;
+    this.isDrinking = false;
+    this.drinkTimer = 0;
+    this.drinkItemId = null;
+    this.drinkCancelled = false;
     this.isMoving = false;
     this.movementSpeed = 0;
     this.yaw = this.spawn.yaw;
@@ -189,6 +201,15 @@ export class FirstPersonControls {
     this.canvas.dataset.moving = String(this.isMoving);
     this.canvas.dataset.movementSpeed = this.movementSpeed.toFixed(3);
     this.canvas.dataset.headBob = this.headBobY.toFixed(3);
+    this.canvas.dataset.drinking = String(this.isDrinking);
+    this.canvas.dataset.drinkItemId = this.drinkItemId ?? "";
+    this.canvas.dataset.drinkProgress = this.isDrinking
+      ? (1 - this.drinkTimer / ALMOND_WATER_DRINK_DURATION).toFixed(3)
+      : "0";
+  }
+
+  clearDrinkCancelled() {
+    this.drinkCancelled = false;
   }
 
   queueJump() {
@@ -456,6 +477,7 @@ export class FirstPersonControls {
 
   update(delta) {
     this.updateStaminaEffects(delta);
+    this.updateDrinking(delta);
     let inputX = this.joystickInput.x;
     let inputY = this.joystickInput.y;
     this.isSprinting = false;
@@ -486,13 +508,23 @@ export class FirstPersonControls {
       const wantsJoystickSprint =
         this.joystickPointerId !== null && this.joystickInput.y > 0.88;
       const wantsSprint = wantsKeyboardSprint || wantsJoystickSprint;
-      this.isSprinting = wantsSprint && this.stamina > MIN_SPRINT_STAMINA;
-      if (this.isSprinting) {
-        this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN_RATE * delta);
-        this.staminaRecoveryDelay = STAMINA_RECOVERY_DELAY;
+
+      if (this.isDrinking && wantsSprint) {
+        this.cancelDrink(true);
+      } else {
+        this.isSprinting = wantsSprint && this.stamina > MIN_SPRINT_STAMINA;
+        if (this.isSprinting) {
+          this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN_RATE * delta);
+          this.staminaRecoveryDelay = STAMINA_RECOVERY_DELAY;
+        }
       }
 
-      const distance = this.moveSpeed * (this.isSprinting ? this.sprintMultiplier : 1) * delta;
+      const drinkMultiplier = this.isDrinking ? DRINK_MOVE_MULTIPLIER : 1;
+      const distance =
+        this.moveSpeed *
+        (this.isSprinting ? this.sprintMultiplier : 1) *
+        drinkMultiplier *
+        delta;
       this.move.normalize().multiplyScalar(distance);
 
       const currentX = this.camera.position.x;
@@ -538,6 +570,12 @@ export class FirstPersonControls {
       superAlmondWaterDuration: SUPER_ALMOND_WATER_EFFECT_DURATION,
       staminaRecoveryMultiplier: this.getStaminaRecoveryMultiplier(),
       activeBuffs: this.getActiveBuffs(),
+      isDrinking: this.isDrinking,
+      drinkItemId: this.drinkItemId,
+      drinkProgress: this.isDrinking
+        ? 1 - this.drinkTimer / ALMOND_WATER_DRINK_DURATION
+        : 0,
+      drinkCancelled: this.drinkCancelled,
     };
   }
 
@@ -567,6 +605,46 @@ export class FirstPersonControls {
     }
 
     return [];
+  }
+
+  startDrink(itemId, { staminaBonus = ALMOND_WATER_STAMINA_BONUS } = {}) {
+    if (this.isDrinking) return false;
+    if (itemId !== "almond-water" && itemId !== "super-almond-water") return false;
+    this.isDrinking = true;
+    this.drinkTimer = ALMOND_WATER_DRINK_DURATION;
+    this.drinkItemId = itemId;
+    this.drinkStaminaBonus = staminaBonus;
+    this.drinkCancelled = false;
+    this.isSprinting = false;
+    this.staminaRecoveryDelay = 0;
+    this.syncCameraState();
+    return true;
+  }
+
+  cancelDrink(notify = true) {
+    if (!this.isDrinking) return false;
+    this.isDrinking = false;
+    this.drinkTimer = 0;
+    if (notify) this.drinkCancelled = true;
+    this.syncCameraState();
+    return true;
+  }
+
+  updateDrinking(delta) {
+    if (!this.isDrinking) return;
+    this.drinkTimer = Math.max(0, this.drinkTimer - delta);
+    if (this.drinkTimer <= 0) {
+      const completedItemId = this.drinkItemId;
+      const completedBonus = this.drinkStaminaBonus;
+      this.isDrinking = false;
+      this.drinkTimer = 0;
+      if (completedItemId === "super-almond-water") {
+        this.drinkSuperAlmondWater();
+      } else {
+        this.drinkAlmondWater(completedBonus);
+      }
+      this.notifyDrinkComplete?.(completedItemId);
+    }
   }
 
   drinkAlmondWater(bonus = ALMOND_WATER_STAMINA_BONUS) {

@@ -8,8 +8,10 @@ const canvas = document.querySelector("#scene");
 const joystick = document.querySelector("#joystick");
 const jumpButton = document.querySelector("#jump-button");
 const useButton = document.querySelector("#use-button");
+const actionButton = document.querySelector("#action-button");
 const flashlightButton = document.querySelector("#flashlight-button");
 const detectorButton = document.querySelector("#detector-button");
+const pauseButton = document.querySelector("#pause-button");
 const statusText = document.querySelector("#status-text");
 const levelSelect = document.querySelector("#level-select");
 const languageSelect = document.querySelector("#language-select");
@@ -26,6 +28,9 @@ const flashlightReadout = document.querySelector("#flashlight-readout");
 const detectorMeter = document.querySelector("#detector-meter");
 const detectorFill = document.querySelector("#detector-fill");
 const detectorReadout = document.querySelector("#detector-readout");
+const drinkingMeter = document.querySelector("#drinking-meter");
+const drinkingFill = document.querySelector("#drinking-fill");
+const drinkingReadout = document.querySelector("#drinking-readout");
 const loadingOverlay = document.querySelector("#loading-overlay");
 const loadingFill = document.querySelector("#loading-fill");
 const loadingStatus = document.querySelector("#loading-status");
@@ -39,6 +44,13 @@ const itemInfoEffect = document.querySelector("#item-info-effect");
 const itemInfoAction = document.querySelector("#item-info-action");
 const buffList = document.querySelector("#buff-list");
 const entityMarkers = document.querySelector("#entity-markers");
+const pauseOverlay = document.querySelector("#pause-overlay");
+const pauseTitle = document.querySelector("#pause-title");
+const pauseSubtitle = document.querySelector("#pause-subtitle");
+const inventoryBar = document.querySelector("#inventory-bar");
+const inventorySlots = document.querySelector("#inventory-slots");
+const inventoryPrev = document.querySelector("#inventory-prev");
+const inventoryNext = document.querySelector("#inventory-next");
 
 const MAX_PIXEL_RATIO = 1.25;
 const MIN_PIXEL_RATIO = 0.75;
@@ -53,6 +65,10 @@ const DETECTOR_SCAN_DURATION = 5;
 const DETECTOR_COOLDOWN_DURATION = 60;
 const DETECTOR_RANGE = 72;
 const LANGUAGE_STORAGE_KEY = "backrooms-language";
+const ALMOND_WATER_DURATION = 45;
+const SUPER_ALMOND_WATER_DURATION = 25;
+const ALMOND_WATER_STAMINA_BONUS = 50;
+const ALMOND_WATER_DRINK_DURATION = 1.0;
 
 const ITEM_TEXT = {
   "zh-CN": {
@@ -134,13 +150,22 @@ const STATUS_TEXT = {
     flashlightRefilled: "手电筒电量已满",
     detectorAcquired: "探测仪已激活",
     detectorReady: "就绪",
+    detectorReadyHint: "按 E 使用",
     detectorScan: "扫描 {seconds}秒",
     detectorCharge: "充能 {seconds}秒",
     bacteriaMarker: "细菌实体",
     bacteriaFailTitle: "失联",
     bacteriaFailSubtitle: "接触细菌实体",
+    superBacteriaMarker: "超级细菌",
+    superBacteriaFailSubtitle: "接触超级细菌实体",
     almondWaterUsed: "杏仁水 {seconds}秒",
     superAlmondWaterUsed: "超级杏仁水 {seconds}秒",
+    almondWaterDrinking: "饮用中",
+    almondWaterCancelled: "饮用取消",
+    pauseTitle: "已暂停",
+    pauseSubtitle: "按 ESC 或点击继续",
+    inventoryHint: "← → 切换 / E 使用",
+    inventoryEmpty: "背包为空",
   },
   en: {
     "almond-water": "ALMOND WATER",
@@ -151,17 +176,26 @@ const STATUS_TEXT = {
     flashlightRefilled: "FLASHLIGHT BATTERY FULL",
     detectorAcquired: "DETECTOR ONLINE",
     detectorReady: "READY",
+    detectorReadyHint: "PRESS E TO USE",
     detectorScan: "SCAN {seconds}s",
     detectorCharge: "CHARGE {seconds}s",
     bacteriaMarker: "BACTERIA",
     bacteriaFailTitle: "SIGNAL LOST",
     bacteriaFailSubtitle: "BACTERIA CONTACT",
+    superBacteriaMarker: "SUPER BACTERIA",
+    superBacteriaFailSubtitle: "SUPER BACTERIA CONTACT",
     almondWaterUsed: "ALMOND WATER {seconds}s",
     superAlmondWaterUsed: "SUPER ALMOND WATER {seconds}s",
+    almondWaterDrinking: "DRINKING",
+    almondWaterCancelled: "DRINK CANCELLED",
+    pauseTitle: "PAUSED",
+    pauseSubtitle: "ESC / TAP TO RESUME",
+    inventoryHint: "← → SWITCH / E USE",
+    inventoryEmpty: "INVENTORY EMPTY",
   },
 };
 
-[hud, joystick, jumpButton, useButton, flashlightButton, detectorButton, loadingOverlay].forEach((element) => {
+[hud, joystick, jumpButton, useButton, actionButton, flashlightButton, detectorButton, pauseButton, loadingOverlay].forEach((element) => {
   element?.removeAttribute("hidden");
 });
 exitOverlay?.setAttribute("hidden", "");
@@ -207,6 +241,13 @@ const controls = new FirstPersonControls({
 const ambientHum = createAmbientHum();
 
 const clock = new THREE.Clock();
+
+controls.notifyDrinkComplete = (itemId) => {
+  if (itemId === "almond-water" || itemId === "super-almond-water") {
+    removeInventory(itemId);
+    renderInventoryBar();
+  }
+};
 let frameCount = 0;
 let sampleFrameCount = 0;
 let sampleElapsed = 0;
@@ -220,11 +261,28 @@ let pickupFlashText = "";
 let flashlightOwned = false;
 let flashlightOn = false;
 let flashlightBattery = 0;
-let detectorOwned = false;
 let detectorActiveTimer = 0;
 let detectorCooldownTimer = 0;
 let currentLanguage = "zh-CN";
 const detectorProjection = new THREE.Vector3();
+
+const INVENTORY_DEFS = {
+  flashlight: { id: "flashlight", type: "toggle", unique: true, stackable: false },
+  detector: { id: "detector", type: "scan", unique: true, stackable: false },
+  "almond-water": { id: "almond-water", type: "consumable", unique: false, stackable: true },
+  "super-almond-water": {
+    id: "super-almond-water",
+    type: "consumable",
+    unique: false,
+    stackable: true,
+  },
+};
+const inventory = [];
+let equippedIndex = -1;
+let lastDrinkCancelled = false;
+let lastDrinkCompletedItemId = null;
+let isPaused = false;
+let pauseAccumulatedDelta = 0;
 
 try {
   const savedLanguage = window.localStorage?.getItem(LANGUAGE_STORAGE_KEY);
@@ -239,6 +297,57 @@ canvas.dataset.language = currentLanguage;
 
 function getLocalizedText(collection, id) {
   return collection[currentLanguage]?.[id] ?? collection.en?.[id] ?? collection["zh-CN"]?.[id] ?? {};
+}
+
+function findInventoryIndex(id) {
+  return inventory.findIndex((entry) => entry.id === id);
+}
+
+function getInventoryCount(id) {
+  const entry = inventory[findInventoryIndex(id)];
+  return entry ? entry.count : 0;
+}
+
+function addInventory(id, { silent = false } = {}) {
+  const def = INVENTORY_DEFS[id];
+  if (!def) return false;
+  const existing = inventory[findInventoryIndex(id)];
+  if (existing) {
+    if (def.stackable) existing.count += 1;
+    return true;
+  }
+  inventory.push({ id, count: def.unique ? 1 : 1, type: def.type });
+  equippedIndex = inventory.length - 1;
+  return true;
+}
+
+function removeInventory(id) {
+  const index = findInventoryIndex(id);
+  if (index === -1) return false;
+  inventory[index].count -= 1;
+  if (inventory[index].count <= 0) {
+    inventory.splice(index, 1);
+    if (inventory.length === 0) {
+      equippedIndex = -1;
+    } else if (equippedIndex >= inventory.length) {
+      equippedIndex = inventory.length - 1;
+    } else if (equippedIndex > index) {
+      equippedIndex -= 1;
+    }
+  }
+  return true;
+}
+
+function cycleInventory(direction) {
+  if (inventory.length === 0) {
+    equippedIndex = -1;
+    return;
+  }
+  equippedIndex = (equippedIndex + direction + inventory.length) % inventory.length;
+}
+
+function getEquipped() {
+  return equippedIndex >= 0 ? inventory[equippedIndex] : null;
 }
 
 function formatLocalizedStatus(id, values = {}) {
@@ -360,6 +469,10 @@ languageSelect?.addEventListener("change", () => {
   canvas.dataset.language = nextLanguage;
   updateBuffCards(controls.getState());
   updateDetectorHud();
+  if (isPaused) {
+    if (pauseTitle) pauseTitle.textContent = formatLocalizedStatus("pauseTitle");
+    if (pauseSubtitle) pauseSubtitle.textContent = formatLocalizedStatus("pauseSubtitle");
+  }
   try {
     window.localStorage?.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
   } catch {
@@ -513,7 +626,7 @@ function updateFlashlight(delta) {
   }
 
   const ratio = FLASHLIGHT_BATTERY_MAX > 0 ? flashlightBattery / FLASHLIGHT_BATTERY_MAX : 0;
-  flashlightLight.intensity = flashlightOwned && flashlightOn && flashlightBattery > 0 ? 7.6 * Math.max(0.46, ratio) : 0;
+  flashlightLight.intensity = flashlightOwned && flashlightOn && flashlightBattery > 0 ? 22.8 * Math.max(0.46, ratio) : 0;
   flashlightLight.distance = 28 + ratio * 24;
   updateFlashlightHud();
 }
@@ -602,8 +715,11 @@ function updateEntityMarkers(metrics) {
 
         const marker = document.createElement("div");
         marker.className = "entity-marker";
+        if (entity.id === "super-bacteria") marker.classList.add("entity-marker--super");
         const name = document.createElement("strong");
-        name.textContent = formatLocalizedStatus("bacteriaMarker");
+        name.textContent = formatLocalizedStatus(
+          entity.id === "super-bacteria" ? "superBacteriaMarker" : "bacteriaMarker",
+        );
         const distance = document.createElement("span");
         distance.textContent = `${Math.round(entity.distance)}m`;
         marker.style.left = `${x}px`;
@@ -636,8 +752,107 @@ function updateDetector(delta, metrics) {
   updateEntityMarkers(metrics);
 }
 
+function renderInventoryBar() {
+  if (!inventoryBar || !inventorySlots) return;
+  const hasItems = inventory.length > 0;
+  inventoryBar.classList.toggle("is-visible", hasItems);
+  if (!hasItems) {
+    inventorySlots.replaceChildren();
+    inventoryPrev?.setAttribute("hidden", "");
+    inventoryNext?.setAttribute("hidden", "");
+    updateActionButtonState();
+    return;
+  }
+  inventoryPrev?.removeAttribute("hidden");
+  inventoryNext?.removeAttribute("hidden");
+
+  const fragment = document.createDocumentFragment();
+  inventory.forEach((entry, index) => {
+    const def = INVENTORY_DEFS[entry.id];
+    const slot = document.createElement("div");
+    slot.className = "inventory-slot";
+    slot.dataset.type = entry.id;
+    if (index === equippedIndex) slot.classList.add("is-equipped");
+
+    const icon = document.createElement("div");
+    icon.className = "inventory-slot__icon";
+    slot.append(icon);
+
+    if (def?.stackable && entry.count > 1) {
+      const count = document.createElement("span");
+      count.className = "inventory-slot__count";
+      count.textContent = String(entry.count);
+      slot.append(count);
+    }
+
+    fragment.append(slot);
+  });
+  inventorySlots.replaceChildren(fragment);
+  updateActionButtonState();
+}
+
+function updateActionButtonState() {
+  if (!actionButton) return;
+  const equipped = getEquipped();
+  const hasUsable = Boolean(equipped);
+  actionButton.classList.toggle("is-visible", hasUsable);
+  actionButton.disabled = !hasUsable;
+}
+
+function updateDrinkingMeter(controlState) {
+  if (!drinkingMeter) return;
+  const isDrinking = Boolean(controlState?.isDrinking);
+  drinkingMeter.hidden = !isDrinking && !lastDrinkCancelled;
+  drinkingMeter.dataset.state = isDrinking ? "active" : "cancelled";
+  const progress = Math.max(0, Math.min(1, controlState?.drinkProgress ?? 0));
+  if (drinkingFill) {
+    drinkingFill.style.transform = isDrinking ? `scaleX(${progress.toFixed(3)})` : "scaleX(0)";
+  }
+  if (drinkingReadout) {
+    if (isDrinking) {
+      const remaining = Math.max(0, ALMOND_WATER_DRINK_DURATION - progress * ALMOND_WATER_DRINK_DURATION);
+      drinkingReadout.textContent = `${remaining.toFixed(1)}s`;
+    } else if (lastDrinkCancelled) {
+      drinkingReadout.textContent = formatLocalizedStatus("almondWaterCancelled");
+    } else {
+      drinkingReadout.textContent = "--";
+    }
+  }
+  if (lastDrinkCancelled && !isDrinking && clock.elapsedTime > lastDrinkCancelledUntil) {
+    lastDrinkCancelled = false;
+    drinkingMeter.hidden = true;
+  }
+}
+
+let lastDrinkCancelledUntil = 0;
+
+function setPauseState(next) {
+  if (isPaused === next) return;
+  isPaused = next;
+  canvas.dataset.paused = String(isPaused);
+  if (pauseOverlay) {
+    pauseOverlay.classList.toggle("is-visible", isPaused);
+    if (isPaused) pauseOverlay.removeAttribute("hidden");
+  }
+  if (pauseTitle) pauseTitle.textContent = formatLocalizedStatus("pauseTitle");
+  if (pauseSubtitle) pauseSubtitle.textContent = formatLocalizedStatus("pauseSubtitle");
+  if (isPaused) {
+    pauseAccumulatedDelta = clock.getDelta();
+    if (document.pointerLockElement === canvas && document.exitPointerLock) {
+      try {
+        document.exitPointerLock();
+      } catch {
+        // ignore
+      }
+    }
+  } else {
+    clock.getDelta();
+  }
+}
+
 function acquireFlashlight(count) {
   const wasOwned = flashlightOwned;
+  addInventory("flashlight");
   flashlightOwned = true;
   flashlightOn = false;
   flashlightBattery = FLASHLIGHT_BATTERY_MAX;
@@ -645,16 +860,18 @@ function acquireFlashlight(count) {
   pickupFlashUntil = clock.elapsedTime + 1.7;
   canvas.dataset.flashlightPickups = String(count ?? 1);
   updateFlashlightHud();
+  renderInventoryBar();
 }
 
 function acquireDetector(count) {
+  const wasFirst = !detectorOwned;
+  addInventory("detector");
   detectorOwned = true;
-  detectorActiveTimer = DETECTOR_SCAN_DURATION;
-  detectorCooldownTimer = 0;
-  pickupFlashText = formatLocalizedStatus("detectorAcquired");
+  pickupFlashText = formatLocalizedStatus(wasFirst ? "detectorAcquired" : "detectorReadyHint");
   pickupFlashUntil = clock.elapsedTime + 1.7;
   canvas.dataset.detectorPickups = String(count ?? 1);
   updateDetectorHud();
+  renderInventoryBar();
 }
 
 function updatePickupHud(metrics) {
@@ -721,16 +938,16 @@ function usePickup() {
   } else if (pickup.itemId === "detector") {
     acquireDetector(pickup.count);
   } else if (pickup.itemId === "super-almond-water") {
-    const controlState = controls.drinkSuperAlmondWater();
+    addInventory("super-almond-water");
     pickupFlashText = formatLocalizedStatus("superAlmondWaterUsed", {
-      seconds: Math.ceil(controlState.superAlmondWaterRemaining),
+      seconds: SUPER_ALMOND_WATER_DURATION,
     });
     pickupFlashUntil = clock.elapsedTime + 1.9;
     canvas.dataset.superAlmondWaterDrinks = String(pickup.count);
-  } else {
-    const controlState = controls.drinkAlmondWater(pickup.staminaBonus);
+  } else if (pickup.itemId === "almond-water") {
+    addInventory("almond-water");
     pickupFlashText = formatLocalizedStatus("almondWaterUsed", {
-      seconds: Math.ceil(controlState.almondWaterRemaining),
+      seconds: ALMOND_WATER_DURATION,
     });
     pickupFlashUntil = clock.elapsedTime + 1.7;
     canvas.dataset.almondWaterDrinks = String(pickup.count);
@@ -738,6 +955,31 @@ function usePickup() {
 
   useButton?.classList.add("is-active");
   window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
+  renderInventoryBar();
+}
+
+function useEquipped() {
+  if (exitComplete || levelTransition || isPaused) return;
+  const equipped = getEquipped();
+  if (!equipped) return;
+
+  if (equipped.id === "flashlight") {
+    toggleFlashlight();
+  } else if (equipped.id === "detector") {
+    startDetectorScan();
+  } else if (equipped.id === "almond-water") {
+    const started = controls.startDrink("almond-water", { staminaBonus: ALMOND_WATER_STAMINA_BONUS });
+    if (started) {
+      actionButton?.classList.add("is-active");
+      window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
+    }
+  } else if (equipped.id === "super-almond-water") {
+    const started = controls.startDrink("super-almond-water");
+    if (started) {
+      actionButton?.classList.add("is-active");
+      window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
+    }
+  }
 }
 
 function updateHud(metrics, controlState, elapsed) {
@@ -767,19 +1009,40 @@ function updateHud(metrics, controlState, elapsed) {
 }
 
 function animate() {
-  const delta = Math.min(clock.getDelta(), 0.05);
+  const rawDelta = clock.getDelta();
+  if (isPaused) {
+    requestAnimationFrame(animate);
+    return;
+  }
+  const delta = Math.min(rawDelta, 0.05);
   const elapsed = clock.elapsedTime;
 
   updateLevelTransition(delta);
   if (!exitComplete && !gameFailed && !levelTransition) controls.update(delta);
   const controlState = controls.getState();
+  if (controlState.drinkCancelled && !controlState.isDrinking) {
+    lastDrinkCancelled = true;
+    lastDrinkCancelledUntil = clock.elapsedTime + 1.4;
+    pickupFlashText = formatLocalizedStatus("almondWaterCancelled");
+    pickupFlashUntil = clock.elapsedTime + 1.2;
+    controls.clearDrinkCancelled();
+  } else if (lastDrinkCancelled && !controlState.isDrinking) {
+    pickupFlashText = formatLocalizedStatus("almondWaterCancelled");
+    pickupFlashUntil = clock.elapsedTime + 1.2;
+    lastDrinkCancelledUntil = clock.elapsedTime + 1.4;
+  }
   const metrics = world.update(delta, elapsed, world.camera.position);
   updateFlashlight(delta);
   updateDetector(delta, metrics);
   if (metrics.entityContact && !gameFailed && !exitComplete && !levelTransition) {
+    const contactEntity = (metrics.entities ?? []).find((entity) => entity?.contact);
+    const isSuper = contactEntity?.id === "super-bacteria";
     gameFailed = true;
     canvas.dataset.gameFailed = "true";
-    showExitOverlay(formatLocalizedStatus("bacteriaFailTitle"), formatLocalizedStatus("bacteriaFailSubtitle"));
+    showExitOverlay(
+      formatLocalizedStatus("bacteriaFailTitle"),
+      formatLocalizedStatus(isSuper ? "superBacteriaFailSubtitle" : "bacteriaFailSubtitle"),
+    );
   }
   if (metrics.exitReached && !gameFailed && !exitComplete && !levelTransition) {
     if (world.nextLevel !== null && world.nextLevel !== undefined) {
@@ -794,6 +1057,7 @@ function animate() {
   updateHud(metrics, controlState, elapsed);
   updatePerformanceReadout(delta);
   updateLoadingOverlay();
+  updateDrinkingMeter(controlState);
 
   renderer.render(world.scene, world.camera);
   frameCount += 1;
@@ -809,25 +1073,77 @@ function startAudioOnce() {
 }
 
 function onUseKeyDown(event) {
-  if (event.code !== "KeyF" && event.code !== "KeyE" && event.code !== "KeyR") return;
+  if (isPaused) {
+    if (event.code === "Escape") {
+      event.preventDefault();
+      setPauseState(false);
+    }
+    return;
+  }
   const tagName = event.target?.tagName;
   if (tagName === "INPUT" || tagName === "SELECT" || tagName === "TEXTAREA") return;
-  event.preventDefault();
+  if (event.code === "KeyF") {
+    event.preventDefault();
+    usePickup();
+    return;
+  }
   if (event.code === "KeyE") {
-    toggleFlashlight();
+    event.preventDefault();
+    useEquipped();
     return;
   }
-  if (event.code === "KeyR") {
-    startDetectorScan();
+  if (event.code === "ArrowLeft") {
+    event.preventDefault();
+    cycleInventory(-1);
+    renderInventoryBar();
     return;
   }
-  usePickup();
+  if (event.code === "ArrowRight") {
+    event.preventDefault();
+    cycleInventory(1);
+    renderInventoryBar();
+    return;
+  }
+  if (event.code === "Escape") {
+    event.preventDefault();
+    setPauseState(true);
+  }
 }
 
 useButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
   usePickup();
+});
+actionButton?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  useEquipped();
+});
+inventoryPrev?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  cycleInventory(-1);
+  inventoryPrev.classList.add("is-active");
+  window.setTimeout(() => inventoryPrev?.classList.remove("is-active"), 140);
+  renderInventoryBar();
+});
+inventoryNext?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  cycleInventory(1);
+  inventoryNext.classList.add("is-active");
+  window.setTimeout(() => inventoryNext?.classList.remove("is-active"), 140);
+  renderInventoryBar();
+});
+pauseButton?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  setPauseState(!isPaused);
+});
+pauseOverlay?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  setPauseState(false);
 });
 flashlightButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
@@ -843,7 +1159,9 @@ window.addEventListener("resize", resize);
 window.addEventListener("pointerdown", startAudioOnce, { passive: true });
 window.addEventListener("keydown", startAudioOnce);
 window.addEventListener("keydown", onUseKeyDown);
+window.addEventListener("blur", () => setPauseState(true));
 
 syncLevelHud();
 resize();
+renderInventoryBar();
 animate();
