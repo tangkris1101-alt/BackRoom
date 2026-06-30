@@ -775,13 +775,16 @@ function renderInventoryBar() {
   inventoryPrev?.removeAttribute("hidden");
   inventoryNext?.removeAttribute("hidden");
 
+  const safeEquippedIndex = equippedIndex >= 0 && equippedIndex < inventory.length ? equippedIndex : 0;
   const fragment = document.createDocumentFragment();
-  inventory.forEach((entry, index) => {
+  for (let offset = 0; offset < inventory.length; offset += 1) {
+    const index = (safeEquippedIndex + offset) % inventory.length;
+    const entry = inventory[index];
     const def = INVENTORY_DEFS[entry.id];
+    const isMain = offset === 0;
     const slot = document.createElement("div");
-    slot.className = "inventory-slot";
+    slot.className = `inventory-slot ${isMain ? "inventory-slot--main" : "inventory-slot--side"}`;
     slot.dataset.type = entry.id;
-    if (index === equippedIndex) slot.classList.add("is-equipped");
 
     const icon = document.createElement("div");
     icon.className = "inventory-slot__icon";
@@ -794,8 +797,16 @@ function renderInventoryBar() {
       slot.append(count);
     }
 
+    if (isMain) {
+      const name = document.createElement("span");
+      name.className = "inventory-slot__name";
+      const localized = getLocalizedText(STATUS_TEXT, entry.id);
+      name.textContent = localized || entry.id;
+      slot.append(name);
+    }
+
     fragment.append(slot);
-  });
+  }
   inventorySlots.replaceChildren(fragment);
   updateActionButtonState();
 }
