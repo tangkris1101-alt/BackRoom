@@ -434,18 +434,27 @@ export function addLevelThreePurpificationSpots(scene) {
     metalness: 0.1,
     side: THREE.DoubleSide,
   });
-  // The half-no-clipped entity silhouette: a dim, dark red-purple figure
-  // fused with the purple energy. Wiki says the entity is "partially
-  // noclipped into the wall", so the silhouette is half behind the wall
-  // patch (z<0 in group space) and half in front of it (z>0). Slight
-  // emissive keeps the figure visible against the dark generator/boiler
-  // walls without overpowering the surrounding purple.
+  // Wiki: "instances of entities and the portions of the wall
+  // immediately surrounding them are always completely purple" — the
+  // entity itself is also purple-fused, so we render the silhouette in
+  // the same purple palette (slightly desaturated to read as 'solid form'
+  // rather than 'flat patch'). The bright emissive keeps it visible
+  // against the otherwise-dark L3 walls.
   const silhouetteMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2a0a18,
-    emissive: 0x6a1a4a,
-    emissiveIntensity: 0.45,
-    roughness: 0.65,
-    metalness: 0.1,
+    color: 0x4a1c6a,
+    emissive: 0x9c4aff,
+    emissiveIntensity: 1.1,
+    roughness: 0.55,
+    metalness: 0.08,
+  });
+  // Back-glow plane behind the silhouette — fakes a bright energy source
+  // embedded deeper in the wall, so the silhouette pops off the wall.
+  const backGlowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xc890ff,
+    transparent: true,
+    opacity: 0.65,
+    side: THREE.DoubleSide,
+    depthWrite: false,
   });
   // 1 in Generator Room, 1 near Boiler Room.
   const spots = [
@@ -464,49 +473,72 @@ export function addLevelThreePurpificationSpots(scene) {
     floor.position.set(center.x, 0.045, center.z);
     scene.add(floor);
 
-    // Wall group — smaller purple patch + half-embedded silhouette.
+    // Wall group — small purple patch + bright silhouette + back glow.
     const mount = getLevelThreeTargetMount(center);
     const group = new THREE.Group();
     group.position.set(mount.x, 1.4, mount.z);
     group.rotation.y = mount.rotation;
 
-    // Smaller wall patch (was 1.0 × 1.4).
+    // Wall patch — keep small so the silhouette dominates the visual.
     const wall = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.6, 0.8),
+      new THREE.PlaneGeometry(0.5, 0.7),
       purpleMaterial,
     );
     group.add(wall);
 
-    // Torso — half-buried in the wall (z = +0.15 means roughly half out).
+    // Back glow — bright pale-purple plane behind the silhouette so the
+    // figure pops out of the wall. Sits at z=-0.05 (just behind the
+    // wall patch's front face).
+    const backGlow = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.7, 1.2),
+      backGlowMaterial,
+    );
+    backGlow.position.set(0, 0.05, -0.05);
+    group.add(backGlow);
+
+    // Torso — pushed further out (z = 0.28) so most of it is in front of
+    // the wall plane. Wider/taller than before so it reads at distance.
     const torso = new THREE.Mesh(
-      new THREE.BoxGeometry(0.32, 0.6, 0.4),
+      new THREE.BoxGeometry(0.42, 0.7, 0.4),
       silhouetteMaterial,
     );
-    torso.position.set(0, -0.1, 0.15);
+    torso.position.set(0, -0.1, 0.28);
+    torso.rotation.z = 0.08;
     group.add(torso);
 
-    // Head sphere on top of the torso.
+    // Head sphere — slightly tilted.
     const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.13, 12, 10),
+      new THREE.SphereGeometry(0.18, 14, 12),
       silhouetteMaterial,
     );
-    head.position.set(0, 0.32, 0.15);
+    head.position.set(0, 0.4, 0.28);
+    head.rotation.z = 0.12;
     group.add(head);
 
-    // One arm reaching further out of the wall.
+    // One arm reaching further out of the wall — bent + extended.
     const arm = new THREE.Mesh(
-      new THREE.BoxGeometry(0.08, 0.45, 0.08),
+      new THREE.BoxGeometry(0.1, 0.55, 0.1),
       silhouetteMaterial,
     );
-    arm.position.set(0.18, 0.05, 0.3);
-    arm.rotation.z = -0.4;
+    arm.position.set(0.22, 0.0, 0.45);
+    arm.rotation.z = -0.7;
+    arm.rotation.x = -0.2;
     group.add(arm);
+
+    // Second arm — shorter, partly visible on the other side.
+    const arm2 = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.45, 0.1),
+      silhouetteMaterial,
+    );
+    arm2.position.set(-0.18, -0.15, 0.32);
+    arm2.rotation.z = 0.5;
+    group.add(arm2);
 
     scene.add(group);
 
-    // Dimmer purple glow (was 1.2 / 4.2 m) so it doesn't blast the
-    // surrounding walls with purple.
-    const light = new THREE.PointLight(0x8a3aff, 0.7, 3.5, 2);
+    // Purple point light for ambient purple wash (slightly stronger now
+    // since the silhouette needs illumination to read at distance).
+    const light = new THREE.PointLight(0x9c4aff, 1.1, 4.0, 2);
     light.position.set(mount.x, 1.4, mount.z);
     scene.add(light);
   });
