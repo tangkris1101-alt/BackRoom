@@ -351,7 +351,7 @@ const STATUS_TEXT = {
     almondWaterCancelled: "饮用取消",
     pauseTitle: "已暂停",
     pauseSubtitle: "按 ESC 或点击继续",
-    inventoryHint: "← → 切换 / E 使用",
+    inventoryHint: "← → / 滚轮 切换 · 点击 切换 / E 使用",
     inventoryEmpty: "背包为空",
     pickupEmpty: "无物品可拾取",
   },
@@ -378,7 +378,7 @@ const STATUS_TEXT = {
     almondWaterCancelled: "DRINK CANCELLED",
     pauseTitle: "PAUSED",
     pauseSubtitle: "ESC / TAP TO RESUME",
-    inventoryHint: "← → SWITCH / E USE",
+    inventoryHint: "← → / WHEEL · TAP TO SWITCH / E USE",
     inventoryEmpty: "INVENTORY EMPTY",
     pickupEmpty: "NO ITEM IN RANGE",
   },
@@ -1656,6 +1656,54 @@ function onUseKeyUp(event) {
   }
 }
 
+const TAP_MAX_DURATION_MS = 300;
+const TAP_MAX_DISTANCE_PX = 10;
+let tapStartTime = 0;
+let tapStartX = 0;
+let tapStartY = 0;
+let tapActive = false;
+
+function onCanvasTapPointerDown(event) {
+  if (event.pointerType !== "touch") return;
+  tapStartTime = performance.now();
+  tapStartX = event.clientX;
+  tapStartY = event.clientY;
+  tapActive = true;
+}
+
+function onCanvasTapPointerMove(event) {
+  if (!tapActive) return;
+  const dx = event.clientX - tapStartX;
+  const dy = event.clientY - tapStartY;
+  if (dx * dx + dy * dy > TAP_MAX_DISTANCE_PX * TAP_MAX_DISTANCE_PX) {
+    tapActive = false;
+  }
+}
+
+function onCanvasTapPointerUp(event) {
+  if (!tapActive) return;
+  tapActive = false;
+  if (event.pointerType !== "touch") return;
+  if (isPaused) return;
+  const elapsed = performance.now() - tapStartTime;
+  if (elapsed > TAP_MAX_DURATION_MS) return;
+  event.preventDefault();
+  cycleInventory(1);
+  renderInventoryBar();
+}
+
+function onWheelCycleInventory(event) {
+  if (isPaused) return;
+  const tagName = event.target?.tagName;
+  if (tagName === "INPUT" || tagName === "SELECT" || tagName === "TEXTAREA") return;
+  if (inventory.length === 0) return;
+  const direction = event.deltaY > 0 ? 1 : -1;
+  if (event.deltaY === 0) return;
+  event.preventDefault();
+  cycleInventory(direction);
+  renderInventoryBar();
+}
+
 useButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
@@ -1738,6 +1786,11 @@ window.addEventListener("pointerdown", startAudioOnce, { passive: true });
 window.addEventListener("keydown", startAudioOnce);
 window.addEventListener("keydown", onUseKeyDown);
 window.addEventListener("keyup", onUseKeyUp);
+window.addEventListener("wheel", onWheelCycleInventory, { passive: false });
+canvas?.addEventListener("pointerdown", onCanvasTapPointerDown);
+canvas?.addEventListener("pointermove", onCanvasTapPointerMove);
+canvas?.addEventListener("pointerup", onCanvasTapPointerUp);
+canvas?.addEventListener("pointercancel", () => { tapActive = false; });
 window.addEventListener("blur", () => {
   if (ePressActive) endEPress();
   if (isInPauseTransition) return;
