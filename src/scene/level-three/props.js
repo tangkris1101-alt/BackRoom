@@ -435,18 +435,18 @@ export function addLevelThreePurpificationSpots(scene) {
     side: THREE.DoubleSide,
   });
   // Wiki: "instances of entities and the portions of the wall
-  // immediately surrounding them are always completely purple" — the
-  // entity itself is purple-fused, but it does NOT self-illuminate. We
-  // want the figure to read as a darker stain / corpse outline embedded
-  // in the glowing purple wall patch, NOT a glowing hologram on top of
-  // the wall. So: very dark purple base, minimal emissive (just enough
-  // to register at distance), no back-glow halo (that gave the "portal"
-  // look).
-  const silhouetteMaterial = new THREE.MeshStandardMaterial({
-    color: 0x1a0825,
-    emissive: 0x3a1a6a,
-    emissiveIntensity: 0.15,
-    roughness: 0.7,
+  // immediately surrounding them are always completely purple" — we
+  // render this as just the glowing purple patch on the wall + a faint
+  // spill on the floor. No figure silhouette: every iteration of a
+  // body shape (v1 invisible, v2 neon-portal, v3 dark-cutout) read as
+  // a pasted-on UI element rather than a corpse fused with the wall.
+  // Better to leave the figure to the player's imagination — they know
+  // what the purple patch means.
+  const floorMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2a0e3a,
+    emissive: 0x4a1a6a,
+    emissiveIntensity: 0.2,
+    roughness: 0.65,
     metalness: 0.05,
   });
   // 1 in Generator Room, 1 near Boiler Room.
@@ -458,82 +458,26 @@ export function addLevelThreePurpificationSpots(scene) {
     const center = levelThreeCellCenter(col, row);
 
     // Floor stain — small dark-purple patch bleeding out from under the
-    // wall spot. Smaller than v2 so it reads as 'spill' not 'carpet'.
+    // wall spot.
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(0.7, 0.55),
-      new THREE.MeshStandardMaterial({
-        color: 0x2a0e3a,
-        emissive: 0x4a1a6a,
-        emissiveIntensity: 0.2,
-        roughness: 0.65,
-        metalness: 0.05,
-      }),
+      floorMaterial,
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(center.x, 0.045, center.z);
     scene.add(floor);
 
-    // Wall group — purple patch (the glowing "energy" on the wall) with
-    // a dark silhouette embedded into it.
+    // Wall patch — the glowing purple energy on the wall.
     const mount = getLevelThreeTargetMount(center);
-    const group = new THREE.Group();
-    group.position.set(mount.x, 1.4, mount.z);
-    group.rotation.y = mount.rotation;
-
-    // Wall patch — the glowing purple energy on the wall. Keep this as
-    // the brightest part of the spot; the silhouette is DARKER than this.
     const wall = new THREE.Mesh(
       new THREE.PlaneGeometry(0.55, 0.85),
       purpleMaterial,
     );
-    group.add(wall);
+    wall.position.set(mount.x, 1.4, mount.z);
+    wall.rotation.y = mount.rotation;
+    scene.add(wall);
 
-    // Torso — DARKER than the wall patch (which is emissive purple). The
-    // figure reads as a body-shaped shadow embedded in the glow. Depth
-    // 0.18 keeps it close to the wall — it should look pressed INTO the
-    // wall, not floating in front of it like a UI element.
-    const torso = new THREE.Mesh(
-      new THREE.BoxGeometry(0.4, 0.65, 0.18),
-      silhouetteMaterial,
-    );
-    torso.position.set(0, -0.12, 0.09);
-    torso.rotation.z = 0.08;
-    group.add(torso);
-
-    // Head sphere — tilted, sitting at the top of the torso.
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.17, 14, 12),
-      silhouetteMaterial,
-    );
-    head.position.set(0, 0.36, 0.09);
-    head.rotation.z = 0.12;
-    group.add(head);
-
-    // One arm reaching out from the torso — the only part that breaks
-    // out of the wall plane (depth 0.24), giving the figure a hint of
-    // dimension without making it look like a flat decal.
-    const arm = new THREE.Mesh(
-      new THREE.BoxGeometry(0.09, 0.5, 0.09),
-      silhouetteMaterial,
-    );
-    arm.position.set(0.2, -0.02, 0.24);
-    arm.rotation.z = -0.65;
-    arm.rotation.x = -0.2;
-    group.add(arm);
-
-    // Second arm — short, close to the body, mostly inside the wall patch.
-    const arm2 = new THREE.Mesh(
-      new THREE.BoxGeometry(0.09, 0.4, 0.09),
-      silhouetteMaterial,
-    );
-    arm2.position.set(-0.17, -0.18, 0.1);
-    arm2.rotation.z = 0.5;
-    group.add(arm2);
-
-    scene.add(group);
-
-    // Subtle purple point light — gentle wash on nearby walls. Lower
-    // intensity than v2 (which lit the whole room purple).
+    // Subtle purple point light — gentle wash on nearby walls.
     const light = new THREE.PointLight(0x9c4aff, 0.45, 3.0, 2);
     light.position.set(mount.x, 1.4, mount.z);
     scene.add(light);
