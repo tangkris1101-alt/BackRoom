@@ -69,8 +69,15 @@ const inventorySlots = document.querySelector("#inventory-slots");
 const inventoryPrev = document.querySelector("#inventory-prev");
 const inventoryNext = document.querySelector("#inventory-next");
 const savePromptOverlay = document.querySelector("#save-prompt");
+const savePromptEyebrow = document.querySelector("#save-prompt-eyebrow");
+const savePromptTitle = document.querySelector("#save-prompt-title");
+const savePromptDesc = document.querySelector("#save-prompt-desc");
 const savePromptContinue = document.querySelector("#save-prompt-continue");
+const savePromptContinueLabel = document.querySelector("#save-prompt-continue-label");
+const savePromptContinueHint = document.querySelector("#save-prompt-continue-hint");
 const savePromptRestart = document.querySelector("#save-prompt-restart");
+const savePromptRestartLabel = document.querySelector("#save-prompt-restart-label");
+const savePromptRestartHint = document.querySelector("#save-prompt-restart-hint");
 const savePromptLevel = document.querySelector("#save-prompt-level");
 const savePromptStamina = document.querySelector("#save-prompt-stamina");
 const savePromptRunTime = document.querySelector("#save-prompt-runtime");
@@ -2385,8 +2392,14 @@ tutorialDots.forEach((dot) => {
 
 function populateSavePrompt(save) {
   if (!save) return;
-  const levelInfo = getBackroomsLevelInfo(save.player?.level ?? 0);
-  if (savePromptLevel) savePromptLevel.textContent = levelInfo.levelLabel ?? "LEVEL ?";
+  const saveLevel = Number(save.player?.level ?? 0);
+  const urlLevel = getInitialLevel();
+  const urlOverridesSave = urlLevel > 0 && urlLevel !== saveLevel;
+  const displayLevel = urlOverridesSave ? urlLevel : saveLevel;
+  const displayInfo = getBackroomsLevelInfo(displayLevel);
+  const saveInfo = getBackroomsLevelInfo(saveLevel);
+
+  if (savePromptLevel) savePromptLevel.textContent = displayInfo.levelLabel ?? "LEVEL ?";
   if (savePromptStamina) {
     const stamina = Math.round(save.player?.stamina ?? 0);
     const staminaMax = Math.round(save.player?.staminaMax ?? 0);
@@ -2409,6 +2422,80 @@ function populateSavePrompt(save) {
       savePromptItems.textContent = counts;
     }
   }
+
+  if (urlOverridesSave) {
+    if (savePromptEyebrow) {
+      savePromptEyebrow.textContent = currentLanguage === "en"
+        ? "URL OVERRIDE"
+        : "URL 指定关卡";
+    }
+    if (savePromptTitle) {
+      savePromptTitle.textContent = currentLanguage === "en"
+        ? `ENTER ${displayInfo.levelLabel}`
+        : `进入 ${displayInfo.levelLabel}`;
+    }
+    if (savePromptDesc) {
+      savePromptDesc.textContent = currentLanguage === "en"
+        ? `Save is parked at ${saveInfo.levelLabel}. URL points to ${displayInfo.levelLabel}; loading that instead.`
+        : `存档停在 ${saveInfo.levelLabel},URL 请求的是 ${displayInfo.levelLabel},按此进入`;
+    }
+    if (savePromptContinueLabel) {
+      savePromptContinueLabel.textContent = currentLanguage === "en"
+        ? `ENTER ${displayInfo.levelLabel}`
+        : `进入 ${displayInfo.levelLabel}`;
+    }
+    if (savePromptContinueHint) {
+      savePromptContinueHint.textContent = currentLanguage === "en"
+        ? `KEEP INVENTORY · START AT ${displayInfo.levelLabel}`
+        : `保留道具 · 在 ${displayInfo.levelLabel} 开始`;
+    }
+    if (savePromptRestartLabel) {
+      savePromptRestartLabel.textContent = currentLanguage === "en"
+        ? `RESUME ${saveInfo.levelLabel}`
+        : `恢复 ${saveInfo.levelLabel}`;
+    }
+    if (savePromptRestartHint) {
+      savePromptRestartHint.textContent = currentLanguage === "en"
+        ? `RESTORE SAVE STATE AT ${saveInfo.levelLabel}`
+        : `在 ${saveInfo.levelLabel} 恢复存档`;
+    }
+  } else {
+    if (savePromptEyebrow) {
+      savePromptEyebrow.textContent = currentLanguage === "en"
+        ? "PREVIOUS RUN DETECTED"
+        : "PREVIOUS RUN DETECTED";
+    }
+    if (savePromptTitle) {
+      savePromptTitle.textContent = currentLanguage === "en"
+        ? "CONTINUE PREVIOUS RUN"
+        : "继续上次进度";
+    }
+    if (savePromptDesc) {
+      savePromptDesc.textContent = currentLanguage === "en"
+        ? "An unfinished run was detected. Resume?"
+        : "检测到一份未完成的进度。是否恢复?";
+    }
+    if (savePromptContinueLabel) {
+      savePromptContinueLabel.textContent = currentLanguage === "en"
+        ? "CONTINUE"
+        : "继续";
+    }
+    if (savePromptContinueHint) {
+      savePromptContinueHint.textContent = currentLanguage === "en"
+        ? "RESTORE SAVE STATE"
+        : "恢复上次进度";
+    }
+    if (savePromptRestartLabel) {
+      savePromptRestartLabel.textContent = currentLanguage === "en"
+        ? "RESTART"
+        : "重新开始";
+    }
+    if (savePromptRestartHint) {
+      savePromptRestartHint.textContent = currentLanguage === "en"
+        ? "WIPE SAVE · START AT L0"
+        : "清空存档,从头开始";
+    }
+  }
 }
 
 function showSavePrompt(save) {
@@ -2428,12 +2515,27 @@ function hideSavePrompt() {
 
 function handleSavePromptContinue(save) {
   hideSavePrompt();
-  const targetLevel = getInitialLevelFromSave(save) ?? getInitialLevel();
+  const urlLevel = getInitialLevel();
+  const saveLevel = getInitialLevelFromSave(save);
+  // When the URL explicitly points to a different level than the save,
+  // honour the URL — the player asked for that level. Save state (inventory,
+  // flashlight, detector) is still applied so they keep their items.
+  const targetLevel = urlLevel > 0 && urlLevel !== saveLevel ? urlLevel : saveLevel;
   bootstrapWorld(targetLevel, save);
 }
 
-function handleSavePromptRestart() {
+function handleSavePromptRestart(save) {
   hideSavePrompt();
+  const urlLevel = getInitialLevel();
+  const saveLevel = save ? getInitialLevelFromSave(save) : 0;
+  if (urlLevel > 0 && urlLevel !== saveLevel && save) {
+    // URL override case: the second button offers to abandon the override
+    // and resume the save at its actual level. URL is rewritten so refreshes
+    // go to the same place.
+    updateLevelUrl(saveLevel);
+    bootstrapWorld(saveLevel, save);
+    return;
+  }
   clearSave();
   bootstrapWorld(getInitialLevel(), null);
 }
@@ -2449,7 +2551,9 @@ savePromptContinue?.addEventListener("pointerdown", (event) => {
 savePromptRestart?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
-  handleSavePromptRestart();
+  if (pendingSaveForPrompt) {
+    handleSavePromptRestart(pendingSaveForPrompt);
+  }
 });
 
 savePromptOverlay?.addEventListener("pointerdown", (event) => {
