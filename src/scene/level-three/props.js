@@ -437,22 +437,22 @@ export function addLevelThreePurpificationSpots(scene) {
   // Wiki: "instances of entities and the portions of the wall
   // immediately surrounding them are always completely purple" — the
   // entity itself is also purple-fused, so we render the silhouette in
-  // the same purple palette (slightly desaturated to read as 'solid form'
-  // rather than 'flat patch'). The bright emissive keeps it visible
-  // against the otherwise-dark L3 walls.
+  // the same purple palette. Emissive is moderate (not neon-bright) so
+  // the figure reads as 'corpse fused with purple energy' rather than
+  // 'glowing UI element'.
   const silhouetteMaterial = new THREE.MeshStandardMaterial({
-    color: 0x4a1c6a,
-    emissive: 0x9c4aff,
-    emissiveIntensity: 1.1,
+    color: 0x3a1450,
+    emissive: 0x7a3ad0,
+    emissiveIntensity: 0.55,
     roughness: 0.55,
     metalness: 0.08,
   });
-  // Back-glow plane behind the silhouette — fakes a bright energy source
-  // embedded deeper in the wall, so the silhouette pops off the wall.
+  // Back-glow plane behind the silhouette — fakes a subtle energy source
+  // embedded deeper in the wall, dim enough not to overpower the figure.
   const backGlowMaterial = new THREE.MeshBasicMaterial({
-    color: 0xc890ff,
+    color: 0x9c5ae0,
     transparent: true,
-    opacity: 0.65,
+    opacity: 0.35,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -536,9 +536,10 @@ export function addLevelThreePurpificationSpots(scene) {
 
     scene.add(group);
 
-    // Purple point light for ambient purple wash (slightly stronger now
-    // since the silhouette needs illumination to read at distance).
-    const light = new THREE.PointLight(0x9c4aff, 1.1, 4.0, 2);
+    // Purple point light for ambient purple wash — moderate intensity so
+    // the surrounding walls get a subtle purple tint without lighting
+    // up the whole room.
+    const light = new THREE.PointLight(0x9c4aff, 0.75, 3.6, 2);
     light.position.set(mount.x, 1.4, mount.z);
     scene.add(light);
   });
