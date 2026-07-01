@@ -436,25 +436,18 @@ export function addLevelThreePurpificationSpots(scene) {
   });
   // Wiki: "instances of entities and the portions of the wall
   // immediately surrounding them are always completely purple" — the
-  // entity itself is also purple-fused, so we render the silhouette in
-  // the same purple palette. Emissive is moderate (not neon-bright) so
-  // the figure reads as 'corpse fused with purple energy' rather than
-  // 'glowing UI element'.
+  // entity itself is purple-fused, but it does NOT self-illuminate. We
+  // want the figure to read as a darker stain / corpse outline embedded
+  // in the glowing purple wall patch, NOT a glowing hologram on top of
+  // the wall. So: very dark purple base, minimal emissive (just enough
+  // to register at distance), no back-glow halo (that gave the "portal"
+  // look).
   const silhouetteMaterial = new THREE.MeshStandardMaterial({
-    color: 0x3a1450,
-    emissive: 0x7a3ad0,
-    emissiveIntensity: 0.55,
-    roughness: 0.55,
-    metalness: 0.08,
-  });
-  // Back-glow plane behind the silhouette — fakes a subtle energy source
-  // embedded deeper in the wall, dim enough not to overpower the figure.
-  const backGlowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x9c5ae0,
-    transparent: true,
-    opacity: 0.35,
-    side: THREE.DoubleSide,
-    depthWrite: false,
+    color: 0x1a0825,
+    emissive: 0x3a1a6a,
+    emissiveIntensity: 0.15,
+    roughness: 0.7,
+    metalness: 0.05,
   });
   // 1 in Generator Room, 1 near Boiler Room.
   const spots = [
@@ -464,82 +457,84 @@ export function addLevelThreePurpificationSpots(scene) {
   spots.forEach(({ col, row }) => {
     const center = levelThreeCellCenter(col, row);
 
-    // Floor patch — purple energy bleeding onto the floor under the spot.
+    // Floor stain — small dark-purple patch bleeding out from under the
+    // wall spot. Smaller than v2 so it reads as 'spill' not 'carpet'.
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.0, 0.7),
-      purpleMaterial,
+      new THREE.PlaneGeometry(0.7, 0.55),
+      new THREE.MeshStandardMaterial({
+        color: 0x2a0e3a,
+        emissive: 0x4a1a6a,
+        emissiveIntensity: 0.2,
+        roughness: 0.65,
+        metalness: 0.05,
+      }),
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(center.x, 0.045, center.z);
     scene.add(floor);
 
-    // Wall group — small purple patch + bright silhouette + back glow.
+    // Wall group — purple patch (the glowing "energy" on the wall) with
+    // a dark silhouette embedded into it.
     const mount = getLevelThreeTargetMount(center);
     const group = new THREE.Group();
     group.position.set(mount.x, 1.4, mount.z);
     group.rotation.y = mount.rotation;
 
-    // Wall patch — keep small so the silhouette dominates the visual.
+    // Wall patch — the glowing purple energy on the wall. Keep this as
+    // the brightest part of the spot; the silhouette is DARKER than this.
     const wall = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.5, 0.7),
+      new THREE.PlaneGeometry(0.55, 0.85),
       purpleMaterial,
     );
     group.add(wall);
 
-    // Back glow — bright pale-purple plane behind the silhouette so the
-    // figure pops out of the wall. Sits at z=-0.05 (just behind the
-    // wall patch's front face).
-    const backGlow = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.7, 1.2),
-      backGlowMaterial,
-    );
-    backGlow.position.set(0, 0.05, -0.05);
-    group.add(backGlow);
-
-    // Torso — pushed further out (z = 0.28) so most of it is in front of
-    // the wall plane. Wider/taller than before so it reads at distance.
+    // Torso — DARKER than the wall patch (which is emissive purple). The
+    // figure reads as a body-shaped shadow embedded in the glow. Depth
+    // 0.18 keeps it close to the wall — it should look pressed INTO the
+    // wall, not floating in front of it like a UI element.
     const torso = new THREE.Mesh(
-      new THREE.BoxGeometry(0.42, 0.7, 0.4),
+      new THREE.BoxGeometry(0.4, 0.65, 0.18),
       silhouetteMaterial,
     );
-    torso.position.set(0, -0.1, 0.28);
+    torso.position.set(0, -0.12, 0.09);
     torso.rotation.z = 0.08;
     group.add(torso);
 
-    // Head sphere — slightly tilted.
+    // Head sphere — tilted, sitting at the top of the torso.
     const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.18, 14, 12),
+      new THREE.SphereGeometry(0.17, 14, 12),
       silhouetteMaterial,
     );
-    head.position.set(0, 0.4, 0.28);
+    head.position.set(0, 0.36, 0.09);
     head.rotation.z = 0.12;
     group.add(head);
 
-    // One arm reaching further out of the wall — bent + extended.
+    // One arm reaching out from the torso — the only part that breaks
+    // out of the wall plane (depth 0.24), giving the figure a hint of
+    // dimension without making it look like a flat decal.
     const arm = new THREE.Mesh(
-      new THREE.BoxGeometry(0.1, 0.55, 0.1),
+      new THREE.BoxGeometry(0.09, 0.5, 0.09),
       silhouetteMaterial,
     );
-    arm.position.set(0.22, 0.0, 0.45);
-    arm.rotation.z = -0.7;
+    arm.position.set(0.2, -0.02, 0.24);
+    arm.rotation.z = -0.65;
     arm.rotation.x = -0.2;
     group.add(arm);
 
-    // Second arm — shorter, partly visible on the other side.
+    // Second arm — short, close to the body, mostly inside the wall patch.
     const arm2 = new THREE.Mesh(
-      new THREE.BoxGeometry(0.1, 0.45, 0.1),
+      new THREE.BoxGeometry(0.09, 0.4, 0.09),
       silhouetteMaterial,
     );
-    arm2.position.set(-0.18, -0.15, 0.32);
+    arm2.position.set(-0.17, -0.18, 0.1);
     arm2.rotation.z = 0.5;
     group.add(arm2);
 
     scene.add(group);
 
-    // Purple point light for ambient purple wash — moderate intensity so
-    // the surrounding walls get a subtle purple tint without lighting
-    // up the whole room.
-    const light = new THREE.PointLight(0x9c4aff, 0.75, 3.6, 2);
+    // Subtle purple point light — gentle wash on nearby walls. Lower
+    // intensity than v2 (which lit the whole room purple).
+    const light = new THREE.PointLight(0x9c4aff, 0.45, 3.0, 2);
     light.position.set(mount.x, 1.4, mount.z);
     scene.add(light);
   });
