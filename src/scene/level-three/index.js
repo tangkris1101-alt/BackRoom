@@ -31,7 +31,17 @@ import {
 } from "./layout.js";
 import { collectLevelTransforms, createLayoutLights, addLayoutDarkPockets } from "../level-two/props.js";
 import { createLevelThreeFloorTexture, createLevelThreeCeilingTexture, createLevelThreeBrickTexture } from "./textures.js";
-import { addLevelThreeElectricalDetails, addLevelThreeBreakerDoor } from "./props.js";
+import {
+  addLevelThreeElectricalDetails,
+  addLevelThreeBreakerDoor,
+  addLevelThreeBlackSludgePipes,
+  addLevelThreeIndestructibleBars,
+  addLevelThreeSanctumStatue,
+  addLevelThreeNotebookPapers,
+  addLevelThreeMural,
+  addLevelThreePurpificationSpots,
+} from "./props.js";
+import { snapEntityStates } from "../common/snap.js";
 import {
   createAlmondWaterPickup,
   createFlashlightPickup,
@@ -77,7 +87,10 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
-  const entityInitial = Array.isArray(initialState?.entities) ? initialState.entities : [];
+  const entityInitial = snapEntityStates(
+    Array.isArray(initialState?.entities) ? initialState.entities : [],
+    isWalkable,
+  );
   const savedBacteriaStates = entityInitial.filter((entity) => entity.type === "bacteria");
 
   const { northSouth, eastWest, fixturePositions } = collectLevelTransforms({
@@ -159,7 +172,13 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     originX: LEVEL_THREE_ORIGIN_X,
     originZ: LEVEL_THREE_ORIGIN_Z,
   });
-  const propColliders = addLevelThreeElectricalDetails(scene);
+  let propColliders = addLevelThreeElectricalDetails(scene);
+  propColliders = propColliders.concat(addLevelThreeSanctumStatue(scene));
+  addLevelThreeBlackSludgePipes(scene);
+  addLevelThreeIndestructibleBars(scene);
+  addLevelThreeNotebookPapers(scene);
+  addLevelThreeMural(scene);
+  addLevelThreePurpificationSpots(scene);
   const almondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,

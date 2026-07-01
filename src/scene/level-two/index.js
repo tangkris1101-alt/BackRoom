@@ -59,6 +59,7 @@ import {
   getFocusedItem,
   tryInteractWithSpots,
 } from "../entities/index.js";
+import { snapEntityStates } from "../common/snap.js";
 
 export function createLevelTwoScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
@@ -79,7 +80,10 @@ export function createLevelTwoScene({ initialState = null } = {}) {
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
-  const entityInitial = Array.isArray(initialState?.entities) ? initialState.entities : [];
+  const entityInitial = snapEntityStates(
+    Array.isArray(initialState?.entities) ? initialState.entities : [],
+    isWalkable,
+  );
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: createLevelTwoFloorTexture(),

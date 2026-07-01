@@ -142,6 +142,317 @@ export function addLevelThreeBreakerDoor(scene, position) {
   );
   sign.position.set(mount.x, 2.42, mount.z);
   sign.rotation.y = mount.rotation;
-  scene.add(sign);
+}
+
+export function addLevelThreeBlackSludgePipes(scene) {
+  const sludgeMaterial = new THREE.MeshStandardMaterial({
+    color: 0x080705,
+    emissive: 0x18052a,
+    emissiveIntensity: 0.34,
+    roughness: 0.55,
+    metalness: 0.42,
+  });
+  const jointMaterial = new THREE.MeshStandardMaterial({
+    color: 0x141115,
+    emissive: 0x22083a,
+    emissiveIntensity: 0.48,
+    roughness: 0.48,
+    metalness: 0.5,
+  });
+  const pipes = [
+    { col: 22, row: 12, axis: "z", length: CELL_SIZE * 6, radius: 0.18, y: 2.5 },
+    { col: 4, row: 5, axis: "x", length: CELL_SIZE * 9, radius: 0.14, y: 2.55, offsetZ: -0.92 },
+    { col: 28, row: 14, axis: "z", length: CELL_SIZE * 6, radius: 0.16, y: 2.6, offsetX: 0.94 },
+    { col: 4, row: 20, axis: "x", length: CELL_SIZE * 12, radius: 0.15, y: 2.45, offsetZ: 0.88 },
+  ];
+  pipes.forEach((pipe) => {
+    const center = levelThreeCellCenter(pipe.col, pipe.row);
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(pipe.radius, pipe.radius, pipe.length, 14),
+      sludgeMaterial,
+    );
+    mesh.position.set(
+      center.x + (pipe.offsetX ?? 0),
+      pipe.y,
+      center.z + (pipe.offsetZ ?? 0),
+    );
+    if (pipe.axis === "x") mesh.rotation.z = Math.PI / 2;
+    if (pipe.axis === "z") mesh.rotation.x = Math.PI / 2;
+    scene.add(mesh);
+
+    [-1, 1].forEach((sign) => {
+      const joint = new THREE.Mesh(
+        new THREE.SphereGeometry(pipe.radius * 1.35, 12, 8),
+        jointMaterial,
+      );
+      joint.position.copy(mesh.position);
+      if (pipe.axis === "x") joint.position.x += sign * pipe.length / 2;
+      if (pipe.axis === "z") joint.position.z += sign * pipe.length / 2;
+      scene.add(joint);
+    });
+  });
+}
+
+export function addLevelThreeIndestructibleBars(scene) {
+  const barMaterial = new THREE.MeshStandardMaterial({
+    color: 0x0a0908,
+    emissive: 0x14080a,
+    emissiveIntensity: 0.08,
+    roughness: 0.5,
+    metalness: 0.72,
+  });
+  const frameMaterial = new THREE.MeshStandardMaterial({
+    color: 0x161109,
+    emissive: 0x1c0c04,
+    emissiveIntensity: 0.1,
+    roughness: 0.5,
+    metalness: 0.6,
+  });
+  const gateCells = [
+    { col: 6, row: 9 },
+    { col: 18, row: 9 },
+    { col: 28, row: 12 },
+    { col: 10, row: 18 },
+    { col: 26, row: 18 },
+  ];
+  gateCells.forEach(({ col, row }) => {
+    const center = levelThreeCellCenter(col, row);
+    const mount = getLevelThreeTargetMount(center);
+    const barCount = 6;
+    const spacing = CELL_SIZE * 0.16;
+    const totalWidth = (barCount - 1) * spacing;
+    const group = new THREE.Group();
+    for (let i = 0; i < barCount; i += 1) {
+      const bar = new THREE.Mesh(
+        new THREE.BoxGeometry(0.04, 2.0, 0.04),
+        barMaterial,
+      );
+      bar.position.set(-totalWidth / 2 + i * spacing, 1.0, 0);
+      group.add(bar);
+    }
+    const beam = new THREE.Mesh(
+      new THREE.BoxGeometry(totalWidth + 0.18, 0.08, 0.08),
+      frameMaterial,
+    );
+    beam.position.set(0, 2.06, 0);
+    group.add(beam);
+    const bottom = new THREE.Mesh(
+      new THREE.BoxGeometry(totalWidth + 0.18, 0.05, 0.05),
+      frameMaterial,
+    );
+    bottom.position.set(0, 0.04, 0);
+    group.add(bottom);
+    group.position.set(mount.x, 0, mount.z);
+    group.rotation.y = mount.rotation;
+    scene.add(group);
+  });
+}
+
+export function addLevelThreeSanctumStatue(scene) {
+  const stoneMaterial = new THREE.MeshStandardMaterial({
+    color: 0xe8d4a8,
+    emissive: 0x1a1208,
+    emissiveIntensity: 0.2,
+    roughness: 0.82,
+    metalness: 0.05,
+  });
+  const darkStoneMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb0a08a,
+    emissive: 0x1a1208,
+    emissiveIntensity: 0.1,
+    roughness: 0.85,
+    metalness: 0.04,
+  });
+  const glyphMaterial = new THREE.MeshBasicMaterial({
+    color: 0x080606,
+  });
+  const center = levelThreeCellCenter(18, 15);
+  const group = new THREE.Group();
+  const pedestal = new THREE.Mesh(
+    new THREE.BoxGeometry(0.8, 0.4, 0.8),
+    darkStoneMaterial,
+  );
+  pedestal.position.y = 0.2;
+  group.add(pedestal);
+  const glyph = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.3, 0.3),
+    glyphMaterial,
+  );
+  glyph.position.set(0, 0.2, 0.41);
+  group.add(glyph);
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.25, 0.32, 1.2, 12),
+    stoneMaterial,
+  );
+  body.position.y = 1.0;
+  group.add(body);
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 12, 10),
+    stoneMaterial,
+  );
+  head.position.y = 1.74;
+  group.add(head);
+  [-1, 1].forEach((side) => {
+    const wing = new THREE.Mesh(
+      new THREE.BoxGeometry(0.6, 0.9, 0.05),
+      stoneMaterial,
+    );
+    wing.position.set(side * 0.32, 1.4, 0);
+    wing.rotation.z = side * 0.5;
+    group.add(wing);
+  });
+  [-1, 1].forEach((side) => {
+    const arm = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 0.5, 0.06),
+      stoneMaterial,
+    );
+    arm.position.set(side * 0.22, 1.5, 0);
+    arm.rotation.z = side * -0.25;
+    group.add(arm);
+  });
+  group.position.set(center.x, 0, center.z);
+  scene.add(group);
+  const halo = new THREE.PointLight(0xffd68a, 0.42, 3.5, 2);
+  halo.position.set(center.x, 1.7, center.z);
+  scene.add(halo);
+  return [{
+    minX: center.x - 0.4,
+    maxX: center.x + 0.4,
+    minZ: center.z - 0.4,
+    maxZ: center.z + 0.4,
+  }];
+}
+
+export function addLevelThreeNotebookPapers(scene) {
+  const paperMaterial = new THREE.MeshStandardMaterial({
+    color: 0xeae0c0,
+    emissive: 0x4a3a1c,
+    emissiveIntensity: 0.18,
+    roughness: 0.88,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  const wallPapers = [
+    { col: 4, row: 5 },
+    { col: 14, row: 8 },
+    { col: 21, row: 10 },
+    { col: 7, row: 15 },
+    { col: 30, row: 18 },
+  ];
+  wallPapers.forEach(({ col, row }) => {
+    const center = levelThreeCellCenter(col, row);
+    const mount = getLevelThreeTargetMount(center);
+    const paper = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.18, 0.24),
+      paperMaterial,
+    );
+    paper.position.set(mount.x, 1.55, mount.z);
+    paper.rotation.y = mount.rotation;
+    scene.add(paper);
+  });
+  const floorCenter = levelThreeCellCenter(12, 12);
+  const floorPaper = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.18, 0.24),
+    paperMaterial,
+  );
+  floorPaper.rotation.x = -Math.PI / 2;
+  floorPaper.rotation.z = 0.7;
+  floorPaper.position.set(floorCenter.x, 0.02, floorCenter.z);
+  scene.add(floorPaper);
+}
+
+export function addLevelThreeMural(scene) {
+  const canvasMaterial = new THREE.MeshStandardMaterial({
+    color: 0xc8b89c,
+    emissive: 0x4a3a1c,
+    emissiveIntensity: 0.22,
+    roughness: 0.85,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  const figureMaterial = new THREE.MeshStandardMaterial({
+    color: 0x6a5c44,
+    emissive: 0x281c0a,
+    emissiveIntensity: 0.1,
+    roughness: 0.9,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  const smudgeMaterial = new THREE.MeshBasicMaterial({
+    color: 0x0a0805,
+    side: THREE.DoubleSide,
+  });
+  const center = levelThreeCellCenter(22, 15);
+  const mount = getLevelThreeTargetMount(center);
+  const canvas = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.0, 1.2),
+    canvasMaterial,
+  );
+  canvas.position.set(mount.x, 1.6, mount.z);
+  canvas.rotation.y = mount.rotation;
+  scene.add(canvas);
+  const body = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.4, 0.9),
+    figureMaterial,
+  );
+  body.position.set(0, -0.05, 0.02);
+  canvas.add(body);
+  const head = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.32, 0.32),
+    figureMaterial,
+  );
+  head.position.set(0, 0.5, 0.02);
+  canvas.add(head);
+  [-1, 1].forEach((side) => {
+    const wing = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.7, 0.5),
+      figureMaterial,
+    );
+    wing.position.set(side * 0.5, 0.1, 0.02);
+    wing.rotation.z = side * -0.2;
+    canvas.add(wing);
+  });
+  const smudge = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.36, 0.36),
+    smudgeMaterial,
+  );
+  smudge.position.set(0, 0.5, 0.04);
+  canvas.add(smudge);
+}
+
+export function addLevelThreePurpificationSpots(scene) {
+  const purpleMaterial = new THREE.MeshStandardMaterial({
+    color: 0x4a1c6a,
+    emissive: 0x8a3aff,
+    emissiveIntensity: 0.95,
+    roughness: 0.5,
+    metalness: 0.1,
+    side: THREE.DoubleSide,
+  });
+  const spots = [
+    { col: 14, row: 18 },
+    { col: 30, row: 12 },
+  ];
+  spots.forEach(({ col, row }) => {
+    const center = levelThreeCellCenter(col, row);
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.4, 1.0),
+      purpleMaterial,
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(center.x, 0.045, center.z);
+    scene.add(floor);
+    const mount = getLevelThreeTargetMount(center);
+    const wall = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.0, 1.4),
+      purpleMaterial,
+    );
+    wall.position.set(mount.x, 1.4, mount.z);
+    wall.rotation.y = mount.rotation;
+    scene.add(wall);
+    const light = new THREE.PointLight(0x8a3aff, 1.2, 4.2, 2);
+    light.position.set(center.x, 0.6, center.z);
+    scene.add(light);
+  });
 }
 
