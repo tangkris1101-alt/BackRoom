@@ -24,10 +24,11 @@
 - 第一人称移动 + 冲刺 + 跳跃（带体力条）
 - Pointer Lock 视角 + 拖拽 fallback
 - 移动端摇杆 + 操作按钮
-- **道具系统**：手电筒（电量有限、SpotLight 锥光、可堆叠 3 个、电量耗尽自动消耗 1 个并回满）、探测器（5s 扫描 / 60s 冷却、72m 范围）、杏仁水（+50 上限/45s）、超级杏仁水（上限 250 / 恢复×2 / 移速×1.5 / 25s）
+- **道具系统**：手电筒（电量有限、SpotLight 锥光、可堆叠 3 个、电量耗尽自动消耗 1 个并回满）、探测器（5s 扫描 / 60s 冷却、72m 范围）、杏仁水（+50 上限/45s / +30 回血）、超级杏仁水（上限 250 / 恢复×2 / 移速×1.5 / 25s / +80 回血）
 - 拾取提示 + 检视信息面板 + 主动使用 + **长按 E 饮水**
 - 道具栏：主槽 + 侧槽 + 左右翻页
 - **实体检测**（Level 4）：屏幕边缘箭头标记 + 探测器标记
+- **健康系统**（100/100）：实体接触改为扣血而非直接失败（细菌 −50 / 超级细菌 −60 / Hound −30 并附带短暂减速）、1 秒无敌帧、屏幕红屏反馈；血量归零则视为失联
 - 出口触发完成 overlay
 - ESC 暂停（冻结音频 + pointerlockchange 兜底）
 - 暂停界面**保存进度**按钮（单击立即写盘，绿色主题，1.4s 内显示「已保存」反馈，与 5s 自动保存 / beforeunload flush 互为补充）
@@ -179,6 +180,15 @@ node scripts/validate-sb3.mjs    # 输出: VALIDATION OK
 | `SUPER_ALMOND_WATER_DURATION` | 25s | 超级杏仁水 buff 时长 |
 | `SUPER_ALMOND_WATER_SPEED_MULTIPLIER` | 1.5 | 超级杏仁水 buff 期间角色移速倍率(走/跑) |
 | `WATER_LONG_PRESS_MS` | 600ms | 长按 E 触发饮水 |
+| `HEALTH_MAX` | 100 | 玩家满血 |
+| `BACTERIA_DAMAGE` | 50 | 普通细菌单次扣血 |
+| `SUPER_BACTERIA_DAMAGE` | 60 | 超级细菌单次扣血 |
+| `HOUND_DAMAGE` | 30 | Hound 单次扣血 |
+| `HOUND_SLOW_DURATION` | 3.0s | Hound 受击后减速持续时间 |
+| `DAMAGE_COOLDOWN_S` | 1.0s | 受到任意伤害后的无敌帧时长 |
+| `ALMOND_WATER_HEAL` | 30 | 杏仁水饮用完成时的回血量 |
+| `SUPER_ALMOND_WATER_HEAL` | 80 | 超级杏仁水饮用完成时的回血量 |
+| `DAMAGE_FLASH_MS` | 600ms | 屏幕红屏动画时长 |
 | `PAUSE_RESET_ARM_TIMEOUT_MS` | 3000ms | 暂停重置按钮武装态超时(超时自动取消确认) |
 | `PAUSE_SAVE_FLASH_MS` | 1400ms | 暂停保存按钮「已保存」反馈持续时间 |
 | `FPS_LOW/HIGH_THRESHOLD` | 48/58 | 动态像素比阈值 |

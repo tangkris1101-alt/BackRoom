@@ -18,6 +18,8 @@ const SUPER_ALMOND_WATER_SPEED_MULTIPLIER = 1.5;
 const ALMOND_WATER_DRINK_DURATION = 1.0;
 const DRINK_MOVE_MULTIPLIER = 0.5;
 const DRINK_ON_COMPLETE_EVENT = "backrooms:drink-complete";
+const HEALTH_MAX = 100;
+const HOUND_SLOW_MOVE_MULTIPLIER = 0.7;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -62,6 +64,9 @@ export class FirstPersonControls {
     this.staminaRecoveryDelay = 0;
     this.almondWaterTimer = 0;
     this.superAlmondWaterTimer = 0;
+    this.healthMax = HEALTH_MAX;
+    this.health = HEALTH_MAX;
+    this.houndSlowTimer = 0;
     this.isSprinting = false;
     this.isDrinking = false;
     this.drinkTimer = 0;
@@ -130,6 +135,8 @@ export class FirstPersonControls {
     this.jumpQueued = false;
     this.refreshStaminaModifiers({ fill: true });
     this.staminaRecoveryDelay = 0;
+    this.health = this.healthMax;
+    this.houndSlowTimer = 0;
     this.isSprinting = false;
     this.isDrinking = false;
     this.drinkTimer = 0;
@@ -167,6 +174,11 @@ export class FirstPersonControls {
     this.superAlmondWaterTimer = Number.isFinite(state.superAlmondWaterTimer)
       ? Math.max(0, state.superAlmondWaterTimer)
       : 0;
+    this.healthMax = Number.isFinite(state.healthMax) && state.healthMax > 0 ? state.healthMax : HEALTH_MAX;
+    this.health = Number.isFinite(state.health) ? Math.max(0, Math.min(state.health, this.healthMax)) : this.healthMax;
+    this.houndSlowTimer = Number.isFinite(state.houndSlowTimer)
+      ? Math.max(0, state.houndSlowTimer)
+      : 0;
     this.isSprinting = false;
     this.isDrinking = Boolean(state.isDrinking);
     this.drinkTimer = Number.isFinite(state.drinkTimer) ? Math.max(0, state.drinkTimer) : 0;
@@ -201,6 +213,9 @@ export class FirstPersonControls {
       staminaRecoveryDelay: this.staminaRecoveryDelay,
       almondWaterTimer: this.almondWaterTimer,
       superAlmondWaterTimer: this.superAlmondWaterTimer,
+      health: this.health,
+      healthMax: this.healthMax,
+      houndSlowTimer: this.houndSlowTimer,
       isSprinting: this.isSprinting,
       isDrinking: this.isDrinking,
       drinkTimer: this.drinkTimer,
@@ -256,6 +271,10 @@ export class FirstPersonControls {
     this.canvas.dataset.superAlmondWaterRemaining = this.superAlmondWaterTimer.toFixed(1);
     this.canvas.dataset.staminaRecoveryMultiplier = this.getStaminaRecoveryMultiplier().toFixed(1);
     this.canvas.dataset.sprinting = String(this.isSprinting);
+    this.canvas.dataset.health = this.health.toFixed(0);
+    this.canvas.dataset.healthMax = this.healthMax.toFixed(0);
+    this.canvas.dataset.houndSlow = this.houndSlowTimer > 0 ? "1" : "0";
+    this.canvas.dataset.houndSlowRemaining = this.houndSlowTimer.toFixed(1);
     this.canvas.dataset.moving = String(this.isMoving);
     this.canvas.dataset.movementSpeed = this.movementSpeed.toFixed(3);
     this.canvas.dataset.headBob = this.headBobY.toFixed(3);
@@ -489,6 +508,7 @@ export class FirstPersonControls {
   }
 
   getMoveSpeedMultiplier() {
+    if (this.houndSlowTimer > 0) return HOUND_SLOW_MOVE_MULTIPLIER;
     return this.superAlmondWaterTimer > 0 ? SUPER_ALMOND_WATER_SPEED_MULTIPLIER : 1;
   }
 
@@ -539,6 +559,9 @@ export class FirstPersonControls {
 
   update(delta) {
     this.updateStaminaEffects(delta);
+    if (this.houndSlowTimer > 0) {
+      this.houndSlowTimer = Math.max(0, this.houndSlowTimer - delta);
+    }
     this.updateDrinking(delta);
     let inputX = this.joystickInput.x;
     let inputY = this.joystickInput.y;
@@ -630,6 +653,9 @@ export class FirstPersonControls {
       superAlmondWaterDuration: SUPER_ALMOND_WATER_EFFECT_DURATION,
       staminaRecoveryMultiplier: this.getStaminaRecoveryMultiplier(),
       activeBuffs: this.getActiveBuffs(),
+      health: this.health,
+      healthMax: this.healthMax,
+      houndSlowRemaining: this.houndSlowTimer,
       isDrinking: this.isDrinking,
       drinkItemId: this.drinkItemId,
       drinkProgress: this.isDrinking
@@ -729,5 +755,22 @@ export class FirstPersonControls {
     this.isSprinting = false;
     this.syncCameraState();
     return this.getState();
+  }
+
+  applyDamage(amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return false;
+    const previous = this.health;
+    this.health = Math.max(0, Math.min(this.healthMax, this.health - amount));
+    this.syncCameraState();
+    return this.health <= 0 && previous > 0;
+  }
+
+  applyHeal(amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return false;
+    if (this.health <= 0) return false;
+    if (this.health >= this.healthMax) return false;
+    this.health = Math.max(0, Math.min(this.healthMax, this.health + amount));
+    this.syncCameraState();
+    return true;
   }
 }

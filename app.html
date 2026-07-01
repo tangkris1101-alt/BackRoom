@@ -10,6 +10,7 @@
       <canvas id="scene"></canvas>
       <div class="static-layer" aria-hidden="true"></div>
       <div class="vignette" aria-hidden="true"></div>
+      <div id="damage-flash" class="damage-flash" aria-hidden="true"></div>
 
       <header class="hud hud--top" hidden>
         <div class="hud-top-left">
@@ -44,6 +45,13 @@
               <div id="stamina-fill" class="stamina-meter__fill"></div>
             </div>
             <span id="stamina-readout">150/150</span>
+          </div>
+          <div class="health-meter" aria-label="Health">
+            <span class="health-meter__label">HEALTH</span>
+            <div class="health-meter__track">
+              <div id="health-fill" class="health-meter__fill"></div>
+            </div>
+            <span id="health-readout">100/100</span>
           </div>
           <div id="flashlight-meter" class="flashlight-meter" aria-label="Flashlight battery" hidden>
             <span class="flashlight-meter__label">LIGHT</span>
@@ -245,9 +253,13 @@
                   Level 1+ 会出现<strong style="color:#ff8060">细菌实体</strong>，
                   Level 2+ 会出现 <strong style="color:#ffaa5e">Hound</strong>，
                   Level 3 还会出现更危险的<strong style="color:#ff5040">超级细菌</strong>。
-                  被接触会导致游戏失败。装备
+                  接触会扣减生命值：普通细菌 −50、超级细菌 −60、Hound −30 并附带短暂减速。
+                  受到任意伤害后会获得 <strong style="color:#ff5050">1 秒无敌帧</strong>，期间不会再次扣血；
+                  血量归零则视为失联。装备
                   <kbd class="tutorial-key tutorial-key--inline">E</kbd>
-                  探测仪可以 5 秒扫描定位它们。
+                  探测仪可以 5 秒扫描定位它们，拾取
+                  <kbd class="tutorial-key tutorial-key--inline">F</kbd>
+                  <strong style="color:#a8d878">杏仁水</strong>可少量回血。
                 </p>
               </section>
             </div>

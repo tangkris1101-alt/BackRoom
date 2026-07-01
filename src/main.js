@@ -12,6 +12,7 @@ import {
 } from "./save.js";
 
 const canvas = document.querySelector("#scene");
+const appRoot = canvas?.closest("#app") ?? document.body;
 const joystick = document.querySelector("#joystick");
 const jumpButton = document.querySelector("#jump-button");
 const useButton = document.querySelector("#use-button");
@@ -29,7 +30,11 @@ const hud = document.querySelector(".hud");
 const staminaMeter = document.querySelector(".stamina-meter");
 const staminaFill = document.querySelector("#stamina-fill");
 const staminaReadout = document.querySelector("#stamina-readout");
-const flashlightMeter = document.querySelector("#flashlight-meter");
+const healthMeter = document.querySelector(".health-meter");
+const healthFill = document.querySelector("#health-fill");
+const healthReadout = document.querySelector("#health-readout");
+const damageFlash = document.querySelector("#damage-flash");
+const flashlightMeter = document.querySelector(".flashlight-meter");
 const flashlightFill = document.querySelector("#flashlight-fill");
 const flashlightReadout = document.querySelector("#flashlight-readout");
 const detectorMeter = document.querySelector("#detector-meter");
@@ -72,12 +77,20 @@ const savePromptOverlay = document.querySelector("#save-prompt");
 const savePromptEyebrow = document.querySelector("#save-prompt-eyebrow");
 const savePromptTitle = document.querySelector("#save-prompt-title");
 const savePromptDesc = document.querySelector("#save-prompt-desc");
+const savePromptMain = document.querySelector(".save-prompt__main");
+const savePromptLevels = document.querySelector(".save-prompt__levels");
+const savePromptLevelsBack = document.querySelector("#save-prompt-levels-back");
+const savePromptLevelsTitle = document.querySelector("#save-prompt-levels-title");
+const savePromptLevelsList = document.querySelector("#save-prompt-levels-list");
 const savePromptContinue = document.querySelector("#save-prompt-continue");
 const savePromptContinueLabel = document.querySelector("#save-prompt-continue-label");
 const savePromptContinueHint = document.querySelector("#save-prompt-continue-hint");
 const savePromptRestart = document.querySelector("#save-prompt-restart");
 const savePromptRestartLabel = document.querySelector("#save-prompt-restart-label");
 const savePromptRestartHint = document.querySelector("#save-prompt-restart-hint");
+const savePromptJump = document.querySelector("#save-prompt-jump");
+const savePromptJumpLabel = document.querySelector("#save-prompt-jump-label");
+const savePromptJumpHint = document.querySelector("#save-prompt-jump-hint");
 const savePromptLevel = document.querySelector("#save-prompt-level");
 const savePromptStamina = document.querySelector("#save-prompt-stamina");
 const savePromptRunTime = document.querySelector("#save-prompt-runtime");
@@ -119,6 +132,15 @@ const SAVE_AUTOSAVE_INTERVAL_MS = 5000;
 const SAVE_DEBOUNCE_MS = 250;
 const PAUSE_RESET_ARM_TIMEOUT_MS = 3000;
 const PAUSE_TUTORIAL_RETURN_DELAY_MS = 220;
+const HEALTH_MAX = 100;
+const BACTERIA_DAMAGE = 50;
+const SUPER_BACTERIA_DAMAGE = 60;
+const HOUND_DAMAGE = 30;
+const HOUND_SLOW_DURATION = 3.0;
+const DAMAGE_COOLDOWN_S = 1.0;
+const ALMOND_WATER_HEAL = 30;
+const SUPER_ALMOND_WATER_HEAL = 80;
+const DAMAGE_FLASH_MS = 600;
 
 const ITEM_TEXT = {
   "zh-CN": {
@@ -405,6 +427,11 @@ const STATUS_TEXT = {
     levelLocked: "未解锁",
     levelLockedHint: "该层级尚未解锁",
     levelCleared: "已通关",
+    savePromptJumpLabel: "前往其他层级",
+    savePromptJumpHint: "选择已解锁的层级开始",
+    savePromptLevelsTitle: "选择层级",
+    savePromptLevelsBack: "返回",
+    savePromptLevelReady: "可进入",
   },
   en: {
     "almond-water": "ALMOND WATER",
@@ -443,6 +470,11 @@ const STATUS_TEXT = {
     levelLocked: "LOCKED",
     levelLockedHint: "LEVEL NOT YET UNLOCKED",
     levelCleared: "CLEARED",
+    savePromptJumpLabel: "CHOOSE LEVEL",
+    savePromptJumpHint: "PICK AN UNLOCKED LEVEL",
+    savePromptLevelsTitle: "SELECT LEVEL",
+    savePromptLevelsBack: "BACK",
+    savePromptLevelReady: "READY",
   },
 };
 
@@ -489,9 +521,15 @@ const ambientHum = createAmbientHum();
 const clock = new THREE.Clock();
 
 function handleDrinkComplete(itemId) {
-  if (itemId === "almond-water" || itemId === "super-almond-water") {
+  if (itemId === "almond-water") {
     removeInventory(itemId);
     renderInventoryBar();
+    if (controls) controls.applyHeal(ALMOND_WATER_HEAL);
+    markDirty();
+  } else if (itemId === "super-almond-water") {
+    removeInventory(itemId);
+    renderInventoryBar();
+    if (controls) controls.applyHeal(SUPER_ALMOND_WATER_HEAL);
     markDirty();
   }
 }
@@ -663,6 +701,7 @@ let ePressLongTriggered = false;
 let pauseResetArmed = false;
 let pauseResetArmedTimer = 0;
 let isResettingProgress = false;
+let savePromptMode = "main";
 
 try {
   const savedLanguage = window.localStorage?.getItem(LANGUAGE_STORAGE_KEY);
@@ -917,6 +956,9 @@ function writeSaveSnapshot() {
     staminaRecoveryDelay: playerState.staminaRecoveryDelay,
     almondWaterTimer: playerState.almondWaterTimer,
     superAlmondWaterTimer: playerState.superAlmondWaterTimer,
+    health: playerState.health,
+    healthMax: playerState.healthMax,
+    houndSlowTimer: playerState.houndSlowTimer,
     isSprinting: playerState.isSprinting,
     isDrinking: playerState.isDrinking,
     drinkTimer: playerState.drinkTimer,
@@ -979,6 +1021,7 @@ function loadLevel(level, { updateUrl = false } = {}) {
   }
   exitComplete = false;
   gameFailed = false;
+  playerHealthCooldown = 0;
   canvas.dataset.exitReached = "false";
   canvas.dataset.gameFailed = "false";
   entityMarkers?.replaceChildren();
@@ -1009,6 +1052,7 @@ function bootstrapWorld(level, save) {
   }
   exitComplete = false;
   gameFailed = false;
+  playerHealthCooldown = 0;
   canvas.dataset.exitReached = "false";
   canvas.dataset.gameFailed = "false";
   entityMarkers?.replaceChildren();
@@ -1097,6 +1141,7 @@ levelSelect?.addEventListener("change", () => {
   levelTransition = null;
   exitComplete = false;
   gameFailed = false;
+  playerHealthCooldown = 0;
   canvas.dataset.transitioning = "false";
   canvas.dataset.exitReached = "false";
   canvas.dataset.gameFailed = "false";
@@ -1210,6 +1255,35 @@ function updateStaminaHud(controlState) {
   canvas.dataset.staminaRecoveryMultiplier = String(controlState.staminaRecoveryMultiplier ?? 1);
   canvas.dataset.activeBuffs = activeBuffs.map((buff) => buff.id).join(",");
   canvas.dataset.sprinting = String(controlState.sprinting);
+}
+
+function updateHealthHud(controlState) {
+  if (!controlState) return;
+  const healthMax = Math.max(1, controlState.healthMax ?? HEALTH_MAX);
+  const health = Math.max(0, Math.min(healthMax, controlState.health ?? healthMax));
+  const ratio = health / healthMax;
+  if (healthFill) healthFill.style.transform = `scaleX(${ratio.toFixed(3)})`;
+  if (healthReadout) {
+    healthReadout.textContent = `${Math.round(health)}/${Math.round(healthMax)}`;
+  }
+  if (healthMeter) {
+    const slow = (controlState.houndSlowRemaining ?? 0) > 0;
+    healthMeter.dataset.state = ratio <= 0.24 ? "low" : slow ? "slowed" : "ready";
+  }
+  canvas.dataset.health = String(Math.round(health));
+  canvas.dataset.healthMax = String(Math.round(healthMax));
+  canvas.dataset.healthRatio = ratio.toFixed(3);
+  canvas.dataset.houndSlow = String((controlState.houndSlowRemaining ?? 0) > 0);
+  canvas.dataset.houndSlowRemaining = (controlState.houndSlowRemaining ?? 0).toFixed(1);
+}
+
+function triggerDamageFlash() {
+  if (!appRoot || !damageFlash) return;
+  appRoot.classList.remove("is-hurt");
+  // Force reflow so the animation can replay on rapid hits.
+  void damageFlash.offsetWidth;
+  appRoot.classList.add("is-hurt");
+  window.setTimeout(() => appRoot.classList.remove("is-hurt"), DAMAGE_FLASH_MS);
 }
 
 function updateBuffCards(controlState) {
@@ -1634,6 +1708,11 @@ function resetAllProgress() {
   runTime = 0;
   reachedLevels = new Set([0]);
   completedLevels = new Set();
+  if (controls) {
+    controls.health = controls.healthMax;
+    controls.houndSlowTimer = 0;
+  }
+  playerHealthCooldown = 0;
   window.location.replace(window.location.pathname);
 }
 
@@ -2020,7 +2099,51 @@ function updateHud(metrics, controlState, elapsed) {
       Boolean(metrics.focusInteraction?.available),
   );
   updateStaminaHud(controlState);
+  updateHealthHud(controlState);
   updateBuffCards(controlState);
+}
+
+let playerHealthCooldown = 0;
+
+function applyEntityContactDamage(delta, metrics) {
+  if (gameFailed || exitComplete || levelTransition) return;
+  if (!controls || !metrics) return;
+  if (controls.health <= 0) return;
+  if (playerHealthCooldown > 0) {
+    playerHealthCooldown = Math.max(0, playerHealthCooldown - delta);
+  }
+  if (playerHealthCooldown > 0) return;
+  const entities = Array.isArray(metrics.entities) ? metrics.entities : [];
+  const hit = entities.find((entity) => {
+    if (!entity?.active) return false;
+    if (!Number.isFinite(entity.distance)) return false;
+    const id = entity.id ?? "";
+    const radius = id.includes("hound") ? 0.86 : 0.74;
+    return entity.distance <= radius;
+  });
+  if (!hit) return;
+  const id = hit.id ?? "";
+  let damage;
+  if (id === "super-bacteria") damage = SUPER_BACTERIA_DAMAGE;
+  else if (id.includes("hound")) damage = HOUND_DAMAGE;
+  else damage = BACTERIA_DAMAGE;
+  const killed = controls.applyDamage(damage);
+  if (id.includes("hound")) {
+    controls.houndSlowTimer = HOUND_SLOW_DURATION;
+    controls.syncCameraState?.();
+  }
+  triggerDamageFlash();
+  playerHealthCooldown = DAMAGE_COOLDOWN_S;
+  markDirty();
+  if (killed) {
+    gameFailed = true;
+    canvas.dataset.gameFailed = "true";
+    const entityText = getLocalizedText(ENTITY_TEXT, id);
+    showExitOverlay(
+      formatLocalizedStatus("bacteriaFailTitle"),
+      entityText.failSubtitle ?? formatLocalizedStatus("bacteriaFailSubtitle"),
+    );
+  }
 }
 
 function animate() {
@@ -2058,17 +2181,7 @@ function animate() {
   lastMetrics = metrics;
   updateFlashlight(delta);
   updateDetector(delta, metrics);
-  if (metrics.entityContact && !gameFailed && !exitComplete && !levelTransition) {
-    const contactEntity = (metrics.entities ?? []).find((entity) => entity?.contact);
-    const entityText = getLocalizedText(ENTITY_TEXT, contactEntity?.id);
-    gameFailed = true;
-    canvas.dataset.gameFailed = "true";
-    clearSave();
-    showExitOverlay(
-      formatLocalizedStatus("bacteriaFailTitle"),
-      entityText.failSubtitle ?? formatLocalizedStatus("bacteriaFailSubtitle"),
-    );
-  }
+  applyEntityContactDamage(delta, metrics);
   if (metrics.exitReached && !gameFailed && !exitComplete && !levelTransition) {
     if (world.nextLevel !== null && world.nextLevel !== undefined) {
       beginLevelTransition(world.nextLevel);
@@ -2102,6 +2215,17 @@ function startAudioOnce() {
 }
 
 function onUseKeyDown(event) {
+  if (isSavePromptVisible()) {
+    if (event.code === "Escape") {
+      event.preventDefault();
+      if (savePromptMode === "levels") {
+        showSavePromptMain();
+      } else {
+        showSavePromptLevels();
+      }
+    }
+    return;
+  }
   if (isPaused) {
     if (event.code === "Escape") {
       event.preventDefault();
@@ -2472,11 +2596,27 @@ function populateSavePrompt(save) {
         : "清空存档,从头开始";
     }
   }
+  if (savePromptJumpLabel) {
+    savePromptJumpLabel.textContent = formatLocalizedStatus("savePromptJumpLabel");
+  }
+  if (savePromptJumpHint) {
+    savePromptJumpHint.textContent = formatLocalizedStatus("savePromptJumpHint");
+  }
+  if (savePromptLevelsTitle) {
+    savePromptLevelsTitle.textContent = formatLocalizedStatus("savePromptLevelsTitle");
+  }
+  if (savePromptLevelsBack) {
+    savePromptLevelsBack.textContent = formatLocalizedStatus("savePromptLevelsBack");
+  }
+  if (savePromptMode === "levels") {
+    populateSavePromptLevels();
+  }
 }
 
 function showSavePrompt(save) {
   if (!savePromptOverlay) return;
   populateSavePrompt(save);
+  showSavePromptMain();
   savePromptOverlay.removeAttribute("hidden");
   savePromptOverlay.classList.add("is-visible");
   canvas?.setAttribute("data-save-prompt", "true");
@@ -2487,6 +2627,68 @@ function hideSavePrompt() {
   savePromptOverlay.classList.remove("is-visible");
   window.setTimeout(() => savePromptOverlay.setAttribute("hidden", ""), OVERLAY_FADE_MS);
   canvas?.removeAttribute("data-save-prompt");
+}
+
+function isSavePromptVisible() {
+  return Boolean(savePromptOverlay?.classList.contains("is-visible"));
+}
+
+function showSavePromptMain() {
+  savePromptMode = "main";
+  savePromptMain?.removeAttribute("hidden");
+  savePromptLevels?.setAttribute("hidden", "");
+}
+
+function showSavePromptLevels() {
+  populateSavePromptLevels();
+  savePromptMode = "levels";
+  savePromptMain?.setAttribute("hidden", "");
+  savePromptLevels?.removeAttribute("hidden");
+}
+
+function populateSavePromptLevels() {
+  if (!savePromptLevelsList) return;
+  savePromptLevelsList.replaceChildren();
+  for (let lv = 0; lv <= 4; lv += 1) {
+    const info = getBackroomsLevelInfo(lv);
+    const reached = reachedLevels.has(lv);
+    const li = document.createElement("li");
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = reached
+      ? "save-prompt__level"
+      : "save-prompt__level save-prompt__level--locked";
+    btn.disabled = !reached;
+    btn.dataset.level = String(lv);
+
+    const label = document.createElement("span");
+    label.className = "save-prompt__level-label";
+    const strong = document.createElement("strong");
+    strong.textContent = info.levelLabel ?? `LEVEL ${lv}`;
+    const small = document.createElement("small");
+    small.textContent = info.levelName ?? "";
+    label.append(strong, small);
+
+    const state = document.createElement("span");
+    state.className = reached
+      ? "save-prompt__level-state"
+      : "save-prompt__level-state save-prompt__level-state--locked";
+    state.textContent = reached
+      ? formatLocalizedStatus("savePromptLevelReady")
+      : formatLocalizedStatus("levelLocked");
+
+    btn.append(label, state);
+    if (reached) {
+      btn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (pendingSaveForPrompt) handleSavePromptJumpToLevel(lv, pendingSaveForPrompt);
+      });
+    }
+    li.appendChild(btn);
+    savePromptLevelsList.appendChild(li);
+  }
 }
 
 function handleSavePromptContinue(save) {
@@ -2516,6 +2718,18 @@ function handleSavePromptRestart(save) {
   bootstrapWorld(getInitialLevel(), null);
 }
 
+function handleSavePromptJumpToLevel(targetLevel, save) {
+  if (!reachedLevels.has(targetLevel)) {
+    flashPickupHint("levelLockedHint", 1400);
+    return;
+  }
+  hideSavePrompt();
+  reachedLevels.add(targetLevel);
+  saveIntegerSet(REACHED_KEY, reachedLevels);
+  updateLevelUrl(targetLevel);
+  bootstrapWorld(targetLevel, save);
+}
+
 savePromptContinue?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
@@ -2530,6 +2744,18 @@ savePromptRestart?.addEventListener("pointerdown", (event) => {
   if (pendingSaveForPrompt) {
     handleSavePromptRestart(pendingSaveForPrompt);
   }
+});
+
+savePromptJump?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  showSavePromptLevels();
+});
+
+savePromptLevelsBack?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  showSavePromptMain();
 });
 
 savePromptOverlay?.addEventListener("pointerdown", (event) => {
