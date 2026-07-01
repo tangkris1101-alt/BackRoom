@@ -47,7 +47,7 @@ import {
   tryInteractWithSpots,
 } from "../entities/index.js";
 
-export function createLevelThreeScene() {
+export function createLevelThreeScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
   const FOG_COLOR = 0x242620;
   scene.background = new THREE.Color(FOG_COLOR);
@@ -66,6 +66,12 @@ export function createLevelThreeScene() {
   camera.rotation.y = spawn.yaw;
   const viewModel = attachFirstPersonViewModel(camera);
   scene.add(camera);
+
+  const pickupInitial = initialState?.pickups ?? {};
+  const interactionInitial = initialState?.interactions ?? {};
+  const objectiveInitial = initialState?.objectives ?? {};
+  const entityInitial = Array.isArray(initialState?.entities) ? initialState.entities : [];
+  const savedBacteriaStates = entityInitial.filter((entity) => entity.type === "bacteria");
 
   const { northSouth, eastWest, fixturePositions } = collectLevelTwoTransforms();
   fixturePositions.forEach((fixture, index) => {
@@ -138,6 +144,7 @@ export function createLevelThreeScene() {
     getCellCenter: levelTwoCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial["almond-water"] ?? null,
   });
   const superAlmondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_TWO_COLS,
@@ -151,6 +158,7 @@ export function createLevelThreeScene() {
     respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
     initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
     respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+    initialState: pickupInitial["super-almond-water"] ?? null,
   });
   const flashlight = createFlashlightPickup(scene, {
     cols: LEVEL_TWO_COLS,
@@ -159,6 +167,7 @@ export function createLevelThreeScene() {
     getCellCenter: levelTwoCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial.flashlight ?? null,
   });
   const detector = createDetectorPickup(scene, {
     cols: LEVEL_TWO_COLS,
@@ -167,6 +176,7 @@ export function createLevelThreeScene() {
     getCellCenter: levelTwoCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial.detector ?? null,
   });
   const interactions = [
     createInteractionSpot({
@@ -175,6 +185,7 @@ export function createLevelThreeScene() {
       inspectHeight: 1.72,
       inspectRadius: 0.86,
       responseKey: "levelThreeBreakerResponse",
+      initialState: interactionInitial["level-three-breaker"] ?? null,
     }),
     createInteractionSpot({
       id: "level-three-generator",
@@ -182,6 +193,7 @@ export function createLevelThreeScene() {
       inspectHeight: 0.78,
       inspectRadius: 0.9,
       responseKey: "levelThreeGeneratorResponse",
+      initialState: interactionInitial["level-three-generator"] ?? null,
     }),
   ];
   const bacteriaSpawns = pickBacteriaSpawnPositions({
@@ -193,12 +205,13 @@ export function createLevelThreeScene() {
     spawnPosition: spawnCell,
     count: 2,
   });
-  const bacteria = bacteriaSpawns.map((spawnPosition) =>
+  const bacteria = bacteriaSpawns.map((spawnPosition, index) =>
     createBacteriaEntity(scene, {
       spawnPosition,
       isWalkable,
       speed: 1.48,
       id: "super-bacteria",
+      initialState: savedBacteriaStates[index] ?? null,
     }),
   );
   const hound = createHoundEntity(scene, {
@@ -214,10 +227,11 @@ export function createLevelThreeScene() {
         minSeparation: CELL_SIZE * 7,
       })[0] ?? targetPosition,
     isWalkable,
-    speed: 1.62,
+    speed: 2.22,
+    initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
   });
 
-  let objectiveReached = false;
+  let objectiveReached = Boolean(objectiveInitial.reached);
 
   function isWalkable(x, z, radius = 0.36) {
     const corner = radius * 0.72;
@@ -311,6 +325,21 @@ export function createLevelThreeScene() {
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+    getSnapshot() {
+      return {
+        pickups: {
+          flashlight: flashlight.getState(),
+          detector: detector.getState(),
+          "almond-water": almondWater.getState(),
+          "super-almond-water": superAlmondWater.getState(),
+        },
+        interactions: Object.fromEntries(
+          interactions.map((spot) => [spot.id, spot.getState()]),
+        ),
+        objectives: { reached: objectiveReached },
+        entities: [...bacteria.map((b) => b.getState()), hound.getState()],
+      };
+    },
   };
 }
 

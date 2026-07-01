@@ -33,7 +33,7 @@ export function addLevelFourStairDoor(scene, position) {
   scene.add(sign);
 }
 
-export function addLevelFourOfficeDetails(scene) {
+export function addLevelFourOfficeDetails(scene, interactionInitial = {}) {
   const colliders = [];
   const interactions = [];
   const partitionMaterial = new THREE.MeshStandardMaterial({
@@ -107,6 +107,7 @@ export function addLevelFourOfficeDetails(scene) {
           inspectHeight: 0.78,
           inspectRadius: 0.75,
           responseKey: index === 2 ? "levelFourTerminalResponse" : "levelFourFilesResponse",
+          initialState: index === 2 ? interactionInitial["level-four-terminal"] ?? null : interactionInitial["level-four-files"] ?? null,
         }),
       );
     }
@@ -141,6 +142,7 @@ export function addLevelFourOfficeDetails(scene) {
           spot.id === "level-four-water-cooler"
             ? "levelFourWaterCoolerResponse"
             : "levelFourVendingResponse",
+        initialState: interactionInitial[spot.id] ?? null,
       }),
     );
   });

@@ -52,10 +52,15 @@ export function createInteractionSpot({
   inspectHeight = 1.18,
   inspectRadius = 0.68,
   responseKey,
+  initialState = null,
 }) {
-  let interactionCount = 0;
+  let interactionCount =
+    initialState && Number.isFinite(initialState.count) ? Math.max(0, Math.floor(initialState.count)) : 0;
   return {
     id,
+    getState() {
+      return { count: interactionCount };
+    },
     inspect(camera, playerPosition) {
       const aimDistance = inspectWorldPoint(camera, position, {
         distanceLimit: inspectDistance,

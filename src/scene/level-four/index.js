@@ -44,7 +44,7 @@ import {
   tryInteractWithSpots,
 } from "../entities/index.js";
 
-export function createLevelFourScene() {
+export function createLevelFourScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
   const FOG_COLOR = 0xb8b9a7;
   scene.background = new THREE.Color(FOG_COLOR);
@@ -59,6 +59,11 @@ export function createLevelFourScene() {
   const spawnCell = levelOneCellCenter(LEVEL_ONE_START_CELL.col, LEVEL_ONE_START_CELL.row);
   const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: -Math.PI * 0.12 };
   const targetPosition = levelOneCellCenter(LEVEL_ONE_TARGET_CELL.col, LEVEL_ONE_TARGET_CELL.row);
+
+  const pickupInitial = initialState?.pickups ?? {};
+  const interactionInitial = initialState?.interactions ?? {};
+  const objectiveInitial = initialState?.objectives ?? {};
+  const entityInitial = Array.isArray(initialState?.entities) ? initialState.entities : [];
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: createLevelFourCarpetTexture(),
@@ -145,7 +150,7 @@ export function createLevelFourScene() {
     normalDelay: 0.86,
   });
   addLevelFourStairDoor(scene, targetPosition);
-  const { colliders: propColliders, interactions: propInteractions } = addLevelFourOfficeDetails(scene);
+  const { colliders: propColliders, interactions: propInteractions } = addLevelFourOfficeDetails(scene, interactionInitial);
   const interactions = [
     ...propInteractions,
     createInteractionSpot({
@@ -154,6 +159,7 @@ export function createLevelFourScene() {
       inspectHeight: 1.58,
       inspectRadius: 0.82,
       responseKey: "levelFourStairDoorResponse",
+      initialState: interactionInitial["level-four-stair-door"] ?? null,
     }),
   ];
 
@@ -164,6 +170,7 @@ export function createLevelFourScene() {
     getCellCenter: levelOneCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial["almond-water"] ?? null,
   });
   const superAlmondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_ONE_COLS,
@@ -177,6 +184,7 @@ export function createLevelFourScene() {
     respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
     initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
     respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+    initialState: pickupInitial["super-almond-water"] ?? null,
   });
   const flashlight = createFlashlightPickup(scene, {
     cols: LEVEL_ONE_COLS,
@@ -185,6 +193,7 @@ export function createLevelFourScene() {
     getCellCenter: levelOneCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial.flashlight ?? null,
   });
   const detector = createDetectorPickup(scene, {
     cols: LEVEL_ONE_COLS,
@@ -193,6 +202,7 @@ export function createLevelFourScene() {
     getCellCenter: levelOneCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial.detector ?? null,
   });
   const hound = createHoundEntity(scene, {
     spawnPosition:
@@ -206,9 +216,10 @@ export function createLevelFourScene() {
       })[0] ?? targetPosition,
     isWalkable,
     speed: 1.06,
+    initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
   });
 
-  let objectiveReached = false;
+  let objectiveReached = Boolean(objectiveInitial.reached);
 
   function isWalkable(x, z, radius = 0.36) {
     const corner = radius * 0.72;
@@ -298,6 +309,21 @@ export function createLevelFourScene() {
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+    getSnapshot() {
+      return {
+        pickups: {
+          flashlight: flashlight.getState(),
+          detector: detector.getState(),
+          "almond-water": almondWater.getState(),
+          "super-almond-water": superAlmondWater.getState(),
+        },
+        interactions: Object.fromEntries(
+          interactions.map((spot) => [spot.id, spot.getState()]),
+        ),
+        objectives: { reached: objectiveReached },
+        entities: [hound.getState()],
+      };
+    },
   };
 }
 

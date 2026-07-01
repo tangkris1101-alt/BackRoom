@@ -3,6 +3,13 @@ import "./styles.css";
 import { createAmbientHum } from "./ambient-audio.js";
 import { createBackroomsScene, getBackroomsLevelInfo } from "./scene.js";
 import { FirstPersonControls } from "./first-person-controls.js";
+import {
+  hasSavedGame,
+  loadSave,
+  writeSave,
+  clearSave,
+  getInitialLevelFromSave,
+} from "./save.js";
 
 const canvas = document.querySelector("#scene");
 const joystick = document.querySelector("#joystick");
@@ -54,6 +61,13 @@ const inventoryBar = document.querySelector("#inventory-bar");
 const inventorySlots = document.querySelector("#inventory-slots");
 const inventoryPrev = document.querySelector("#inventory-prev");
 const inventoryNext = document.querySelector("#inventory-next");
+const savePromptOverlay = document.querySelector("#save-prompt");
+const savePromptContinue = document.querySelector("#save-prompt-continue");
+const savePromptRestart = document.querySelector("#save-prompt-restart");
+const savePromptLevel = document.querySelector("#save-prompt-level");
+const savePromptStamina = document.querySelector("#save-prompt-stamina");
+const savePromptRunTime = document.querySelector("#save-prompt-runtime");
+const savePromptItems = document.querySelector("#save-prompt-items");
 const tutorialOverlay = document.querySelector("#tutorial-overlay");
 const tutorialSkip = document.querySelector("#tutorial-skip");
 const tutorialPrev = document.querySelector("#tutorial-prev");
@@ -62,6 +76,9 @@ const tutorialPages = document.querySelector(".tutorial-pages");
 const tutorialDots = document.querySelectorAll(".tutorial-pagination__dot");
 const TUTORIAL_SEEN_KEY = "backrooms-tutorial-seen";
 const TUTORIAL_TOTAL_PAGES = 4;
+const REACHED_KEY = "backrooms-levels-reached";
+const COMPLETED_KEY = "backrooms-levels-completed";
+const PICKED_UP_KEY = "backrooms-picked-up-items";
 let tutorialPage = 0;
 let tutorialActive = false;
 
@@ -74,6 +91,7 @@ const OVERLAY_FADE_MS = 460;
 const LEVEL_TRANSITION_MS = 1250;
 const FLASHLIGHT_BATTERY_MAX = 100;
 const FLASHLIGHT_DRAIN_RATE = 4.2;
+const FLASHLIGHT_MAX_STACK = 3;
 const DETECTOR_SCAN_DURATION = 5;
 const DETECTOR_COOLDOWN_DURATION = 60;
 const DETECTOR_RANGE = 72;
@@ -83,6 +101,8 @@ const SUPER_ALMOND_WATER_DURATION = 25;
 const ALMOND_WATER_STAMINA_BONUS = 50;
 const ALMOND_WATER_DRINK_DURATION = 1.0;
 const WATER_LONG_PRESS_MS = 600;
+const SAVE_AUTOSAVE_INTERVAL_MS = 5000;
+const SAVE_DEBOUNCE_MS = 250;
 
 const ITEM_TEXT = {
   "zh-CN": {
@@ -98,7 +118,7 @@ const ITEM_TEXT = {
     },
     flashlight: {
       name: "手电筒",
-      effect: "照亮前方 / 电量有限",
+      effect: "照亮前方 / 最多堆叠 3 / 电量耗尽自动换新",
       action: "F / 按钮拾取 · 拾取后按 E 开关",
     },
     detector: {
@@ -120,7 +140,7 @@ const ITEM_TEXT = {
     },
     flashlight: {
       name: "FLASHLIGHT",
-      effect: "FORWARD BEAM / LIMITED BATTERY",
+      effect: "FORWARD BEAM / STACK x3 / AUTO-RESTOCK ON DEPLETE",
       action: "F / BUTTON PICK UP · E TO TOGGLE AFTER PICKUP",
     },
     detector: {
@@ -337,6 +357,8 @@ const STATUS_TEXT = {
     flashlight: "手电筒",
     detector: "探测仪",
     flashlightAcquired: "已获得手电筒",
+    flashlightRestocked: "手电筒 +1",
+    flashlightFull: "手电筒已达上限",
     flashlightRefilled: "手电筒电量已满",
     detectorAcquired: "探测仪已激活",
     detectorReady: "就绪",
@@ -358,6 +380,9 @@ const STATUS_TEXT = {
     inventoryEmpty: "背包为空",
     pickupEmpty: "无物品可拾取",
     exitTotalTime: "总用时 {time}",
+    levelLocked: "未解锁",
+    levelLockedHint: "该层级尚未解锁",
+    levelCleared: "已通关",
   },
   en: {
     "almond-water": "ALMOND WATER",
@@ -365,7 +390,8 @@ const STATUS_TEXT = {
     flashlight: "FLASHLIGHT",
     detector: "DETECTOR",
     flashlightAcquired: "FLASHLIGHT ACQUIRED",
-    flashlightRefilled: "FLASHLIGHT BATTERY FULL",
+    flashlightRestocked: "FLASHLIGHT +1",
+    flashlightFull: "FLASHLIGHT STACK FULL",
     detectorAcquired: "DETECTOR ONLINE",
     detectorReady: "READY",
     detectorReadyHint: "PRESS E TO USE",
@@ -386,6 +412,9 @@ const STATUS_TEXT = {
     inventoryEmpty: "INVENTORY EMPTY",
     pickupEmpty: "NO ITEM IN RANGE",
     exitTotalTime: "TOTAL TIME {time}",
+    levelLocked: "LOCKED",
+    levelLockedHint: "LEVEL NOT YET UNLOCKED",
+    levelCleared: "CLEARED",
   },
 };
 
@@ -416,32 +445,28 @@ function getInitialLevel() {
   return getBackroomsLevelInfo(level).level;
 }
 
-let world = createBackroomsScene(getInitialLevel());
+let world = null;
+let controls = null;
+let animationFrameStarted = false;
+let saveDirtyTimer = 0;
+let gameStarted = false;
+
 function attachFlashlightToCamera(camera) {
   camera.add(flashlightLight);
   camera.add(flashlightTarget);
   flashlightLight.target = flashlightTarget;
 }
-
-attachFlashlightToCamera(world.camera);
-const controls = new FirstPersonControls({
-  camera: world.camera,
-  canvas,
-  joystick,
-  jumpButton,
-  isWalkable: world.isWalkable,
-  spawn: world.spawn,
-});
 const ambientHum = createAmbientHum();
 
 const clock = new THREE.Clock();
 
-controls.notifyDrinkComplete = (itemId) => {
+function handleDrinkComplete(itemId) {
   if (itemId === "almond-water" || itemId === "super-almond-water") {
     removeInventory(itemId);
     renderInventoryBar();
+    markDirty();
   }
-};
+}
 let frameCount = 0;
 let sampleFrameCount = 0;
 let sampleElapsed = 0;
@@ -464,7 +489,13 @@ const detectorProjection = new THREE.Vector3();
 let lastMetrics = null;
 
 const INVENTORY_DEFS = {
-  flashlight: { id: "flashlight", type: "toggle", unique: true, stackable: false },
+  flashlight: {
+    id: "flashlight",
+    type: "toggle",
+    unique: false,
+    stackable: true,
+    maxStack: FLASHLIGHT_MAX_STACK,
+  },
   detector: { id: "detector", type: "scan", unique: true, stackable: false },
   "almond-water": { id: "almond-water", type: "consumable", unique: false, stackable: true },
   "super-almond-water": {
@@ -613,6 +644,59 @@ if (languageSelect) languageSelect.value = currentLanguage;
 document.documentElement.lang = currentLanguage;
 canvas.dataset.language = currentLanguage;
 
+function loadIntegerSet(key) {
+  try {
+    const raw = window.localStorage?.getItem(key);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((n) => Number.isInteger(n) && n >= 0 && n <= 4));
+  } catch {
+    return new Set();
+  }
+}
+
+function loadStringSet(key) {
+  try {
+    const raw = window.localStorage?.getItem(key);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((s) => typeof s === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveIntegerSet(key, set) {
+  try {
+    window.localStorage?.setItem(key, JSON.stringify([...set].sort((a, b) => a - b)));
+  } catch {
+    // localStorage may be unavailable.
+  }
+}
+
+function saveStringSet(key, set) {
+  try {
+    window.localStorage?.setItem(key, JSON.stringify([...set].sort()));
+  } catch {
+    // localStorage may be unavailable.
+  }
+}
+
+let reachedLevels = loadIntegerSet(REACHED_KEY);
+let completedLevels = loadIntegerSet(COMPLETED_KEY);
+let pickedUpItems = loadStringSet(PICKED_UP_KEY);
+
+{
+  const initialLevel = getInitialLevel();
+  reachedLevels.add(initialLevel);
+  if (new URLSearchParams(window.location.search).has("level") && initialLevel > 0) {
+    for (let i = 0; i <= initialLevel; i += 1) reachedLevels.add(i);
+  }
+  saveIntegerSet(REACHED_KEY, reachedLevels);
+}
+
 function getLocalizedText(collection, id) {
   return collection[currentLanguage]?.[id] ?? collection.en?.[id] ?? collection["zh-CN"]?.[id] ?? {};
 }
@@ -631,11 +715,16 @@ function addInventory(id, { silent = false } = {}) {
   if (!def) return false;
   const existing = inventory[findInventoryIndex(id)];
   if (existing) {
-    if (def.stackable) existing.count += 1;
+    if (def.stackable) {
+      if (def.maxStack && existing.count >= def.maxStack) return false;
+      existing.count += 1;
+    }
+    markDirty();
     return true;
   }
   inventory.push({ id, count: def.unique ? 1 : 1, type: def.type });
   equippedIndex = inventory.length - 1;
+  markDirty();
   return true;
 }
 
@@ -653,6 +742,7 @@ function removeInventory(id) {
       equippedIndex -= 1;
     }
   }
+  markDirty();
   return true;
 }
 
@@ -686,12 +776,32 @@ function formatDuration(totalSeconds) {
 }
 
 function syncLevelHud() {
-  if (levelSelect) levelSelect.value = String(world.level);
+  if (levelSelect) {
+    const options = levelSelect.querySelectorAll("option");
+    options.forEach((option) => {
+      const lv = Number(option.value);
+      const info = getBackroomsLevelInfo(lv);
+      const reached = reachedLevels.has(lv);
+      const completed = completedLevels.has(lv);
+      option.disabled = !reached;
+      option.dataset.reached = reached ? "true" : "false";
+      option.dataset.completed = completed ? "true" : "false";
+      option.title = info.levelName;
+      let label = info.levelLabel;
+      if (completed) label += ` · ${formatLocalizedStatus("levelCleared")}`;
+      else if (!reached) label += ` · ${formatLocalizedStatus("levelLocked")}`;
+      option.textContent = label;
+    });
+    levelSelect.value = String(world.level);
+    levelSelect.dataset.currentCompleted = completedLevels.has(world.level) ? "true" : "false";
+  }
   if (loadingLevelLabel) loadingLevelLabel.textContent = world.levelLabel;
   canvas.dataset.level = String(world.level);
   canvas.dataset.levelName = world.levelName;
   canvas.dataset.viewModel = world.viewModelName ?? "NONE";
   canvas.dataset.colliderCount = String(world.colliderCount ?? 0);
+  canvas.dataset.reachedLevels = [...reachedLevels].sort((a, b) => a - b).join(",");
+  canvas.dataset.completedLevels = [...completedLevels].sort((a, b) => a - b).join(",");
 }
 
 function disposeMaterial(material) {
@@ -718,15 +828,116 @@ function updateLevelUrl(level) {
   window.history.replaceState(null, "", url);
 }
 
+function buildLevelInitialState(level, save) {
+  if (!save) return null;
+  return {
+    pickups: save.pickups?.[level] ?? {},
+    interactions: save.interactions?.[level] ?? {},
+    objectives: save.objectives?.[level] ?? { reached: false },
+    entities: save.entities?.[level] ?? [],
+  };
+}
+
+function applySaveToRuntime(save) {
+  if (!save) return;
+  inventory.length = 0;
+  for (const entry of save.inventory) {
+    inventory.push({ id: entry.id, count: entry.count, type: entry.type });
+  }
+  if (inventory.length === 0) {
+    equippedIndex = -1;
+  } else {
+    const safeIdx = save.equippedIndex >= 0 && save.equippedIndex < inventory.length
+      ? save.equippedIndex
+      : 0;
+    equippedIndex = safeIdx;
+  }
+  flashlightOwned = Boolean(save.flashlight?.owned);
+  flashlightOn = Boolean(save.flashlight?.on) && flashlightOwned;
+  flashlightBattery = Number.isFinite(save.flashlight?.battery) ? save.flashlight.battery : 0;
+  detectorOwned = Boolean(save.detector?.owned);
+  detectorActiveTimer = Number.isFinite(save.detector?.activeTimer) ? save.detector.activeTimer : 0;
+  detectorCooldownTimer = Number.isFinite(save.detector?.cooldownTimer)
+    ? save.detector.cooldownTimer
+    : 0;
+  runTime = Number.isFinite(save.player?.runTime) ? save.player.runTime : 0;
+}
+
+function writeSaveSnapshot() {
+  if (!world || !controls || gameFailed) return false;
+  const snapshot = world.getSnapshot?.();
+  const playerState = controls.getPlayerState();
+  const level = world.level;
+  const player = {
+    level,
+    position: playerState.position,
+    yaw: playerState.yaw,
+    pitch: playerState.pitch,
+    stamina: playerState.stamina,
+    staminaMax: playerState.staminaMax,
+    staminaBaseMax: playerState.staminaBaseMax,
+    staminaRecoveryDelay: playerState.staminaRecoveryDelay,
+    almondWaterTimer: playerState.almondWaterTimer,
+    superAlmondWaterTimer: playerState.superAlmondWaterTimer,
+    isSprinting: playerState.isSprinting,
+    isDrinking: playerState.isDrinking,
+    drinkTimer: playerState.drinkTimer,
+    drinkItemId: playerState.drinkItemId,
+    drinkStaminaBonus: playerState.drinkStaminaBonus,
+    runTime,
+  };
+  const payload = {
+    player,
+    inventory: inventory.map((entry) => ({ id: entry.id, count: entry.count, type: entry.type })),
+    equippedIndex,
+    flashlight: { owned: flashlightOwned, on: flashlightOn, battery: flashlightBattery },
+    detector: {
+      owned: detectorOwned,
+      activeTimer: detectorActiveTimer,
+      cooldownTimer: detectorCooldownTimer,
+    },
+    pickups: snapshot?.pickups ? { [level]: snapshot.pickups } : {},
+    interactions: snapshot?.interactions ? { [level]: snapshot.interactions } : {},
+    objectives: snapshot?.objectives ? { [level]: snapshot.objectives } : {},
+    entities: snapshot?.entities ? { [level]: snapshot.entities } : {},
+  };
+  return writeSave(payload);
+}
+
+function markDirty() {
+  if (gameFailed || !world) return;
+  if (saveDirtyTimer) {
+    window.clearTimeout(saveDirtyTimer);
+  }
+  saveDirtyTimer = window.setTimeout(() => {
+    saveDirtyTimer = 0;
+    writeSaveSnapshot();
+  }, SAVE_DEBOUNCE_MS);
+}
+
 function loadLevel(level, { updateUrl = false } = {}) {
+  if (world && !gameFailed) {
+    writeSaveSnapshot();
+  }
   const previousWorld = world;
-  world = createBackroomsScene(level);
+  reachedLevels.add(level);
+  saveIntegerSet(REACHED_KEY, reachedLevels);
+
+  const save = loadSave();
+  const initialStateForLevel = buildLevelInitialState(level, save);
+
+  world = createBackroomsScene(level, { initialState: initialStateForLevel });
   attachFlashlightToCamera(world.camera);
   controls.setWorld({
     camera: world.camera,
     isWalkable: world.isWalkable,
     spawn: world.spawn,
   });
+  if (save && save.player && save.player.level === level) {
+    const pos = save.player.position;
+    world.camera.position.set(pos.x, pos.y, pos.z);
+    controls.applyState(save.player);
+  }
   exitComplete = false;
   gameFailed = false;
   canvas.dataset.exitReached = "false";
@@ -736,6 +947,41 @@ function loadLevel(level, { updateUrl = false } = {}) {
   if (updateUrl) updateLevelUrl(world.level);
   resize();
   disposeWorld(previousWorld);
+}
+
+function bootstrapWorld(level, save) {
+  applySaveToRuntime(save);
+  const initialState = buildLevelInitialState(level, save);
+  world = createBackroomsScene(level, { initialState });
+  attachFlashlightToCamera(world.camera);
+  controls = new FirstPersonControls({
+    camera: world.camera,
+    canvas,
+    joystick,
+    jumpButton,
+    isWalkable: world.isWalkable,
+    spawn: world.spawn,
+  });
+  controls.notifyDrinkComplete = handleDrinkComplete;
+  if (save && save.player && save.player.level === level) {
+    const pos = save.player.position;
+    world.camera.position.set(pos.x, pos.y, pos.z);
+    controls.applyState(save.player);
+  }
+  exitComplete = false;
+  gameFailed = false;
+  canvas.dataset.exitReached = "false";
+  canvas.dataset.gameFailed = "false";
+  entityMarkers?.replaceChildren();
+  syncLevelHud();
+  updateLevelUrl(level);
+  resize();
+  renderInventoryBar();
+  gameStarted = true;
+  if (!animationFrameStarted) {
+    animationFrameStarted = true;
+    animate();
+  }
 }
 
 function setExitOverlayText(title, subtitle) {
@@ -774,6 +1020,10 @@ function hideExitOverlay() {
 
 function beginLevelTransition(nextLevel) {
   const nextLevelInfo = getBackroomsLevelInfo(nextLevel);
+  completedLevels.add(world.level);
+  reachedLevels.add(nextLevelInfo.level);
+  saveIntegerSet(COMPLETED_KEY, completedLevels);
+  saveIntegerSet(REACHED_KEY, reachedLevels);
   levelTransition = {
     nextLevel: nextLevelInfo.level,
     elapsed: 0,
@@ -797,8 +1047,14 @@ function updateLevelTransition(delta) {
 }
 
 levelSelect?.addEventListener("change", () => {
+  if (!world) return;
   const nextLevel = Number(levelSelect.value);
   if (nextLevel === world.level) return;
+  if (!reachedLevels.has(nextLevel)) {
+    if (levelSelect) levelSelect.value = String(world.level);
+    flashPickupHint("levelLockedHint", 1400);
+    return;
+  }
   levelTransition = null;
   exitComplete = false;
   gameFailed = false;
@@ -818,6 +1074,7 @@ languageSelect?.addEventListener("change", () => {
   updateDetectorHud();
   renderInventoryBar();
   updateActionButtonState();
+  syncLevelHud();
   if (lastMetrics) updateItemInfo(lastMetrics);
   if (exitOverlay && !exitOverlay.hasAttribute("hidden")) {
     setExitOverlayTime();
@@ -834,6 +1091,7 @@ languageSelect?.addEventListener("change", () => {
 });
 
 function resize() {
+  if (!world) return;
   const width = window.innerWidth;
   const height = window.innerHeight;
   renderer.setSize(width, height, false);
@@ -956,8 +1214,9 @@ function updateBuffCards(controlState) {
 
 function updateFlashlightHud() {
   const ratio = FLASHLIGHT_BATTERY_MAX > 0 ? flashlightBattery / FLASHLIGHT_BATTERY_MAX : 0;
+  const isEquipped = getEquipped()?.id === "flashlight";
   if (flashlightMeter) {
-    flashlightMeter.hidden = !flashlightOwned;
+    flashlightMeter.hidden = !isEquipped;
     flashlightMeter.dataset.state = ratio < 0.18 ? "low" : flashlightOn ? "on" : "ready";
   }
   if (flashlightFill) flashlightFill.style.transform = `scaleX(${Math.max(0, ratio).toFixed(3)})`;
@@ -972,10 +1231,25 @@ function updateFlashlightHud() {
   canvas.dataset.flashlightBattery = String(Math.round(flashlightBattery));
 }
 
+function consumeFlashlightUnit() {
+  removeInventory("flashlight");
+  flashlightOwned = getInventoryCount("flashlight") > 0;
+  renderInventoryBar();
+  return getInventoryCount("flashlight");
+}
+
 function updateFlashlight(delta) {
   if (flashlightOn) {
     flashlightBattery = Math.max(0, flashlightBattery - FLASHLIGHT_DRAIN_RATE * delta);
-    if (flashlightBattery <= 0) flashlightOn = false;
+    if (flashlightBattery <= 0) {
+      const remaining = consumeFlashlightUnit();
+      if (remaining > 0) {
+        flashlightBattery = FLASHLIGHT_BATTERY_MAX;
+      } else {
+        flashlightOn = false;
+        flashlightBattery = 0;
+      }
+    }
   }
 
   const ratio = FLASHLIGHT_BATTERY_MAX > 0 ? flashlightBattery / FLASHLIGHT_BATTERY_MAX : 0;
@@ -988,11 +1262,13 @@ function toggleFlashlight() {
   if (!flashlightOwned || flashlightBattery <= 0) return;
   flashlightOn = !flashlightOn;
   updateFlashlightHud();
+  markDirty();
 }
 
 function updateDetectorHud() {
+  const isEquipped = getEquipped()?.id === "detector";
   if (detectorMeter) {
-    detectorMeter.hidden = !detectorOwned;
+    detectorMeter.hidden = !isEquipped;
     detectorMeter.dataset.state =
       detectorActiveTimer > 0 ? "active" : detectorCooldownTimer > 0 ? "cooldown" : "ready";
   }
@@ -1088,6 +1364,7 @@ function startDetectorScan() {
   detectorActiveTimer = DETECTOR_SCAN_DURATION;
   detectorCooldownTimer = 0;
   updateDetectorHud();
+  markDirty();
 }
 
 function updateDetector(delta, metrics) {
@@ -1300,16 +1577,25 @@ function hideTutorial({ markSeen = true } = {}) {
 }
 
 function acquireFlashlight(count) {
-  const wasOwned = flashlightOwned;
-  addInventory("flashlight");
+  const added = addInventory("flashlight");
+  if (!added) {
+    pickupFlashText = formatLocalizedStatus("flashlightFull");
+    pickupFlashUntil = clock.elapsedTime + 1.4;
+    return false;
+  }
   flashlightOwned = true;
   flashlightOn = false;
   flashlightBattery = FLASHLIGHT_BATTERY_MAX;
-  pickupFlashText = formatLocalizedStatus(wasOwned ? "flashlightRefilled" : "flashlightAcquired");
+  const wasFirst = getInventoryCount("flashlight") === 1;
+  pickupFlashText = formatLocalizedStatus(
+    wasFirst ? "flashlightAcquired" : "flashlightRestocked",
+  );
   pickupFlashUntil = clock.elapsedTime + 1.7;
   canvas.dataset.flashlightPickups = String(count ?? 1);
   updateFlashlightHud();
   renderInventoryBar();
+  markDirty();
+  return true;
 }
 
 function acquireDetector(count) {
@@ -1321,6 +1607,7 @@ function acquireDetector(count) {
   canvas.dataset.detectorPickups = String(count ?? 1);
   updateDetectorHud();
   renderInventoryBar();
+  markDirty();
 }
 
 function updatePickupHud(metrics) {
@@ -1438,7 +1725,18 @@ function flashPickupHint(textKey, durationMs = 1100) {
 }
 
 function usePickup() {
-  if (exitComplete || levelTransition || isPaused) return;
+  if (!world || exitComplete || levelTransition || isPaused) return;
+  const nearest = findNearestPickupable(lastMetrics);
+  if (
+    nearest?.id === "flashlight" &&
+    getInventoryCount("flashlight") >= FLASHLIGHT_MAX_STACK
+  ) {
+    pickupFlashText = formatLocalizedStatus("flashlightFull");
+    pickupFlashUntil = clock.elapsedTime + 1.4;
+    useButton?.classList.add("is-active");
+    window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
+    return;
+  }
   const pickup = world.tryPickup?.(world.camera.position);
   if (!pickup?.pickedUp) {
     if (lastMetrics?.focusInteraction?.available) {
@@ -1478,13 +1776,18 @@ function usePickup() {
     canvas.dataset.almondWaterDrinks = String(pickup.count);
   }
 
+  if (completedLevels.has(world.level)) {
+    pickedUpItems.add(`${world.level}-${pickup.itemId}`);
+    saveStringSet(PICKED_UP_KEY, pickedUpItems);
+  }
+
   useButton?.classList.add("is-active");
   window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
   renderInventoryBar();
 }
 
 function useEquippedShortPress() {
-  if (exitComplete || levelTransition || isPaused) return;
+  if (!controls || exitComplete || levelTransition || isPaused) return;
   const equipped = getEquipped();
   if (!equipped) return;
   if (equipped.id === "flashlight") {
@@ -1499,7 +1802,7 @@ function useEquippedShortPress() {
 }
 
 function startEquippedDrink() {
-  if (exitComplete || levelTransition || isPaused) return;
+  if (!controls || exitComplete || levelTransition || isPaused) return;
   const equipped = getEquipped();
   if (!equipped) return;
   if (equipped.id === "almond-water") {
@@ -1535,6 +1838,7 @@ function beginEPress() {
 }
 
 function endEPress(event) {
+  if (!controls) return;
   if (!ePressActive) return;
   const duration = performance.now() - ePressStartTime;
   ePressActive = false;
@@ -1606,6 +1910,10 @@ function updateHud(metrics, controlState, elapsed) {
 }
 
 function animate() {
+  if (!gameStarted || !world || !controls) {
+    requestAnimationFrame(animate);
+    return;
+  }
   const rawDelta = clock.getDelta();
   if (isPaused) {
     tickLongPressProgress();
@@ -1641,6 +1949,7 @@ function animate() {
     const entityText = getLocalizedText(ENTITY_TEXT, contactEntity?.id);
     gameFailed = true;
     canvas.dataset.gameFailed = "true";
+    clearSave();
     showExitOverlay(
       formatLocalizedStatus("bacteriaFailTitle"),
       entityText.failSubtitle ?? formatLocalizedStatus("bacteriaFailSubtitle"),
@@ -1651,6 +1960,8 @@ function animate() {
       beginLevelTransition(world.nextLevel);
     } else {
       exitComplete = true;
+      completedLevels.add(world.level);
+      saveIntegerSet(COMPLETED_KEY, completedLevels);
       showExitOverlay("EXIT STABILIZED", `${world.levelLabel} SIGNAL LOST`);
       canvas.dataset.exitReached = "true";
     }
@@ -1818,7 +2129,7 @@ actionButton?.addEventListener("pointercancel", (event) => {
     delete actionButton.dataset.longPress;
     actionButton.style.removeProperty("--long-press-progress");
   }
-  if (controls.isDrinking) controls.cancelDrink(true);
+  if (controls?.isDrinking) controls.cancelDrink(true);
 });
 actionButton?.addEventListener("pointerleave", (event) => {
   if (ePressActive) endEPress();
@@ -1917,14 +2228,130 @@ tutorialDots.forEach((dot) => {
   });
 });
 
-syncLevelHud();
-resize();
-renderInventoryBar();
-animate();
+function populateSavePrompt(save) {
+  if (!save) return;
+  const levelInfo = getBackroomsLevelInfo(save.player?.level ?? 0);
+  if (savePromptLevel) savePromptLevel.textContent = levelInfo.levelLabel ?? "LEVEL ?";
+  if (savePromptStamina) {
+    const stamina = Math.round(save.player?.stamina ?? 0);
+    const staminaMax = Math.round(save.player?.staminaMax ?? 0);
+    savePromptStamina.textContent = `${stamina} / ${staminaMax}`;
+  }
+  if (savePromptRunTime) {
+    savePromptRunTime.textContent = formatDuration(save.player?.runTime ?? 0);
+  }
+  if (savePromptItems) {
+    if (save.inventory.length === 0) {
+      savePromptItems.textContent = currentLanguage === "en" ? "EMPTY" : "空";
+    } else {
+      const counts = save.inventory
+        .map((entry) => {
+          const localized = getLocalizedText(STATUS_TEXT, entry.id);
+          const name = localized || entry.id;
+          return `${name} ×${entry.count}`;
+        })
+        .join(currentLanguage === "en" ? " · " : " · ");
+      savePromptItems.textContent = counts;
+    }
+  }
+}
+
+function showSavePrompt(save) {
+  if (!savePromptOverlay) return;
+  populateSavePrompt(save);
+  savePromptOverlay.removeAttribute("hidden");
+  savePromptOverlay.classList.add("is-visible");
+  canvas?.setAttribute("data-save-prompt", "true");
+}
+
+function hideSavePrompt() {
+  if (!savePromptOverlay) return;
+  savePromptOverlay.classList.remove("is-visible");
+  window.setTimeout(() => savePromptOverlay.setAttribute("hidden", ""), OVERLAY_FADE_MS);
+  canvas?.removeAttribute("data-save-prompt");
+}
+
+function handleSavePromptContinue(save) {
+  hideSavePrompt();
+  const targetLevel = getInitialLevelFromSave(save) ?? getInitialLevel();
+  bootstrapWorld(targetLevel, save);
+}
+
+function handleSavePromptRestart() {
+  hideSavePrompt();
+  clearSave();
+  bootstrapWorld(getInitialLevel(), null);
+}
+
+savePromptContinue?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (pendingSaveForPrompt) {
+    handleSavePromptContinue(pendingSaveForPrompt);
+  }
+});
+
+savePromptRestart?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  handleSavePromptRestart();
+});
+
+savePromptOverlay?.addEventListener("pointerdown", (event) => {
+  if (event.target === savePromptOverlay) {
+    if (pendingSaveForPrompt) handleSavePromptContinue(pendingSaveForPrompt);
+  }
+});
+
+let pendingSaveForPrompt = null;
+
+const initialSave = (() => {
+  try {
+    return hasSavedGame() ? loadSave() : null;
+  } catch {
+    return null;
+  }
+})();
+
+if (initialSave) {
+  pendingSaveForPrompt = initialSave;
+  showSavePrompt(initialSave);
+} else {
+  bootstrapWorld(getInitialLevel(), null);
+}
+
+window.setInterval(() => {
+  if (world && !gameFailed) {
+    writeSaveSnapshot();
+  }
+}, SAVE_AUTOSAVE_INTERVAL_MS);
+
+window.addEventListener("beforeunload", () => {
+  if (world && !gameFailed) {
+    if (saveDirtyTimer) {
+      window.clearTimeout(saveDirtyTimer);
+      saveDirtyTimer = 0;
+    }
+    writeSaveSnapshot();
+  }
+});
+
+if (typeof window !== "undefined") {
+  window.__backroomsResetProgress = () => {
+    try {
+      window.localStorage?.removeItem(REACHED_KEY);
+      window.localStorage?.removeItem(COMPLETED_KEY);
+      window.localStorage?.removeItem(PICKED_UP_KEY);
+    } catch {
+      // localStorage may be unavailable.
+    }
+    window.location.reload();
+  };
+}
 
 // Show tutorial on first launch (after a short delay so loading overlay has time to settle)
 window.setTimeout(() => {
-  if (isPaused || exitComplete) return;
+  if (!gameStarted || isPaused || exitComplete) return;
   let seen = false;
   try {
     seen = window.localStorage?.getItem(TUTORIAL_SEEN_KEY) === "true";

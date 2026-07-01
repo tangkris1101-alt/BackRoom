@@ -59,7 +59,7 @@ import {
   tryInteractWithSpots,
 } from "../entities/index.js";
 
-export function createLevelOneScene() {
+export function createLevelOneScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
   const FOG_COLOR = 0x8c988e;
   scene.background = new THREE.Color(FOG_COLOR);
@@ -73,6 +73,11 @@ export function createLevelOneScene() {
   const spawnCell = levelOneCellCenter(LEVEL_ONE_START_CELL.col, LEVEL_ONE_START_CELL.row);
   const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: LEVEL_ONE_START_CELL.yaw };
   const targetPosition = levelOneCellCenter(LEVEL_ONE_TARGET_CELL.col, LEVEL_ONE_TARGET_CELL.row);
+
+  const pickupInitial = initialState?.pickups ?? {};
+  const interactionInitial = initialState?.interactions ?? {};
+  const objectiveInitial = initialState?.objectives ?? {};
+  const entityInitial = Array.isArray(initialState?.entities) ? initialState.entities : [];
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: createLevelOneFloorTexture(),
@@ -164,6 +169,7 @@ export function createLevelOneScene() {
     getCellCenter: levelOneCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial["almond-water"] ?? null,
   });
   const superAlmondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_ONE_COLS,
@@ -177,6 +183,7 @@ export function createLevelOneScene() {
     respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
     initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
     respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+    initialState: pickupInitial["super-almond-water"] ?? null,
   });
   const flashlight = createFlashlightPickup(scene, {
     cols: LEVEL_ONE_COLS,
@@ -185,6 +192,7 @@ export function createLevelOneScene() {
     getCellCenter: levelOneCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial.flashlight ?? null,
   });
   const detector = createDetectorPickup(scene, {
     cols: LEVEL_ONE_COLS,
@@ -193,6 +201,7 @@ export function createLevelOneScene() {
     getCellCenter: levelOneCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial.detector ?? null,
   });
   const interactions = [
     createInteractionSpot({
@@ -201,6 +210,7 @@ export function createLevelOneScene() {
       inspectHeight: 1.6,
       inspectRadius: 0.75,
       responseKey: "levelOneElevatorResponse",
+      initialState: interactionInitial["level-one-elevator-panel"] ?? null,
     }),
   ];
   const bacteria = createBacteriaEntity(scene, {
@@ -214,9 +224,10 @@ export function createLevelOneScene() {
     })[0] ?? spawnCell,
     isWalkable,
     speed: 1.16,
+    initialState: entityInitial.find((entity) => entity.type === "bacteria") ?? null,
   });
 
-  let objectiveReached = false;
+  let objectiveReached = Boolean(objectiveInitial.reached);
 
   function isWalkable(x, z, radius = 0.36) {
     const corner = radius * 0.72;
@@ -309,6 +320,21 @@ export function createLevelOneScene() {
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+    getSnapshot() {
+      return {
+        pickups: {
+          flashlight: flashlight.getState(),
+          detector: detector.getState(),
+          "almond-water": almondWater.getState(),
+          "super-almond-water": superAlmondWater.getState(),
+        },
+        interactions: Object.fromEntries(
+          interactions.map((spot) => [spot.id, spot.getState()]),
+        ),
+        objectives: { reached: objectiveReached },
+        entities: [bacteria.getState()],
+      };
+    },
   };
 }
 

@@ -14,6 +14,7 @@ const ALMOND_WATER_MAX_STAMINA = MAX_STAMINA + ALMOND_WATER_STAMINA_BONUS;
 const SUPER_ALMOND_WATER_MAX_STAMINA = 250;
 const SUPER_ALMOND_WATER_EFFECT_DURATION = 25;
 const SUPER_ALMOND_WATER_RECOVERY_MULTIPLIER = 2;
+const SUPER_ALMOND_WATER_SPEED_MULTIPLIER = 1.5;
 const ALMOND_WATER_DRINK_DURATION = 1.0;
 const DRINK_MOVE_MULTIPLIER = 0.5;
 const DRINK_ON_COMPLETE_EVENT = "backrooms:drink-complete";
@@ -149,6 +150,63 @@ export class FirstPersonControls {
     this.keys.clear();
     this.resetJoystick();
     this.reset();
+  }
+
+  applyState(state) {
+    if (!state) return;
+    this.yaw = Number.isFinite(state.yaw) ? state.yaw : this.yaw;
+    this.pitch = Number.isFinite(state.pitch) ? state.pitch : -0.025;
+    this.stamina = Number.isFinite(state.stamina) ? Math.max(0, state.stamina) : this.stamina;
+    this.staminaMax = Number.isFinite(state.staminaMax) ? Math.max(1, state.staminaMax) : this.staminaMax;
+    this.staminaRecoveryDelay = Number.isFinite(state.staminaRecoveryDelay)
+      ? Math.max(0, state.staminaRecoveryDelay)
+      : 0;
+    this.almondWaterTimer = Number.isFinite(state.almondWaterTimer)
+      ? Math.max(0, state.almondWaterTimer)
+      : 0;
+    this.superAlmondWaterTimer = Number.isFinite(state.superAlmondWaterTimer)
+      ? Math.max(0, state.superAlmondWaterTimer)
+      : 0;
+    this.isSprinting = false;
+    this.isDrinking = Boolean(state.isDrinking);
+    this.drinkTimer = Number.isFinite(state.drinkTimer) ? Math.max(0, state.drinkTimer) : 0;
+    this.drinkItemId =
+      typeof state.drinkItemId === "string" && state.drinkItemId ? state.drinkItemId : null;
+    this.drinkStaminaBonus = Number.isFinite(state.drinkStaminaBonus)
+      ? state.drinkStaminaBonus
+      : ALMOND_WATER_STAMINA_BONUS;
+    this.drinkCancelled = false;
+    this.verticalVelocity = 0;
+    this.isGrounded = true;
+    this.jumpQueued = false;
+    this.refreshStaminaModifiers({ fill: false });
+    if (!this.isDrinking) {
+      this.stamina = Math.min(this.stamina, this.staminaMax);
+    }
+    this.applyRotation();
+  }
+
+  getPlayerState() {
+    return {
+      position: {
+        x: this.camera.position.x,
+        y: this.camera.position.y,
+        z: this.camera.position.z,
+      },
+      yaw: this.yaw,
+      pitch: this.pitch,
+      stamina: this.stamina,
+      staminaMax: this.staminaMax,
+      staminaBaseMax: MAX_STAMINA,
+      staminaRecoveryDelay: this.staminaRecoveryDelay,
+      almondWaterTimer: this.almondWaterTimer,
+      superAlmondWaterTimer: this.superAlmondWaterTimer,
+      isSprinting: this.isSprinting,
+      isDrinking: this.isDrinking,
+      drinkTimer: this.drinkTimer,
+      drinkItemId: this.drinkItemId,
+      drinkStaminaBonus: this.drinkStaminaBonus,
+    };
   }
 
   canRequestPointerLock() {
@@ -430,6 +488,10 @@ export class FirstPersonControls {
     return this.superAlmondWaterTimer > 0 ? SUPER_ALMOND_WATER_RECOVERY_MULTIPLIER : 1;
   }
 
+  getMoveSpeedMultiplier() {
+    return this.superAlmondWaterTimer > 0 ? SUPER_ALMOND_WATER_SPEED_MULTIPLIER : 1;
+  }
+
   getCurrentStaminaMax() {
     if (this.superAlmondWaterTimer > 0) return SUPER_ALMOND_WATER_MAX_STAMINA;
     if (this.almondWaterTimer > 0) return ALMOND_WATER_MAX_STAMINA;
@@ -509,21 +571,19 @@ export class FirstPersonControls {
         this.joystickPointerId !== null && this.joystickInput.y > 0.88;
       const wantsSprint = wantsKeyboardSprint || wantsJoystickSprint;
 
-      if (this.isDrinking && wantsSprint) {
-        this.cancelDrink(true);
-      } else {
-        this.isSprinting = wantsSprint && this.stamina > MIN_SPRINT_STAMINA;
-        if (this.isSprinting) {
-          this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN_RATE * delta);
-          this.staminaRecoveryDelay = STAMINA_RECOVERY_DELAY;
-        }
+      this.isSprinting = wantsSprint && this.stamina > MIN_SPRINT_STAMINA;
+      if (this.isSprinting) {
+        this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN_RATE * delta);
+        this.staminaRecoveryDelay = STAMINA_RECOVERY_DELAY;
       }
 
       const drinkMultiplier = this.isDrinking ? DRINK_MOVE_MULTIPLIER : 1;
+      const superAlmondSpeedMultiplier = this.getMoveSpeedMultiplier();
       const distance =
         this.moveSpeed *
         (this.isSprinting ? this.sprintMultiplier : 1) *
         drinkMultiplier *
+        superAlmondSpeedMultiplier *
         delta;
       this.move.normalize().multiplyScalar(distance);
 
@@ -588,6 +648,7 @@ export class FirstPersonControls {
           duration: SUPER_ALMOND_WATER_EFFECT_DURATION,
           staminaMax: SUPER_ALMOND_WATER_MAX_STAMINA,
           recoveryMultiplier: SUPER_ALMOND_WATER_RECOVERY_MULTIPLIER,
+          speedMultiplier: SUPER_ALMOND_WATER_SPEED_MULTIPLIER,
         },
       ];
     }

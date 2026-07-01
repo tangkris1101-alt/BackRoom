@@ -5,13 +5,14 @@ import { createLevelThreeScene } from "./level-three/index.js";
 import { createLevelFourScene } from "./level-four/index.js";
 import { getBackroomsLevelInfo } from "./constants.js";
 
-export function createBackroomsScene(level = 0) {
+export function createBackroomsScene(level = 0, { initialState = null } = {}) {
   const levelInfo = getBackroomsLevelInfo(level);
-  if (levelInfo.level === 1) return createLevelOneScene();
-  if (levelInfo.level === 2) return createLevelTwoScene();
-  if (levelInfo.level === 3) return createLevelThreeScene();
-  if (levelInfo.level === 4) return createLevelFourScene();
-  return createLevelZeroScene();
+  const options = { initialState };
+  if (levelInfo.level === 1) return createLevelOneScene(options);
+  if (levelInfo.level === 2) return createLevelTwoScene(options);
+  if (levelInfo.level === 3) return createLevelThreeScene(options);
+  if (levelInfo.level === 4) return createLevelFourScene(options);
+  return createLevelZeroScene(options);
 }
 
 export { getBackroomsLevelInfo } from "./constants.js";

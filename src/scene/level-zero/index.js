@@ -30,7 +30,7 @@ import {
 import { createAlmondWaterPickup, createFlashlightPickup } from "../items/index.js";
 import { tryPickupItems, getFocusedItem } from "../entities/index.js";
 
-export function createLevelZeroScene() {
+export function createLevelZeroScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
   // The background MUST match the fog colour, otherwise corridor ends, the
   // far-clip plane and plane edges render as black voids instead of dissolving
@@ -46,6 +46,9 @@ export function createLevelZeroScene() {
   const spawnCell = cellCenter(START_CELL.col, START_CELL.row);
   const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: START_CELL.yaw };
   const exitPosition = cellCenter(EXIT_CELL.col, EXIT_CELL.row);
+
+  const pickupInitial = initialState?.pickups ?? {};
+  const objectiveInitial = initialState?.objectives ?? {};
 
   const carpetTexture = createLevelZeroCarpetTexture();
   const wallpaperTexture = createLevelZeroWallpaperTexture();
@@ -138,6 +141,7 @@ export function createLevelZeroScene() {
     isCellOpen: isOpenCell,
     getCellCenter: cellCenter,
     avoidPositions: [spawnCell, exitPosition],
+    initialState: pickupInitial["almond-water"] ?? null,
   });
   const superAlmondWater = createAlmondWaterPickup(scene, {
     cols: COLS,
@@ -150,6 +154,7 @@ export function createLevelZeroScene() {
     respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
     initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
     respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+    initialState: pickupInitial["super-almond-water"] ?? null,
   });
   const flashlight = createFlashlightPickup(scene, {
     cols: COLS,
@@ -157,8 +162,9 @@ export function createLevelZeroScene() {
     isCellOpen: isOpenCell,
     getCellCenter: cellCenter,
     avoidPositions: [spawnCell, exitPosition],
+    initialState: pickupInitial.flashlight ?? null,
   });
-  let exitReached = false;
+  let exitReached = Boolean(objectiveInitial.reached);
 
   function isWalkable(x, z, radius = 0.36) {
     const corner = radius * 0.72;
@@ -233,6 +239,19 @@ export function createLevelZeroScene() {
     isWalkable,
     update,
     tryPickup: (playerPosition) => tryPickupItems(playerPosition, superAlmondWater, flashlight, almondWater),
+    getSnapshot() {
+      return {
+        pickups: {
+          flashlight: flashlight.getState(),
+          detector: null,
+          "almond-water": almondWater.getState(),
+          "super-almond-water": superAlmondWater.getState(),
+        },
+        interactions: {},
+        objectives: { reached: exitReached },
+        entities: [],
+      };
+    },
   };
 }
 

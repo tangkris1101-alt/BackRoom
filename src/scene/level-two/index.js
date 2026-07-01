@@ -60,7 +60,7 @@ import {
   tryInteractWithSpots,
 } from "../entities/index.js";
 
-export function createLevelTwoScene() {
+export function createLevelTwoScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
   const FOG_COLOR = 0x554537;
   scene.background = new THREE.Color(FOG_COLOR);
@@ -75,6 +75,11 @@ export function createLevelTwoScene() {
   const spawnCell = levelTwoCellCenter(LEVEL_TWO_START_CELL.col, LEVEL_TWO_START_CELL.row);
   const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: LEVEL_TWO_START_CELL.yaw };
   const targetPosition = levelTwoCellCenter(LEVEL_TWO_TARGET_CELL.col, LEVEL_TWO_TARGET_CELL.row);
+
+  const pickupInitial = initialState?.pickups ?? {};
+  const interactionInitial = initialState?.interactions ?? {};
+  const objectiveInitial = initialState?.objectives ?? {};
+  const entityInitial = Array.isArray(initialState?.entities) ? initialState.entities : [];
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: createLevelTwoFloorTexture(),
@@ -172,6 +177,7 @@ export function createLevelTwoScene() {
     getCellCenter: levelTwoCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial["almond-water"] ?? null,
   });
   const superAlmondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_TWO_COLS,
@@ -185,6 +191,7 @@ export function createLevelTwoScene() {
     respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
     initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
     respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+    initialState: pickupInitial["super-almond-water"] ?? null,
   });
   const flashlight = createFlashlightPickup(scene, {
     cols: LEVEL_TWO_COLS,
@@ -193,6 +200,7 @@ export function createLevelTwoScene() {
     getCellCenter: levelTwoCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial.flashlight ?? null,
   });
   const detector = createDetectorPickup(scene, {
     cols: LEVEL_TWO_COLS,
@@ -201,6 +209,7 @@ export function createLevelTwoScene() {
     getCellCenter: levelTwoCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
+    initialState: pickupInitial.detector ?? null,
   });
   const interactions = [
     createInteractionSpot({
@@ -209,6 +218,7 @@ export function createLevelTwoScene() {
       inspectHeight: 1.45,
       inspectRadius: 0.72,
       responseKey: "levelTwoValveResponse",
+      initialState: interactionInitial["level-two-valve"] ?? null,
     }),
     createInteractionSpot({
       id: "level-two-service-door",
@@ -216,6 +226,7 @@ export function createLevelTwoScene() {
       inspectHeight: 1.65,
       inspectRadius: 0.8,
       responseKey: "levelTwoServiceDoorResponse",
+      initialState: interactionInitial["level-two-service-door"] ?? null,
     }),
   ];
   const bacteriaSpawn =
@@ -231,6 +242,7 @@ export function createLevelTwoScene() {
     spawnPosition: bacteriaSpawn,
     isWalkable,
     speed: 1.22,
+    initialState: entityInitial.find((entity) => entity.type === "bacteria") ?? null,
   });
   const hound = createHoundEntity(scene, {
     spawnPosition:
@@ -245,10 +257,11 @@ export function createLevelTwoScene() {
         minSeparation: CELL_SIZE * 7,
       })[0] ?? targetPosition,
     isWalkable,
-    speed: 1.34,
+    speed: 1.83,
+    initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
   });
 
-  let objectiveReached = false;
+  let objectiveReached = Boolean(objectiveInitial.reached);
 
   function isWalkable(x, z, radius = 0.36) {
     const corner = radius * 0.72;
@@ -351,6 +364,21 @@ export function createLevelTwoScene() {
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+    getSnapshot() {
+      return {
+        pickups: {
+          flashlight: flashlight.getState(),
+          detector: detector.getState(),
+          "almond-water": almondWater.getState(),
+          "super-almond-water": superAlmondWater.getState(),
+        },
+        interactions: Object.fromEntries(
+          interactions.map((spot) => [spot.id, spot.getState()]),
+        ),
+        objectives: { reached: objectiveReached },
+        entities: [bacteria.getState(), hound.getState()],
+      };
+    },
   };
 }
 

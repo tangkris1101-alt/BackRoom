@@ -126,6 +126,7 @@ export function createAlmondWaterPickup(
     respawnVariance = ALMOND_WATER_RESPAWN_VARIANCE,
     initialSpawnChance = 1,
     respawnChance = 1,
+    initialState = null,
   },
 ) {
   const isSuper = variant === "super";
@@ -170,6 +171,13 @@ export function createAlmondWaterPickup(
   let active = false;
   let respawnTimer = 0;
   let pickupCount = 0;
+  const preDepleted = frozenItems && alreadyPickedUp instanceof Set && alreadyPickedUp.has(itemId);
+
+  if (preDepleted) {
+    group.visible = false;
+  } else {
+    trySpawn(initialSpawnChance);
+  }
 
   function chooseCandidate() {
     return candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
@@ -202,9 +210,25 @@ export function createAlmondWaterPickup(
     placeAtRandomPosition();
   }
 
-  trySpawn(initialSpawnChance);
+  if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
+    active = Boolean(initialState.active);
+    respawnTimer = Math.max(0, Number(initialState.respawnTimer ?? 0));
+    group.position.set(initialState.position.x, 0, initialState.position.z);
+    group.rotation.y = Number.isFinite(initialState.rotation) ? initialState.rotation : 0;
+    group.visible = active;
+  } else {
+    trySpawn(initialSpawnChance);
+  }
 
   return {
+    getState() {
+      return {
+        active,
+        respawnTimer,
+        position: { x: group.position.x, y: 0, z: group.position.z },
+        rotation: group.rotation.y,
+      };
+    },
     inspect(camera) {
       if (!active || !camera) return null;
       camera.getWorldDirection(inspectForward);
@@ -227,6 +251,15 @@ export function createAlmondWaterPickup(
 
     update(delta, elapsed, playerPosition) {
       if (!active) {
+        if (frozenItems) {
+          return {
+            id: itemId,
+            visible: false,
+            available: false,
+            distance: Infinity,
+            respawn: 0,
+          };
+        }
         respawnTimer -= delta;
         if (respawnTimer <= 0) trySpawn(respawnChance);
         return {

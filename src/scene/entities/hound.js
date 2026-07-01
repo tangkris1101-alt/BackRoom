@@ -88,14 +88,30 @@ export function createHoundModel() {
 }
 
 
-export function createHoundEntity(scene, { spawnPosition, isWalkable, speed = 1.45, id = "hound" }) {
+export function createHoundEntity(
+  scene,
+  { spawnPosition, isWalkable, speed = 1.45, id = "hound", initialState = null },
+) {
   const group = createHoundModel();
   group.position.set(spawnPosition.x, 0, spawnPosition.z);
   group.rotation.y = Math.random() * Math.PI * 2;
   scene.add(group);
 
   let contact = false;
+  if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
+    group.position.x = initialState.position.x;
+    group.position.z = initialState.position.z;
+    contact = Boolean(initialState.contact);
+  }
   return {
+    getState() {
+      return {
+        id,
+        type: "hound",
+        position: { x: group.position.x, z: group.position.z },
+        contact,
+      };
+    },
     update(delta, elapsed, playerPosition) {
       const dx = playerPosition.x - group.position.x;
       const dz = playerPosition.z - group.position.z;
