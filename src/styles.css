@@ -67,6 +67,41 @@ body {
   gap: 16px;
 }
 
+.hud-top-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.timer-readout {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid rgba(205, 229, 133, 0.24);
+  background: rgba(5, 8, 5, 0.34);
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(5px);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0;
+  white-space: nowrap;
+  color: #e6f7b4;
+}
+
+.timer-readout__label {
+  color: #86ff9f;
+}
+
+.timer-readout__value {
+  font-variant-numeric: tabular-nums;
+  min-width: 4ch;
+  text-align: right;
+}
+
 .hud-stack {
   display: grid;
   justify-items: end;
@@ -626,6 +661,20 @@ body {
   pointer-events: none;
 }
 
+.exit-overlay__time {
+  margin-top: 6px;
+  padding: 8px 16px;
+  border: 1px solid rgba(181, 255, 132, 0.32);
+  background: rgba(8, 10, 5, 0.5);
+  font-size: clamp(15px, 3.6vw, 22px);
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #b5ff84;
+  text-shadow: 0 0 14px rgba(181, 255, 132, 0.42);
+  font-variant-numeric: tabular-nums;
+}
+
 .vignette {
   position: fixed;
   inset: 0;
@@ -907,6 +956,11 @@ body {
     gap: 8px;
   }
 
+  .timer-readout {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
   .level-select,
   .language-select,
   .meters span,
@@ -978,6 +1032,7 @@ body {
   display: inline-flex;
   align-items: stretch;
   gap: 8px;
+  max-width: calc(100vw - 32px);
   padding: 8px 10px;
   border: 1px solid rgba(205, 229, 133, 0.22);
   background: rgba(5, 8, 5, 0.46);
@@ -1004,12 +1059,25 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  overflow-x: auto;
+  overflow-y: visible;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  max-width: 100%;
+  padding: 0 2px;
+}
+
+.inventory-slots::-webkit-scrollbar {
+  display: none;
 }
 
 .inventory-slot {
   position: relative;
   display: grid;
   place-items: center;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
   border: 1px solid rgba(205, 229, 133, 0.18);
   background: rgba(13, 18, 10, 0.5);
   color: rgba(230, 238, 174, 0.92);
@@ -1046,10 +1114,10 @@ body {
   box-shadow: inset 0 0 14px rgba(255, 221, 96, 0.18);
 }
 
-/* Center slot (equipped) */
-.inventory-slot[data-position="0"] {
-  width: 78px;
-  height: 78px;
+/* Equipped slot (selected) �?larger and glowing */
+.inventory-slot[data-equipped="true"] {
+  width: 84px;
+  height: 84px;
   border-color: rgba(150, 255, 175, 0.62);
   background: linear-gradient(180deg, rgba(20, 30, 18, 0.62), rgba(8, 12, 8, 0.5));
   box-shadow:
@@ -1058,72 +1126,46 @@ body {
   transform: translateY(-4px);
 }
 
-.inventory-slot[data-position="0"][data-type="flashlight"] {
+.inventory-slot[data-equipped="true"][data-type="flashlight"] {
   border-color: rgba(150, 220, 255, 0.78);
   box-shadow:
     0 0 20px rgba(150, 220, 255, 0.34),
     inset 0 0 18px rgba(150, 220, 255, 0.18);
 }
 
-.inventory-slot[data-position="0"][data-type="detector"] {
+.inventory-slot[data-equipped="true"][data-type="detector"] {
   border-color: rgba(255, 170, 130, 0.78);
   box-shadow:
     0 0 20px rgba(255, 170, 130, 0.34),
     inset 0 0 18px rgba(255, 170, 130, 0.18);
 }
 
-.inventory-slot[data-position="0"][data-type="super-almond-water"] {
+.inventory-slot[data-equipped="true"][data-type="super-almond-water"] {
   border-color: rgba(255, 220, 110, 0.82);
   box-shadow:
     0 0 22px rgba(255, 220, 110, 0.38),
     inset 0 0 20px rgba(255, 220, 110, 0.22);
 }
 
-/* Side slots by distance from center */
-.inventory-slot[data-position="-1"],
-.inventory-slot[data-position="1"] {
-  width: 60px;
-  height: 60px;
-  opacity: 0.72;
-  filter: saturate(0.78);
+/* Non-equipped slots �?slightly dimmed */
+.inventory-slot:not([data-equipped="true"]) {
+  opacity: 0.78;
+  filter: saturate(0.82);
 }
 
-.inventory-slot[data-position="-2"],
-.inventory-slot[data-position="2"] {
-  width: 52px;
-  height: 52px;
-  opacity: 0.52;
-  filter: saturate(0.65);
-}
-
-.inventory-slot[data-position="-3"],
-.inventory-slot[data-position="3"] {
-  width: 46px;
-  height: 46px;
-  opacity: 0.38;
-  filter: saturate(0.55);
-}
-
-.inventory-slot[data-position="-4"],
-.inventory-slot[data-position="4"],
-.inventory-slot[data-position="-5"],
-.inventory-slot[data-position="5"] {
-  width: 42px;
-  height: 42px;
-  opacity: 0.28;
-  filter: saturate(0.45);
-}
-
-/* Icon base - now uses inline SVG */
+/* Icon base */
 .inventory-slot__icon {
   position: relative;
-  margin-bottom: 12px;
   display: grid;
   place-items: center;
 }
 
-.inventory-slot:not([data-position="0"]) .inventory-slot__icon {
+.inventory-slot:not([data-equipped="true"]) .inventory-slot__icon {
   margin-bottom: 0;
+}
+
+.inventory-slot[data-equipped="true"] .inventory-slot__icon {
+  margin-bottom: 12px;
 }
 
 .inventory-slot__svg {
@@ -1133,60 +1175,38 @@ body {
   pointer-events: none;
 }
 
-/* Center icon sizes per type */
-.inventory-slot[data-position="0"][data-type="flashlight"] .inventory-slot__icon {
+/* Equipped icon sizes per type */
+.inventory-slot[data-equipped="true"][data-type="flashlight"] .inventory-slot__icon {
   width: 64px;
   height: 28px;
 }
 
-.inventory-slot[data-position="0"][data-type="detector"] .inventory-slot__icon {
+.inventory-slot[data-equipped="true"][data-type="detector"] .inventory-slot__icon {
   width: 48px;
   height: 48px;
 }
 
-.inventory-slot[data-position="0"][data-type="almond-water"] .inventory-slot__icon,
-.inventory-slot[data-position="0"][data-type="super-almond-water"] .inventory-slot__icon {
+.inventory-slot[data-equipped="true"][data-type="almond-water"] .inventory-slot__icon,
+.inventory-slot[data-equipped="true"][data-type="super-almond-water"] .inventory-slot__icon {
   width: 32px;
   height: 54px;
 }
 
-/* Side ±1 icon sizes (smaller) */
-.inventory-slot[data-position="-1"][data-type="flashlight"] .inventory-slot__icon,
-.inventory-slot[data-position="1"][data-type="flashlight"] .inventory-slot__icon {
-  width: 48px;
-  height: 22px;
+/* Non-equipped icon sizes per type (smaller) */
+.inventory-slot:not([data-equipped="true"])[data-type="flashlight"] .inventory-slot__icon {
+  width: 44px;
+  height: 20px;
 }
 
-.inventory-slot[data-position="-1"][data-type="detector"] .inventory-slot__icon,
-.inventory-slot[data-position="1"][data-type="detector"] .inventory-slot__icon {
-  width: 36px;
-  height: 36px;
+.inventory-slot:not([data-equipped="true"])[data-type="detector"] .inventory-slot__icon {
+  width: 32px;
+  height: 32px;
 }
 
-.inventory-slot[data-position="-1"][data-type="almond-water"] .inventory-slot__icon,
-.inventory-slot[data-position="1"][data-type="almond-water"] .inventory-slot__icon,
-.inventory-slot[data-position="-1"][data-type="super-almond-water"] .inventory-slot__icon,
-.inventory-slot[data-position="1"][data-type="super-almond-water"] .inventory-slot__icon {
-  width: 24px;
-  height: 42px;
-}
-
-/* ±2 - scale down via transform */
-.inventory-slot[data-position="-2"] .inventory-slot__icon,
-.inventory-slot[data-position="2"] .inventory-slot__icon {
-  transform: scale(0.85);
-}
-
-.inventory-slot[data-position="-3"] .inventory-slot__icon,
-.inventory-slot[data-position="3"] .inventory-slot__icon {
-  transform: scale(0.72);
-}
-
-.inventory-slot[data-position="-4"] .inventory-slot__icon,
-.inventory-slot[data-position="4"] .inventory-slot__icon,
-.inventory-slot[data-position="-5"] .inventory-slot__icon,
-.inventory-slot[data-position="5"] .inventory-slot__icon {
-  transform: scale(0.62);
+.inventory-slot:not([data-equipped="true"])[data-type="almond-water"] .inventory-slot__icon,
+.inventory-slot:not([data-equipped="true"])[data-type="super-almond-water"] .inventory-slot__icon {
+  width: 22px;
+  height: 38px;
 }
 
 .inventory-slot__name {
@@ -1448,21 +1468,14 @@ body {
     display: grid;
   }
 
-  .inventory-slot[data-position="0"] {
-    width: 68px;
-    height: 68px;
+  .inventory-slot[data-equipped="true"] {
+    width: 72px;
+    height: 72px;
   }
 
-  .inventory-slot[data-position="-1"],
-  .inventory-slot[data-position="1"] {
+  .inventory-slot {
     width: 50px;
     height: 50px;
-  }
-
-  .inventory-slot[data-position="-2"],
-  .inventory-slot[data-position="2"] {
-    width: 44px;
-    height: 44px;
   }
 
   .action-button,

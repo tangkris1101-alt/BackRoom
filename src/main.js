@@ -1125,25 +1125,23 @@ function renderInventoryBar() {
   const safeEquippedIndex =
     equippedIndex >= 0 && equippedIndex < inventory.length ? equippedIndex : 0;
   const fragment = document.createDocumentFragment();
-
-  for (let i = 1; i <= safeEquippedIndex; i += 1) {
-    fragment.append(createInventorySlot(inventory[safeEquippedIndex - i], -i));
-  }
-  fragment.append(createInventorySlot(inventory[safeEquippedIndex], 0));
-  for (let i = 1; i < inventory.length - safeEquippedIndex; i += 1) {
-    fragment.append(createInventorySlot(inventory[safeEquippedIndex + i], i));
-  }
+  inventory.forEach((entry, index) => {
+    fragment.append(createInventorySlot(entry, index === safeEquippedIndex));
+  });
 
   inventorySlots.replaceChildren(fragment);
   updateActionButtonState();
+  scrollEquippedIntoView(inventorySlots, safeEquippedIndex);
 }
 
-function createInventorySlot(entry, position) {
+function createInventorySlot(entry, isEquipped) {
   const def = INVENTORY_DEFS[entry.id];
   const slot = document.createElement("div");
   slot.className = "inventory-slot";
   slot.dataset.type = entry.id;
-  slot.dataset.position = String(position);
+  if (isEquipped) slot.dataset.equipped = "true";
+  slot.setAttribute("role", "tab");
+  slot.setAttribute("aria-selected", isEquipped ? "true" : "false");
 
   const icon = document.createElement("div");
   icon.className = "inventory-slot__icon";
@@ -1157,7 +1155,7 @@ function createInventorySlot(entry, position) {
     slot.append(count);
   }
 
-  if (position === 0) {
+  if (isEquipped) {
     const name = document.createElement("span");
     name.className = "inventory-slot__name";
     const localized = getLocalizedText(STATUS_TEXT, entry.id);
@@ -1166,6 +1164,23 @@ function createInventorySlot(entry, position) {
   }
 
   return slot;
+}
+
+function scrollEquippedIntoView(container, equippedIndex) {
+  if (!container || equippedIndex < 0) return;
+  const target = container.children[equippedIndex];
+  if (!target) return;
+  const barWidth = container.clientWidth;
+  const targetLeft = target.offsetLeft;
+  const targetWidth = target.offsetWidth;
+  const targetRight = targetLeft + targetWidth;
+  const viewLeft = container.scrollLeft;
+  const viewRight = viewLeft + barWidth;
+  if (targetRight > viewRight - 12) {
+    container.scrollTo({ left: targetLeft - 12, behavior: "smooth" });
+  } else if (targetLeft < viewLeft + 12) {
+    container.scrollTo({ left: targetLeft - 12, behavior: "smooth" });
+  }
 }
 
 function updateActionButtonState() {
@@ -1528,7 +1543,10 @@ function endEPress(event) {
     delete actionButton.dataset.longPress;
     actionButton.style.removeProperty("--long-press-progress");
   }
-  if (exitComplete || levelTransition || isPaused) return;
+  if (exitComplete || levelTransition || isPaused) {
+    if (controls.isDrinking) controls.cancelDrink(true);
+    return;
+  }
   const equipped = getEquipped();
   if (!equipped) return;
 
@@ -1537,6 +1555,7 @@ function endEPress(event) {
       ePressLongTriggered = true;
       startEquippedDrink();
     }
+    if (controls.isDrinking) controls.cancelDrink(true);
     return;
   }
   if (duration < WATER_LONG_PRESS_MS) {
@@ -1799,6 +1818,7 @@ actionButton?.addEventListener("pointercancel", (event) => {
     delete actionButton.dataset.longPress;
     actionButton.style.removeProperty("--long-press-progress");
   }
+  if (controls.isDrinking) controls.cancelDrink(true);
 });
 actionButton?.addEventListener("pointerleave", (event) => {
   if (ePressActive) endEPress();
