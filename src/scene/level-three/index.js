@@ -272,6 +272,21 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     speed: 2.22,
     initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
   });
+  const ambushPosition = isLevelThreeOpenCell(24, 7)
+    ? levelThreeCellCenter(24, 7)
+    : null;
+  const ambushHound = ambushPosition
+    ? createHoundEntity(scene, {
+        spawnPosition: ambushPosition,
+        isWalkable,
+        speed: 2.42,
+        id: "ambush-hound",
+        type: "ambush-hound",
+        dormant: true,
+        dormantArmRadius: CELL_SIZE * 2.4,
+        initialState: entityInitial.find((entity) => entity.type === "ambush-hound") ?? null,
+      })
+    : null;
 
   let objectiveReached = Boolean(objectiveInitial.reached);
 
@@ -322,7 +337,10 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const bacteriaStates = bacteria.map((b) => b.update(delta, elapsed, playerPosition));
     const houndState = hound.update(delta, elapsed, playerPosition);
-    const entities = [...bacteriaStates, houndState];
+    const ambushHoundState = ambushHound ? ambushHound.update(delta, elapsed, playerPosition) : null;
+    const entities = ambushHoundState
+      ? [...bacteriaStates, houndState, ambushHoundState]
+      : [...bacteriaStates, houndState];
     const entityContact = entities.some((state) => state.contact);
 
     return {
@@ -379,7 +397,11 @@ export function createLevelThreeScene({ initialState = null } = {}) {
           interactions.map((spot) => [spot.id, spot.getState()]),
         ),
         objectives: { reached: objectiveReached },
-        entities: [...bacteria.map((b) => b.getState()), hound.getState()],
+        entities: [
+          ...bacteria.map((b) => b.getState()),
+          hound.getState(),
+          ...(ambushHound ? [ambushHound.getState()] : []),
+        ],
       };
     },
   };

@@ -90,7 +90,16 @@ export function createHoundModel() {
 
 export function createHoundEntity(
   scene,
-  { spawnPosition, isWalkable, speed = 1.45, id = "hound", initialState = null },
+  {
+    spawnPosition,
+    isWalkable,
+    speed = 1.45,
+    id = "hound",
+    type = "hound",
+    initialState = null,
+    dormant = false,
+    dormantArmRadius = 8,
+  },
 ) {
   const group = createHoundModel();
   group.position.set(spawnPosition.x, 0, spawnPosition.z);
@@ -98,24 +107,43 @@ export function createHoundEntity(
   scene.add(group);
 
   let contact = false;
+  let isDormant = dormant;
   if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
     group.position.x = initialState.position.x;
     group.position.z = initialState.position.z;
     contact = Boolean(initialState.contact);
+    if (typeof initialState.dormant === "boolean") isDormant = initialState.dormant;
   }
   return {
     getState() {
       return {
         id,
-        type: "hound",
+        type,
         position: { x: group.position.x, z: group.position.z },
         contact,
+        dormant: isDormant,
       };
     },
     update(delta, elapsed, playerPosition) {
       const dx = playerPosition.x - group.position.x;
       const dz = playerPosition.z - group.position.z;
       const distance = Math.hypot(dx, dz);
+
+      if (isDormant && distance > dormantArmRadius) {
+        return {
+          id,
+          type,
+          active: false,
+          contact: false,
+          distance,
+          x: group.position.x,
+          y: 0.9,
+          z: group.position.z,
+          dormant: true,
+        };
+      }
+      isDormant = false;
+
       if (distance > 0.001 && !contact) {
         const surge = 0.78 + Math.sin(elapsed * 1.9) * 0.12;
         const step = Math.min(distance, speed * surge * delta);
@@ -136,12 +164,14 @@ export function createHoundEntity(
       contact = contact || distance <= HOUND_CONTACT_RADIUS;
       return {
         id,
+        type,
         active: true,
         contact,
         distance,
         x: group.position.x,
         y: 0.9,
         z: group.position.z,
+        dormant: false,
       };
     },
   };
