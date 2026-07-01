@@ -1,11 +1,14 @@
 backup/
 node_modules/
+dist/
 
 .agents/
 .codex/
 
 vite-dev.log
 vite-dev.err.log
+
+backrooms.html
 
 .env
 .env.*
