@@ -75,6 +75,9 @@ export function createLevelOneScene({ initialState = null } = {}) {
   const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: LEVEL_ONE_START_CELL.yaw };
   const targetPosition = levelOneCellCenter(LEVEL_ONE_TARGET_CELL.col, LEVEL_ONE_TARGET_CELL.row);
 
+  let propColliders = addLevelOneCrates(scene);
+  propColliders = propColliders.concat(addLevelOneSupplyShelves(scene));
+
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
@@ -160,8 +163,6 @@ export function createLevelOneScene({ initialState = null } = {}) {
   });
   addLevelOneElevator(scene, targetPosition);
   addLevelOnePipes(scene);
-  let propColliders = addLevelOneCrates(scene);
-  propColliders = propColliders.concat(addLevelOneSupplyShelves(scene));
   addLevelOnePuddles(scene);
   addLevelOneFloorZones(scene);
   addLevelOneParkingMarks(scene);

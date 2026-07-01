@@ -17,11 +17,54 @@ import {
   LEVEL_TWO_MAX_POINT_LIGHTS,
   LEVEL_TWO_ORIGIN_X,
   LEVEL_TWO_ORIGIN_Z,
-isLevelTwoOpenCell,
+  LEVEL_TWO_CELL_META,
+  LEVEL_TWO_MAP,
+  CELL_OPEN,
+  CELL_WALL,
+  CELL_DOOR,
+  CELL_VALVE,
+  DIAGONAL_TYPES,
+  CELL_DIAG_WN,
+  CELL_DIAG_EN,
+  CELL_DIAG_ES,
+  CELL_DIAG_WS,
+  isLevelTwoOpenCell,
+  isLevelTwoWalkableCell,
+  isLevelTwoDiagonalCell,
   levelTwoCellCenter,
   countLevelTwoOpenNeighbors,
   getLevelTwoTargetMount,
+  getLevelTwoMachineRect,
+  levelTwoDiagonalCenterWorld,
 } from "./layout.js";
+
+const S = CELL_SIZE;
+const MACHINE_FRACTION = 0; // corridor is fully open; machinery is purely visual decoration now
+// Visual-only constants for tank decoration (tanks block only their own footprint).
+const TANK_DEPTH_NS = 1.2; // depth of horizontal-tank decoration (north/south face)
+const TANK_DEPTH_EW = 1.0; // depth of vertical-tank decoration (east/west face)
+const TANK_EDGE_GAP = 0.08; // gap between tank and cell wall
+
+export function buildLevelTwoMachineryColliders() {
+  const colliders = [];
+  for (let row = 0; row < LEVEL_TWO_ROWS; row += 1) {
+    for (let col = 0; col < LEVEL_TWO_COLS; col += 1) {
+      const ch = LEVEL_TWO_MAP[row][col];
+      const meta = LEVEL_TWO_CELL_META[row][col];
+
+      if (ch !== CELL_OPEN) continue;
+      const rect = getLevelTwoMachineRect(col, row);
+      if (!rect) continue;
+      colliders.push({
+        minX: rect.minX,
+        maxX: rect.maxX,
+        minZ: rect.minZ,
+        maxZ: rect.maxZ,
+      });
+    }
+  }
+  return colliders;
+}
 
 export function collectLevelTwoTransforms() {
   return collectLevelTransforms({
@@ -51,7 +94,6 @@ export function collectLevelTransforms({
 }) {
   const northSouth = [];
   const eastWest = [];
-  const barWalls = [];
   const fixtureCandidates = [];
 
   for (let row = 0; row < rows; row += 1) {
@@ -60,25 +102,22 @@ export function collectLevelTransforms({
 
       const center = getCellCenter(col, row);
       const isDarkPocket = isInAnyZone(col, row, darkZones);
-      if (!isCellOpen(col, row - 1)) {
-        const position = new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2);
-        if (isBarCell(col, row - 1)) barWalls.push(position);
-        else northSouth.push(position);
-      }
-      if (!isCellOpen(col, row + 1)) {
-        const position = new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2);
-        if (isBarCell(col, row + 1)) barWalls.push(position);
-        else northSouth.push(position);
-      }
-      if (!isCellOpen(col - 1, row)) {
-        const position = new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z);
-        if (isBarCell(col - 1, row)) barWalls.push(position);
-        else eastWest.push(position);
-      }
-      if (!isCellOpen(col + 1, row)) {
-        const position = new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z);
-        if (isBarCell(col + 1, row)) barWalls.push(position);
-        else eastWest.push(position);
+
+      if (DIAGONAL_TYPES.has(LEVEL_TWO_MAP[row][col])) {
+        // Diagonal cells don't contribute rectangular walls (handled separately in merged geometry).
+      } else {
+        if (!isCellOpen(col, row - 1)) {
+          northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2));
+        }
+        if (!isCellOpen(col, row + 1)) {
+          northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2));
+        }
+        if (!isCellOpen(col - 1, row)) {
+          eastWest.push(new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+        }
+        if (!isCellOpen(col + 1, row)) {
+          eastWest.push(new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+        }
       }
 
       const neighbors = countOpenNeighbors(col, row);
@@ -89,6 +128,7 @@ export function collectLevelTransforms({
       const isTarget = col === targetCell.col && row === targetCell.row;
       const isCriticalFixture = isStart || isTarget;
       if (isDarkPocket && !isCriticalFixture) continue;
+      if (DIAGONAL_TYPES.has(LEVEL_TWO_MAP[row][col])) continue; // skip lights in diagonals
       if ((isCorridor && fixtureGrid) || isCriticalFixture) {
         fixtureCandidates.push({
           x: center.x,
@@ -99,8 +139,8 @@ export function collectLevelTransforms({
           weak: 0.2 + ((col + row) % 3) * 0.04,
           range: isStart || isTarget ? 12.6 : 9.6,
           baseIntensity: isStart || isTarget ? 1.36 : 0.95,
-          panelWidth: 1.35 + ((col + row) % 2) * 0.38,
-          color: (col + row) % 4 === 0 ? 0xff7a3d : 0xffb05c,
+          panelWidth: 3.0 + ((col + row) % 2) * 0.6,
+          color: (col + row) % 4 === 0 ? 0xff9a55 : 0xffc080,
           hasPointLight: true,
           priority: isStart || isTarget ? 8 : isCorridor ? 3 : 1,
         });
@@ -120,7 +160,7 @@ export function collectLevelTransforms({
       if (!tooClose) fixturePositions.push(candidate);
     });
 
-  return { northSouth, eastWest, barWalls, fixturePositions };
+  return { northSouth, eastWest, fixturePositions };
 }
 
 export function createLevelTwoLights(scene, fixturePositions) {
@@ -138,21 +178,22 @@ export function createLayoutLights(scene, fixturePositions, { maxPointLights }) 
       .slice(0, maxPointLights)
       .map(({ index }) => index),
   );
-  const panelGeometry = new THREE.BoxGeometry(1, 0.045, 0.34);
-  const cageGeometry = new THREE.BoxGeometry(1, 0.05, 0.48);
+
+  const tubeGeometry = new THREE.BoxGeometry(1, 0.05, 0.16);
+  const cageGeometry = new THREE.BoxGeometry(1, 0.04, 0.32);
   const cageMaterial = new THREE.MeshStandardMaterial({
     color: 0x2b2218,
     emissive: 0x140b05,
-    emissiveIntensity: 0.24,
+    emissiveIntensity: 0.2,
     roughness: 0.82,
     metalness: 0.36,
   });
 
   fixturePositions.forEach((fixture, index) => {
     const cage = new THREE.Mesh(cageGeometry, cageMaterial);
-    cage.position.set(fixture.x, CEILING_Y - 0.095, fixture.z);
+    cage.position.set(fixture.x, CEILING_Y - 0.07, fixture.z);
     cage.rotation.y = fixture.rotation;
-    cage.scale.x = fixture.panelWidth + 0.2;
+    cage.scale.x = fixture.panelWidth + 0.25;
     scene.add(cage);
 
     const panelMaterial = new THREE.MeshStandardMaterial({
@@ -161,15 +202,15 @@ export function createLayoutLights(scene, fixturePositions, { maxPointLights }) 
       emissiveIntensity: fixture.baseIntensity,
       roughness: 0.34,
     });
-    const panel = new THREE.Mesh(panelGeometry, panelMaterial);
-    panel.position.set(fixture.x, CEILING_Y - 0.145, fixture.z);
+    const panel = new THREE.Mesh(tubeGeometry, panelMaterial);
+    panel.position.set(fixture.x, CEILING_Y - 0.13, fixture.z);
     panel.rotation.y = fixture.rotation;
     panel.scale.x = fixture.panelWidth;
     scene.add(panel);
 
     let light = null;
     if (pointLightIndexes.has(index)) {
-      light = createFixturePointLight(fixture, CEILING_Y - 0.44, {
+      light = createFixturePointLight(fixture, CEILING_Y - 0.36, {
         rangeScale: 1.62,
         intensityScale: 1.32,
         decay: 2.05,
@@ -190,109 +231,211 @@ export function createLayoutLights(scene, fixturePositions, { maxPointLights }) 
   return fixtures;
 }
 
-export function addLevelTwoPipe(scene, pipeMaterial, pipe) {
-  const center = levelTwoCellCenter(pipe.col, pipe.row);
-  const geometry = new THREE.CylinderGeometry(pipe.radius, pipe.radius, pipe.length, 14);
-  const mesh = new THREE.Mesh(geometry, pipeMaterial);
-  mesh.position.set(center.x + (pipe.offsetX ?? 0), pipe.y, center.z + (pipe.offsetZ ?? 0));
-  if (pipe.axis === "x") mesh.rotation.z = Math.PI / 2;
-  if (pipe.axis === "z") mesh.rotation.x = Math.PI / 2;
-  scene.add(mesh);
-
-  if (pipe.joint) {
-    const joint = new THREE.Mesh(new THREE.SphereGeometry(pipe.radius * 1.35, 12, 8), pipeMaterial);
-    joint.position.copy(mesh.position);
-    scene.add(joint);
-  }
+function makePipeMaterial(color, emissive, intensity) {
+  return new THREE.MeshStandardMaterial({
+    color,
+    emissive,
+    emissiveIntensity: intensity,
+    roughness: 0.72,
+    metalness: 0.34,
+  });
 }
 
 export function addLevelTwoPipes(scene) {
-  const pipeMaterial = new THREE.MeshStandardMaterial({
-    color: 0x3a322a,
-    emissive: 0x100a05,
-    emissiveIntensity: 0.12,
-    roughness: 0.76,
-    metalness: 0.36,
-  });
-  const hotPipeMaterial = new THREE.MeshStandardMaterial({
-    color: 0x57301c,
-    emissive: 0x2b0d04,
-    emissiveIntensity: 0.2,
-    roughness: 0.7,
-    metalness: 0.32,
-  });
-  const pipes = [
-    { col: 8, row: 3, axis: "x", length: CELL_SIZE * 11, radius: 0.08, y: CEILING_Y - 0.48, offsetZ: -0.9 },
-    { col: 14, row: 8, axis: "z", length: CELL_SIZE * 8.5, radius: 0.11, y: CEILING_Y - 0.36, offsetX: -0.95, hot: true, joint: true },
-    { col: 20, row: 10, axis: "x", length: CELL_SIZE * 9, radius: 0.07, y: 2.55, offsetZ: 1.0 },
-    { col: 8, row: 16, axis: "z", length: CELL_SIZE * 7, radius: 0.1, y: 2.8, offsetX: 0.88, hot: true },
-    { col: 22, row: 19, axis: "x", length: CELL_SIZE * 17, radius: 0.09, y: CEILING_Y - 0.52, offsetZ: -1.05 },
-    { col: 30, row: 15, axis: "z", length: CELL_SIZE * 9, radius: 0.12, y: 2.38, offsetX: 1.05, joint: true },
-    { col: 32, row: 11, axis: "x", length: CELL_SIZE * 8, radius: 0.065, y: CEILING_Y - 0.68, offsetZ: 0.82 },
-  ];
+  const coldMat = makePipeMaterial(0x4a3f33, 0x100a05, 0.1);
+  const hotMat = makePipeMaterial(0x6e3a1d, 0x341005, 0.18);
+  const ductMat = makePipeMaterial(0x322821, 0x080604, 0.06);
 
-  pipes.forEach((pipe) => addLevelTwoPipe(scene, pipe.hot ? hotPipeMaterial : pipeMaterial, pipe));
+  function addSegment({ from, to, radius, material, axis }) {
+    const dx = to.x - from.x;
+    const dz = to.z - from.z;
+    const length = Math.hypot(dx, dz);
+    if (length < 0.05) return;
+    const geometry = new THREE.CylinderGeometry(radius, radius, length, 12);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set((from.x + to.x) / 2, from.y, (from.z + to.z) / 2);
+    if (axis === "x") mesh.rotation.z = Math.PI / 2;
+    if (axis === "z") mesh.rotation.x = Math.PI / 2;
+    scene.add(mesh);
+  }
+
+  // Main overhead pipe running along Tunnel A (row 6, N side)
+  const aStart = levelTwoCellCenter(3, 6);
+  const aEnd = levelTwoCellCenter(28, 6);
+  addSegment({
+    from: { x: aStart.x, y: CEILING_Y - 0.32, z: aStart.z - S / 2 + 0.12 },
+    to: { x: aEnd.x, y: CEILING_Y - 0.32, z: aEnd.z - S / 2 + 0.12 },
+    radius: 0.14,
+    material: coldMat,
+    axis: "x",
+  });
+
+  // Hot pipe along Tunnel B (col 29, W side - machine side)
+  const bStart = levelTwoCellCenter(29, 7);
+  const bEnd = levelTwoCellCenter(29, 21);
+  addSegment({
+    from: { x: bStart.x - S / 2 + 0.18, y: 2.45, z: bStart.z },
+    to: { x: bEnd.x - S / 2 + 0.18, y: 2.45, z: bEnd.z },
+    radius: 0.18,
+    material: hotMat,
+    axis: "z",
+  });
+
+  // Main overhead pipe along Tunnel C (row 22, N side)
+  const cStart = levelTwoCellCenter(30, 22);
+  const cEnd = levelTwoCellCenter(40, 22);
+  addSegment({
+    from: { x: cStart.x, y: CEILING_Y - 0.32, z: cStart.z - S / 2 + 0.12 },
+    to: { x: cEnd.x, y: CEILING_Y - 0.32, z: cEnd.z - S / 2 + 0.12 },
+    radius: 0.13,
+    material: coldMat,
+    axis: "x",
+  });
+
+  // Cable tray along Tunnel A (N side, ceiling)
+  addSegment({
+    from: { x: aStart.x, y: CEILING_Y - 0.16, z: aStart.z - S / 2 + 0.05 },
+    to: { x: aEnd.x, y: CEILING_Y - 0.16, z: aEnd.z - S / 2 + 0.05 },
+    radius: 0.06,
+    material: ductMat,
+    axis: "x",
+  });
+
+  // Cable tray along Tunnel B (W side, ceiling)
+  addSegment({
+    from: { x: bStart.x - S / 2 + 0.05, y: CEILING_Y - 0.16, z: bStart.z },
+    to: { x: bEnd.x - S / 2 + 0.05, y: CEILING_Y - 0.16, z: bEnd.z },
+    radius: 0.06,
+    material: ductMat,
+    axis: "z",
+  });
+
+  // Branch A1 short pipe
+  const a1Top = levelTwoCellCenter(12, 4);
+  const a1Bot = levelTwoCellCenter(12, 3);
+  addSegment({
+    from: { x: a1Top.x, y: CEILING_Y - 0.28, z: a1Top.z + S / 2 - 0.1 },
+    to: { x: a1Bot.x, y: CEILING_Y - 0.28, z: a1Bot.z + S / 2 - 0.1 },
+    radius: 0.08,
+    material: coldMat,
+    axis: "z",
+  });
+
+  // Joint spheres at corners
+  const jointMat = coldMat;
+  function addJoint(x, y, z, r = 0.16) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), jointMat);
+    m.position.set(x, y, z);
+    scene.add(m);
+  }
+  addJoint(aEnd.x, CEILING_Y - 0.32, aEnd.z - S / 2 + 0.12, 0.18);
+  addJoint(bStart.x - S / 2 + 0.18, 2.45, bStart.z, 0.22);
+  addJoint(bEnd.x - S / 2 + 0.18, 2.45, bEnd.z, 0.22);
+  addJoint(cStart.x, CEILING_Y - 0.32, cStart.z - S / 2 + 0.12, 0.16);
 }
 
-export function addLevelTwoMachinery(scene) {
+export function addLevelTwoMachinery(scene, machineryColliders) {
   const bodyMaterial = new THREE.MeshStandardMaterial({
-    color: 0x27251f,
-    emissive: 0x090704,
-    emissiveIntensity: 0.1,
-    roughness: 0.8,
-    metalness: 0.26,
+    color: 0x2b2820,
+    emissive: 0x0a0806,
+    emissiveIntensity: 0.12,
+    roughness: 0.82,
+    metalness: 0.28,
   });
   const rustMaterial = new THREE.MeshStandardMaterial({
     color: 0x5a3621,
     emissive: 0x160804,
     emissiveIntensity: 0.1,
     roughness: 0.88,
-    metalness: 0.18,
+    metalness: 0.2,
   });
   const meterMaterial = new THREE.MeshBasicMaterial({ color: 0xffa05a });
-  const colliders = [];
-  const machines = [
-    { col: 5, row: 7, width: 1.35, height: 1.15, depth: 1.0, x: 0.6, z: -0.5, rot: 0.05 },
-    { col: 20, row: 7, width: 1.65, height: 1.35, depth: 0.85, x: -0.4, z: 0.5, rot: -0.12, rust: true },
-    { col: 13, row: 15, width: 1.2, height: 1.0, depth: 1.25, x: 0.45, z: -0.35, rot: 0.16 },
-    { col: 27, row: 15, width: 1.6, height: 1.55, depth: 1.15, x: -0.55, z: 0.42, rot: -0.06, rust: true },
-    { col: 33, row: 19, width: 1.28, height: 1.08, depth: 1.0, x: 0.2, z: 0.3, rot: 0.18 },
-  ];
 
-  machines.forEach((machine) => {
-    const center = levelTwoCellCenter(machine.col, machine.row);
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(machine.width, machine.height, machine.depth),
-      machine.rust ? rustMaterial : bodyMaterial,
-    );
-    mesh.position.set(center.x + machine.x, machine.height / 2, center.z + machine.z);
-    mesh.rotation.y = machine.rot;
-    scene.add(mesh);
-
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.018), meterMaterial);
-    panel.position.set(mesh.position.x, mesh.position.y + machine.height * 0.18, mesh.position.z - machine.depth / 2 - 0.012);
-    panel.rotation.y = machine.rot;
-    scene.add(panel);
-
-    colliders.push({
-      minX: mesh.position.x - machine.width * 0.62,
-      maxX: mesh.position.x + machine.width * 0.62,
-      minZ: mesh.position.z - machine.depth * 0.62,
-      maxZ: mesh.position.z + machine.depth * 0.62,
+  function pushBoxAabb(cx, cz, w, d) {
+    if (w <= 0 || d <= 0) return;
+    machineryColliders.push({
+      minX: cx - w / 2,
+      maxX: cx + w / 2,
+      minZ: cz - d / 2,
+      maxZ: cz + d / 2,
     });
+  }
+
+  // Tank stacks along Tunnel A (every ~6 cells, pinned to the NORTH wall edge)
+  const tunnelACells = [];
+  for (let c = 4; c <= 27; c += 1) {
+    tunnelACells.push({ col: c, row: 6, side: "N" });
+  }
+  tunnelACells.forEach((cell, i) => {
+    if (i % 4 !== 0) return; // every 4th cell
+    const center = levelTwoCellCenter(cell.col, cell.row);
+    const tankW = 1.4;
+    const tankH = 1.8 + ((cell.col * 7) % 5) * 0.18;
+    const tankD = TANK_DEPTH_NS;
+    const tankX = center.x;
+    const tankZ = center.z - S / 2 + TANK_EDGE_GAP + tankD / 2;
+    const mat = (cell.col + cell.row) % 3 === 0 ? rustMaterial : bodyMaterial;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(tankW, tankH, tankD), mat);
+    mesh.position.set(tankX, tankH / 2, tankZ);
+    scene.add(mesh);
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(tankW * 0.92, 0.06, tankD * 0.92),
+      rustMaterial,
+    );
+    stripe.position.set(tankX, tankH * 0.42, tankZ);
+    scene.add(stripe);
+    pushBoxAabb(tankX, tankZ, tankW, tankD);
   });
 
-  return colliders;
+  // Vertical tank along Tunnel B (pinned to the EAST wall edge)
+  for (let r = 8; r <= 20; r += 1) {
+    if (r % 3 !== 0) continue;
+    const center = levelTwoCellCenter(29, r);
+    const tankW = TANK_DEPTH_EW;
+    const tankD = 1.2;
+    const tankH = 2.2;
+    const tankX = center.x + S / 2 - TANK_EDGE_GAP - tankW / 2;
+    const tankZ = center.z;
+    const mat = r % 2 === 0 ? bodyMaterial : rustMaterial;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(tankW, tankH, tankD), mat);
+    mesh.position.set(tankX, tankH / 2, tankZ);
+    scene.add(mesh);
+    // gauge panel
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.18), meterMaterial);
+    panel.position.set(tankX + tankW / 2 + 0.025, tankH * 0.6, tankZ);
+    scene.add(panel);
+    pushBoxAabb(tankX, tankZ, tankW, tankD);
+  }
+
+  // Tunnel C: shorter tanks along N side
+  for (let c = 32; c <= 39; c += 1) {
+    if (c % 3 !== 0) continue;
+    const center = levelTwoCellCenter(c, 22);
+    const tankW = 1.2;
+    const tankH = 1.4 + ((c * 5) % 4) * 0.2;
+    const tankD = TANK_DEPTH_NS;
+    const tankX = center.x;
+    const tankZ = center.z - S / 2 + TANK_EDGE_GAP + tankD / 2;
+    const mat = c % 2 === 0 ? rustMaterial : bodyMaterial;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(tankW, tankH, tankD), mat);
+    mesh.position.set(tankX, tankH / 2, tankZ);
+    scene.add(mesh);
+    pushBoxAabb(tankX, tankZ, tankW, tankD);
+  }
+
+  return machineryColliders;
 }
 
 export function addLevelTwoSteam(scene) {
   const puffs = [];
   const geometry = new THREE.SphereGeometry(0.34, 12, 8);
   const vents = [
-    { col: 14, row: 8, x: -1.05, z: 0.48, phase: 0.2 },
-    { col: 8, row: 16, x: 0.9, z: -0.35, phase: 1.6 },
-    { col: 30, row: 15, x: 1.0, z: 0.42, phase: 2.7 },
-    { col: 23, row: 19, x: -0.4, z: -1.0, phase: 3.3 },
+    { col: 8, row: 6, x: -1.5, z: -0.3, phase: 0.2 },
+    { col: 16, row: 6, x: -1.5, z: -0.3, phase: 1.2 },
+    { col: 24, row: 6, x: -1.5, z: -0.3, phase: 2.4 },
+    { col: 29, row: 11, x: -1.5, z: 0.0, phase: 1.8 },
+    { col: 29, row: 17, x: -1.5, z: 0.0, phase: 0.7 },
+    { col: 35, row: 22, x: -1.5, z: -0.3, phase: 2.9 },
   ];
 
   vents.forEach((vent) => {
@@ -300,7 +443,7 @@ export function addLevelTwoSteam(scene) {
     const material = new THREE.MeshBasicMaterial({
       color: 0xd8cdb6,
       transparent: true,
-      opacity: 0.08,
+      opacity: 0.06,
       depthWrite: false,
     });
     const puff = new THREE.Mesh(geometry, material);
@@ -313,12 +456,6 @@ export function addLevelTwoSteam(scene) {
 
   return puffs;
 }
-
-
-
-
-
-
 
 export function addLevelTwoServiceDoor(scene, position) {
   const mount = getLevelTwoTargetMount(position);
@@ -371,14 +508,14 @@ export function addLevelTwoFloorHeat(scene) {
   const material = new THREE.MeshBasicMaterial({
     color: 0xff7a30,
     transparent: true,
-    opacity: 0.055,
+    opacity: 0.045,
     depthWrite: false,
     side: THREE.DoubleSide,
   });
   const zones = [
-    { col: 13, row: 9, width: 3.2, height: 5.8, rot: 0.08 },
-    { col: 29, row: 16, width: 3.6, height: 4.8, rot: -0.11 },
-    { col: 21, row: 19, width: 6.4, height: 2.0, rot: 0.02 },
+    { col: 29, row: 13, width: 1.8, height: 8.0, rot: 0.0 },
+    { col: 22, row: 22, width: 4.0, height: 2.0, rot: 0.02 },
+    { col: 12, row: 6, width: 8.0, height: 1.8, rot: 0.0 },
   ];
 
   zones.forEach((zone) => {
@@ -403,14 +540,14 @@ export function addLayoutDarkPockets(scene, { darkZones, originX, originZ }) {
   const floorMaterial = new THREE.MeshBasicMaterial({
     color: 0x050403,
     transparent: true,
-    opacity: 0.2,
+    opacity: 0.22,
     depthWrite: false,
     side: THREE.DoubleSide,
   });
   const ceilingMaterial = new THREE.MeshBasicMaterial({
     color: 0x050403,
     transparent: true,
-    opacity: 0.1,
+    opacity: 0.12,
     depthWrite: false,
     side: THREE.DoubleSide,
   });
@@ -433,6 +570,12 @@ export function addLayoutDarkPockets(scene, { darkZones, originX, originZ }) {
   });
 }
 
+// Glowing floor strip that traces the walkable corridor path. Goes through the
+// walkable triangle of each diagonal cell so the player can see the corner from
+// a distance and follow the line around the bend.
+// (Function removed; the floor guide was visually distracting and the player
+// can navigate the diagonal cells via the polygon-collision isWalkable path.)
+
 export function addLevelTwoIndustrialDetails(scene) {
   const cableMaterial = new THREE.MeshStandardMaterial({
     color: 0x050606,
@@ -442,31 +585,103 @@ export function addLevelTwoIndustrialDetails(scene) {
     metalness: 0.2,
   });
   const cableGeometry = new THREE.CylinderGeometry(0.028, 0.028, 1, 8);
-  const cables = [
-    { col: 4, row: 3, axis: "x", length: CELL_SIZE * 9.5, y: CEILING_Y - 0.18, offsetZ: 0.86 },
-    { col: 14, row: 10, axis: "z", length: CELL_SIZE * 8, y: CEILING_Y - 0.2, offsetX: 0.78 },
-    { col: 21, row: 19, axis: "x", length: CELL_SIZE * 14, y: CEILING_Y - 0.16, offsetZ: -0.9 },
-    { col: 30, row: 14, axis: "z", length: CELL_SIZE * 6.5, y: CEILING_Y - 0.2, offsetX: -0.82 },
-  ];
-  cables.forEach((cable) => {
-    const center = levelTwoCellCenter(cable.col, cable.row);
+
+  function addCable({ col, row, axis, length, y, offsetX = 0, offsetZ = 0 }) {
+    const center = levelTwoCellCenter(col, row);
     const mesh = new THREE.Mesh(cableGeometry, cableMaterial);
-    mesh.scale.y = cable.length;
-    mesh.position.set(center.x + (cable.offsetX ?? 0), cable.y, center.z + (cable.offsetZ ?? 0));
-    if (cable.axis === "x") mesh.rotation.z = Math.PI / 2;
-    if (cable.axis === "z") mesh.rotation.x = Math.PI / 2;
+    mesh.scale.y = length;
+    mesh.position.set(
+      center.x + offsetX,
+      y,
+      center.z + offsetZ,
+    );
+    if (axis === "x") mesh.rotation.z = Math.PI / 2;
+    if (axis === "z") mesh.rotation.x = Math.PI / 2;
     scene.add(mesh);
+  }
+
+  addCable({ col: 3, row: 6, axis: "x", length: S * 24, y: CEILING_Y - 0.2, offsetZ: -S / 2 + 0.32 });
+  addCable({ col: 30, row: 22, axis: "x", length: S * 10, y: CEILING_Y - 0.2, offsetZ: -S / 2 + 0.32 });
+  addCable({ col: 29, row: 7, axis: "z", length: S * 14, y: CEILING_Y - 0.2, offsetX: -S / 2 + 0.32 });
+
+  // Door props on door cells
+  const doorMaterial = new THREE.MeshStandardMaterial({
+    color: 0x4a3a2a,
+    emissive: 0x1a0d04,
+    emissiveIntensity: 0.18,
+    roughness: 0.7,
+    metalness: 0.32,
+  });
+  const doorCells = [];
+  for (let r = 0; r < LEVEL_TWO_ROWS; r += 1) {
+    for (let c = 0; c < LEVEL_TWO_COLS; c += 1) {
+      if (LEVEL_TWO_MAP[r][c] === CELL_DOOR) {
+        doorCells.push({ col: c, row: r });
+      }
+    }
+  }
+  doorCells.forEach(({ col, row }) => {
+    const center = levelTwoCellCenter(col, row);
+    // door faces south (toward corridor)
+    const doorMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.3), doorMaterial);
+    doorMesh.position.set(center.x, 1.15, center.z + S / 2 + 0.005);
+    scene.add(doorMesh);
+    // door frame
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x252018,
+      emissive: 0x080503,
+      emissiveIntensity: 0.1,
+      roughness: 0.78,
+      metalness: 0.28,
+    });
+    const top = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.12, 0.1), frameMat);
+    top.position.set(center.x, 2.32, center.z + S / 2 + 0.04);
+    scene.add(top);
+    const left = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.4, 0.1), frameMat);
+    left.position.set(center.x - 0.94, 1.2, center.z + S / 2 + 0.04);
+    scene.add(left);
+    const right = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.4, 0.1), frameMat);
+    right.position.set(center.x + 0.94, 1.2, center.z + S / 2 + 0.04);
+    scene.add(right);
   });
 
+  // Valve props on valve cells (wall-mounted valves)
+  const valveMaterial = new THREE.MeshStandardMaterial({
+    color: 0x7a3e22,
+    emissive: 0x1a0703,
+    emissiveIntensity: 0.16,
+    roughness: 0.72,
+    metalness: 0.24,
+  });
+  const valveCells = [];
+  for (let r = 0; r < LEVEL_TWO_ROWS; r += 1) {
+    for (let c = 0; c < LEVEL_TWO_COLS; c += 1) {
+      if (LEVEL_TWO_MAP[r][c] === CELL_VALVE) {
+        valveCells.push({ col: c, row: r });
+      }
+    }
+  }
+  valveCells.forEach(({ col, row }) => {
+    const center = levelTwoCellCenter(col, row);
+    const valve = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.026, 8, 24), valveMaterial);
+    valve.position.set(center.x, 1.44, center.z + S / 2 + 0.08);
+    valve.rotation.y = 0;
+    scene.add(valve);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 12), valveMaterial);
+    hub.position.set(center.x, 1.44, center.z + S / 2 + 0.1);
+    hub.rotation.x = Math.PI / 2;
+    scene.add(hub);
+  });
+
+  // Wall signs
   const signs = [
-    { col: 14, row: 4, text: "LOW PRESSURE", bg: "#251308", fg: "#ffbd73" },
-    { col: 20, row: 10, text: "MAINTENANCE", bg: "#17130d", fg: "#ffd78a" },
-    { col: 29, row: 18, text: "PIPE DREAMS", bg: "#211006", fg: "#ff945c" },
-    { col: 34, row: 19, text: "KEEP MOVING", bg: "#1b1109", fg: "#ffca8f" },
+    { col: 10, row: 5, text: "LOW PRESSURE", bg: "#251308", fg: "#ffbd73" },
+    { col: 22, row: 5, text: "MAINTENANCE", bg: "#17130d", fg: "#ffd78a" },
+    { col: 28, row: 21, text: "PIPE DREAMS", bg: "#211006", fg: "#ff945c" },
+    { col: 38, row: 21, text: "KEEP MOVING", bg: "#1b1109", fg: "#ffca8f" },
   ];
   signs.forEach((sign) => {
     const center = levelTwoCellCenter(sign.col, sign.row);
-    const mount = getLevelTwoTargetMount(center);
     const material = new THREE.MeshStandardMaterial({
       map: createWideSignTexture(sign.text, sign.bg, sign.fg),
       color: 0xffffff,
@@ -476,39 +691,11 @@ export function addLevelTwoIndustrialDetails(scene) {
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.5), material);
-    mesh.position.set(mount.x, 1.62, mount.z);
-    mesh.rotation.y = mount.rotation;
+    mesh.position.set(center.x, 1.62, center.z - S / 2 + 0.04);
     scene.add(mesh);
   });
 
-  const valveMaterial = new THREE.MeshStandardMaterial({
-    color: 0x6b3520,
-    emissive: 0x1a0703,
-    emissiveIntensity: 0.16,
-    roughness: 0.72,
-    metalness: 0.22,
-  });
-  const valveLocations = [
-    { col: 14, row: 8 },
-    { col: 8, row: 16 },
-    { col: 30, row: 15 },
-    { col: 23, row: 19 },
-  ];
-  valveLocations.forEach((location) => {
-    const center = levelTwoCellCenter(location.col, location.row);
-    const mount = getLevelTwoTargetMount(center);
-    const valve = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.026, 8, 24), valveMaterial);
-    valve.position.set(mount.x, 1.44, mount.z);
-    valve.rotation.y = mount.rotation;
-    scene.add(valve);
-
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 12), valveMaterial);
-    hub.position.copy(valve.position);
-    hub.rotation.x = Math.PI / 2;
-    hub.rotation.y = mount.rotation;
-    scene.add(hub);
-  });
-
+  // Floor grates in a few spots
   const grateMaterial = new THREE.MeshBasicMaterial({
     color: 0x050504,
     transparent: true,
@@ -517,15 +704,15 @@ export function addLevelTwoIndustrialDetails(scene) {
     side: THREE.DoubleSide,
   });
   const grates = [
-    { col: 14, row: 10, width: 2.6, height: 1.1, rot: 0 },
-    { col: 8, row: 19, width: 2.2, height: 1.2, rot: Math.PI / 2 },
-    { col: 30, row: 12, width: 2.7, height: 1.15, rot: 0 },
+    { col: 14, row: 6, width: 1.0, height: 0.8 },
+    { col: 23, row: 6, width: 0.8, height: 0.9 },
+    { col: 29, row: 12, width: 0.7, height: 0.9 },
+    { col: 35, row: 22, width: 1.1, height: 0.8 },
   ];
   grates.forEach((grate) => {
     const center = levelTwoCellCenter(grate.col, grate.row);
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(grate.width, grate.height), grateMaterial);
     mesh.rotation.x = -Math.PI / 2;
-    mesh.rotation.z = grate.rot;
     mesh.position.set(center.x, 0.036, center.z);
     scene.add(mesh);
   });
@@ -554,11 +741,16 @@ export function addLevelTwoUtilityProps(scene) {
     metalness: 0.12,
   });
   const colliders = [];
+
+  // Barrels scattered along tunnels
   const barrels = [
-    { col: 5, row: 7, x: -0.65, z: 0.5 },
-    { col: 19, row: 6, x: 0.54, z: -0.62 },
-    { col: 26, row: 14, x: -0.48, z: 0.56 },
-    { col: 32, row: 18, x: 0.58, z: -0.48 },
+    { col: 6, row: 6, x: -1.5, z: 0.3 },
+    { col: 19, row: 6, x: -1.5, z: 0.2 },
+    { col: 26, row: 6, x: -1.5, z: -0.4 },
+    { col: 29, row: 9, x: -1.5, z: -0.2 },
+    { col: 29, row: 19, x: -1.5, z: 0.3 },
+    { col: 33, row: 22, x: -1.5, z: 0.2 },
+    { col: 38, row: 22, x: -1.5, z: -0.4 },
   ];
 
   barrels.forEach((barrel, index) => {
@@ -577,18 +769,14 @@ export function addLevelTwoUtilityProps(scene) {
       band.rotation.x = Math.PI / 2;
       scene.add(band);
     }
-
-    colliders.push({
-      minX: mesh.position.x - 0.42,
-      maxX: mesh.position.x + 0.42,
-      minZ: mesh.position.z - 0.42,
-      maxZ: mesh.position.z + 0.42,
-    });
   });
 
+  // Hazard barriers at branch junctions
   const barriers = [
-    { col: 13, row: 15, x: 0.24, z: 0.6, rot: 0.22 },
-    { col: 28, row: 16, x: -0.36, z: -0.48, rot: -0.2 },
+    { col: 12, row: 5, x: 0.6, z: -0.55, rot: -0.6 },
+    { col: 25, row: 7, x: -0.6, z: 0.5, rot: 0.55 },
+    { col: 31, row: 12, x: 0.55, z: -0.5, rot: -0.55 },
+    { col: 37, row: 23, x: -0.55, z: 0.55, rot: 0.6 },
   ];
   barriers.forEach((barrier) => {
     const center = levelTwoCellCenter(barrier.col, barrier.row);
@@ -606,6 +794,3 @@ export function addLevelTwoUtilityProps(scene) {
 
   return colliders;
 }
-
-
-

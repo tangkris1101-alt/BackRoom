@@ -62,6 +62,12 @@ export function createLevelFourScene({ initialState = null } = {}) {
   const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: -Math.PI * 0.12 };
   const targetPosition = levelOneCellCenter(LEVEL_ONE_TARGET_CELL.col, LEVEL_ONE_TARGET_CELL.row);
 
+  addLevelFourStairDoor(scene, targetPosition);
+  const { colliders: propColliders, interactions: propInteractions } = addLevelFourOfficeDetails(
+    scene,
+    initialState?.interactions ?? {},
+  );
+
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
@@ -154,8 +160,6 @@ export function createLevelFourScene({ initialState = null } = {}) {
     dimDelay: 0.62,
     normalDelay: 0.86,
   });
-  addLevelFourStairDoor(scene, targetPosition);
-  const { colliders: propColliders, interactions: propInteractions } = addLevelFourOfficeDetails(scene, interactionInitial);
   const interactions = [
     ...propInteractions,
     createInteractionSpot({
@@ -222,6 +226,11 @@ export function createLevelFourScene({ initialState = null } = {}) {
     isWalkable,
     speed: 1.06,
     initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    worldToCell: levelOneWorldToCell,
+    cellCenter: levelOneCellCenter,
   });
 
   let objectiveReached = Boolean(objectiveInitial.reached);

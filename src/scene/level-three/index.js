@@ -87,6 +87,9 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const viewModel = attachFirstPersonViewModel(camera);
   scene.add(camera);
 
+  let propColliders = addLevelThreeElectricalDetails(scene);
+  propColliders = propColliders.concat(addLevelThreeSanctumStatue(scene));
+
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
@@ -176,8 +179,6 @@ addLevelThreeBreakerDoor(scene, targetPosition);
     originX: LEVEL_THREE_ORIGIN_X,
     originZ: LEVEL_THREE_ORIGIN_Z,
   });
-  let propColliders = addLevelThreeElectricalDetails(scene);
-  propColliders = propColliders.concat(addLevelThreeSanctumStatue(scene));
   addLevelThreeBlackSludgePipes(scene);
   addLevelThreeIndestructibleBars(scene);
   addLevelThreeAssemblyLineEquipment(scene);

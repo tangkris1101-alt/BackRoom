@@ -2,6 +2,11 @@
 import { BACTERIA_CONTACT_RADIUS } from "../constants.js";
 import { createLimbSegment } from "../common/view-model.js";
 import { resolveEntityStep } from "./spawn.js";
+import { createNavGrid, aStar, followPath, pathContainsCell } from "./pathfinding.js";
+
+const RECOMPUTE_INTERVAL = 0.6;
+const STUCK_THRESHOLD = 0.8;
+const STUCK_MIN_PROGRESS = 0.25;
 
 export function createBacteriaModel() {
   const group = new THREE.Group();
@@ -19,7 +24,6 @@ export function createBacteriaModel() {
     emissive: 0x3b0906,
     emissiveIntensity: 0.22,
     roughness: 0.74,
-    metalness: 0,
   });
   const glowMaterial = new THREE.MeshBasicMaterial({
     color: 0xff3d22,
@@ -70,7 +74,18 @@ export function createBacteriaModel() {
 
 export function createBacteriaEntity(
   scene,
-  { spawnPosition, isWalkable, speed = 1.05, id = "bacteria", initialState = null },
+  {
+    spawnPosition,
+    isWalkable,
+    speed = 1.05,
+    id = "bacteria",
+    initialState = null,
+    cols,
+    rows,
+    isCellOpen,
+    worldToCell,
+    cellCenter,
+  },
 ) {
   const group = createBacteriaModel();
   group.position.set(spawnPosition.x, 0, spawnPosition.z);
@@ -83,6 +98,32 @@ export function createBacteriaEntity(
     group.position.z = initialState.position.z;
     contact = Boolean(initialState.contact);
   }
+  const navGrid =
+    cols && rows && isCellOpen && worldToCell && cellCenter
+      ? createNavGrid({ cols, rows, isCellOpen })
+      : null;
+  const path = { waypoints: [], index: 0 };
+  let recomputeTimer = 0;
+  let stuckTimer = 0;
+  let lastPlayerCellKey = "";
+  let lastPositionX = group.position.x;
+  let lastPositionZ = group.position.z;
+
+  function repathTo(playerPosition) {
+    if (!navGrid) return;
+    const start = worldToCell(group.position.x, group.position.z);
+    const goal = worldToCell(playerPosition.x, playerPosition.z);
+    const next = aStar(navGrid, start, goal);
+    if (next && next.length > 0) {
+      path.waypoints = next;
+      path.index = 0;
+    } else {
+      path.waypoints = [];
+      path.index = 0;
+    }
+    recomputeTimer = RECOMPUTE_INTERVAL;
+  }
+
   return {
     getState() {
       return {
@@ -96,7 +137,44 @@ export function createBacteriaEntity(
       const dx = playerPosition.x - group.position.x;
       const dz = playerPosition.z - group.position.z;
       const distance = Math.hypot(dx, dz);
-      if (distance > 0.001 && !contact) {
+
+      if (!contact && navGrid) {
+        const playerCell = worldToCell(playerPosition.x, playerPosition.z);
+        const playerCellKey = `${playerCell.col},${playerCell.row}`;
+        const playerMoved = playerCellKey !== lastPlayerCellKey;
+        const playerOffPath = !pathContainsCell(path.waypoints, playerCell, path.index);
+        const stuck = stuckTimer > STUCK_THRESHOLD;
+        const needRepath =
+          path.waypoints.length === 0 ||
+          recomputeTimer <= 0 ||
+          (playerMoved && playerOffPath) ||
+          stuck;
+        if (needRepath) {
+          repathTo(playerPosition);
+          lastPlayerCellKey = playerCellKey;
+        }
+      }
+
+      let nextX = group.position.x;
+      let nextZ = group.position.z;
+      let advanced = false;
+      let reachedEnd = false;
+
+      if (!contact && path.waypoints.length > 0) {
+        const followed = followPath({
+          entityPos: group.position,
+          waypoints: path.waypoints,
+          indexRef: path,
+          cellCenter,
+          speed,
+          delta,
+          isWalkable,
+        });
+        nextX = followed.x;
+        nextZ = followed.z;
+        advanced = followed.advanced;
+        reachedEnd = followed.reachedEnd;
+      } else if (distance > 0.001 && !contact) {
         const step = Math.min(distance, speed * delta);
         const resolved = resolveEntityStep(
           group.position,
@@ -104,8 +182,26 @@ export function createBacteriaEntity(
           (dz / distance) * step,
           isWalkable,
         );
-        group.position.x = resolved.x;
-        group.position.z = resolved.z;
+        nextX = resolved.x;
+        nextZ = resolved.z;
+        advanced = nextX !== group.position.x || nextZ !== group.position.z;
+      }
+
+      if (!contact) {
+        const movedNow = Math.hypot(nextX - lastPositionX, nextZ - lastPositionZ);
+        const expected = speed * delta * STUCK_MIN_PROGRESS;
+        if (movedNow < expected) {
+          stuckTimer += delta;
+        } else {
+          stuckTimer = 0;
+        }
+        lastPositionX = nextX;
+        lastPositionZ = nextZ;
+      }
+
+      group.position.x = nextX;
+      group.position.z = nextZ;
+      if (distance > 0.001 && (advanced || reachedEnd)) {
         group.rotation.y = Math.atan2(dx, dz);
       }
 
@@ -113,6 +209,9 @@ export function createBacteriaEntity(
       group.position.y = Math.sin(elapsed * 3.6) * 0.025;
       group.rotation.z = sway;
       contact = contact || distance <= BACTERIA_CONTACT_RADIUS;
+
+      if (recomputeTimer > 0) recomputeTimer -= delta;
+
       return {
         id,
         active: true,
@@ -125,4 +224,3 @@ export function createBacteriaEntity(
     },
   };
 }
-

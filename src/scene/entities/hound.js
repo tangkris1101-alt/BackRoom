@@ -2,6 +2,11 @@
 import { HOUND_CONTACT_RADIUS } from "../constants.js";
 import { createLimbSegment } from "../common/view-model.js";
 import { resolveEntityStep } from "./spawn.js";
+import { createNavGrid, aStar, followPath, pathContainsCell } from "./pathfinding.js";
+
+const RECOMPUTE_INTERVAL = 0.6;
+const STUCK_THRESHOLD = 0.8;
+const STUCK_MIN_PROGRESS = 0.25;
 
 export function createHoundModel() {
   const group = new THREE.Group();
@@ -95,10 +100,12 @@ export function createHoundEntity(
     isWalkable,
     speed = 1.45,
     id = "hound",
-    type = "hound",
     initialState = null,
-    dormant = false,
-    dormantArmRadius = 8,
+    cols,
+    rows,
+    isCellOpen,
+    worldToCell,
+    cellCenter,
   },
 ) {
   const group = createHoundModel();
@@ -107,21 +114,44 @@ export function createHoundEntity(
   scene.add(group);
 
   let contact = false;
-  let isDormant = dormant;
   if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
     group.position.x = initialState.position.x;
     group.position.z = initialState.position.z;
     contact = Boolean(initialState.contact);
-    if (typeof initialState.dormant === "boolean") isDormant = initialState.dormant;
   }
+  const navGrid =
+    cols && rows && isCellOpen && worldToCell && cellCenter
+      ? createNavGrid({ cols, rows, isCellOpen })
+      : null;
+  const path = { waypoints: [], index: 0 };
+  let recomputeTimer = 0;
+  let stuckTimer = 0;
+  let lastPlayerCellKey = "";
+  let lastPositionX = group.position.x;
+  let lastPositionZ = group.position.z;
+
+  function repathTo(playerPosition) {
+    if (!navGrid) return;
+    const start = worldToCell(group.position.x, group.position.z);
+    const goal = worldToCell(playerPosition.x, playerPosition.z);
+    const next = aStar(navGrid, start, goal);
+    if (next && next.length > 0) {
+      path.waypoints = next;
+      path.index = 0;
+    } else {
+      path.waypoints = [];
+      path.index = 0;
+    }
+    recomputeTimer = RECOMPUTE_INTERVAL;
+  }
+
   return {
     getState() {
       return {
         id,
-        type,
+        type: "hound",
         position: { x: group.position.x, z: group.position.z },
         contact,
-        dormant: isDormant,
       };
     },
     update(delta, elapsed, playerPosition) {
@@ -129,22 +159,43 @@ export function createHoundEntity(
       const dz = playerPosition.z - group.position.z;
       const distance = Math.hypot(dx, dz);
 
-      if (isDormant && distance > dormantArmRadius) {
-        return {
-          id,
-          type,
-          active: false,
-          contact: false,
-          distance,
-          x: group.position.x,
-          y: 0.9,
-          z: group.position.z,
-          dormant: true,
-        };
+      if (!contact && navGrid) {
+        const playerCell = worldToCell(playerPosition.x, playerPosition.z);
+        const playerCellKey = `${playerCell.col},${playerCell.row}`;
+        const playerMoved = playerCellKey !== lastPlayerCellKey;
+        const playerOffPath = !pathContainsCell(path.waypoints, playerCell, path.index);
+        const stuck = stuckTimer > STUCK_THRESHOLD;
+        const needRepath =
+          path.waypoints.length === 0 ||
+          recomputeTimer <= 0 ||
+          (playerMoved && playerOffPath) ||
+          stuck;
+        if (needRepath) {
+          repathTo(playerPosition);
+          lastPlayerCellKey = playerCellKey;
+        }
       }
-      isDormant = false;
 
-      if (distance > 0.001 && !contact) {
+      let nextX = group.position.x;
+      let nextZ = group.position.z;
+      let advanced = false;
+      let reachedEnd = false;
+
+      if (!contact && path.waypoints.length > 0) {
+        const followed = followPath({
+          entityPos: group.position,
+          waypoints: path.waypoints,
+          indexRef: path,
+          cellCenter,
+          speed,
+          delta,
+          isWalkable,
+        });
+        nextX = followed.x;
+        nextZ = followed.z;
+        advanced = followed.advanced;
+        reachedEnd = followed.reachedEnd;
+      } else if (distance > 0.001 && !contact) {
         const surge = 0.78 + Math.sin(elapsed * 1.9) * 0.12;
         const step = Math.min(distance, speed * surge * delta);
         const resolved = resolveEntityStep(
@@ -153,8 +204,26 @@ export function createHoundEntity(
           (dz / distance) * step,
           isWalkable,
         );
-        group.position.x = resolved.x;
-        group.position.z = resolved.z;
+        nextX = resolved.x;
+        nextZ = resolved.z;
+        advanced = nextX !== group.position.x || nextZ !== group.position.z;
+      }
+
+      if (!contact) {
+        const movedNow = Math.hypot(nextX - lastPositionX, nextZ - lastPositionZ);
+        const expected = speed * delta * STUCK_MIN_PROGRESS;
+        if (movedNow < expected) {
+          stuckTimer += delta;
+        } else {
+          stuckTimer = 0;
+        }
+        lastPositionX = nextX;
+        lastPositionZ = nextZ;
+      }
+
+      group.position.x = nextX;
+      group.position.z = nextZ;
+      if (distance > 0.001 && (advanced || reachedEnd)) {
         group.rotation.y = Math.atan2(dx, dz);
       }
 
@@ -162,18 +231,18 @@ export function createHoundEntity(
       group.position.y = Math.abs(Math.sin(elapsed * 5.4)) * 0.028;
       group.rotation.z = gait;
       contact = contact || distance <= HOUND_CONTACT_RADIUS;
+
+      if (recomputeTimer > 0) recomputeTimer -= delta;
+
       return {
         id,
-        type,
         active: true,
         contact,
         distance,
         x: group.position.x,
         y: 0.9,
         z: group.position.z,
-        dormant: false,
       };
     },
   };
 }
-
