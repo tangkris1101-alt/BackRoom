@@ -37,7 +37,10 @@ const loadingStatus = document.querySelector("#loading-status");
 const exitOverlay = document.querySelector("#exit-overlay");
 const exitOverlayTitle = exitOverlay?.querySelector("strong");
 const exitOverlaySubtitle = exitOverlay?.querySelector("span");
+const exitOverlayTime = document.querySelector("#exit-overlay-time");
 const loadingLevelLabel = loadingOverlay?.querySelector(".loading-overlay__panel span");
+const timerReadout = document.querySelector("#timer-readout");
+const timerReadoutValue = timerReadout?.querySelector(".timer-readout__value");
 const itemInfo = document.querySelector("#item-info");
 const itemInfoName = document.querySelector("#item-info-name");
 const itemInfoEffect = document.querySelector("#item-info-effect");
@@ -90,7 +93,7 @@ const ITEM_TEXT = {
     },
     "super-almond-water": {
       name: "超级杏仁水",
-      effect: "体力上限 250 / 恢复速度 x2",
+      effect: "上限 250 / 恢复 x2 / 移速 x1.5 / 25秒",
       action: "F / 按钮拾取并饮用",
     },
     flashlight: {
@@ -112,7 +115,7 @@ const ITEM_TEXT = {
     },
     "super-almond-water": {
       name: "SUPER ALMOND WATER",
-      effect: "250 STAMINA CAP / RECOVERY x2",
+      effect: "250 CAP / RECOVERY x2 / SPEED x1.5 / 25s",
       action: "F / BUTTON DRINK",
     },
     flashlight: {
@@ -354,6 +357,7 @@ const STATUS_TEXT = {
     inventoryHint: "← → / 滚轮 切换 · 点击 切换 / E 使用",
     inventoryEmpty: "背包为空",
     pickupEmpty: "无物品可拾取",
+    exitTotalTime: "总用时 {time}",
   },
   en: {
     "almond-water": "ALMOND WATER",
@@ -381,6 +385,7 @@ const STATUS_TEXT = {
     inventoryHint: "← → / WHEEL · TAP TO SWITCH / E USE",
     inventoryEmpty: "INVENTORY EMPTY",
     pickupEmpty: "NO ITEM IN RANGE",
+    exitTotalTime: "TOTAL TIME {time}",
   },
 };
 
@@ -445,6 +450,7 @@ let loadingComplete = false;
 let exitComplete = false;
 let gameFailed = false;
 let levelTransition = null;
+let runTime = 0;
 let pickupFlashUntil = 0;
 let pickupFlashText = "";
 let flashlightOwned = false;
@@ -668,6 +674,17 @@ function formatLocalizedStatus(id, values = {}) {
   return template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ""));
 }
 
+function formatDuration(totalSeconds) {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return hours > 0
+    ? `${hours}:${pad(minutes)}:${pad(seconds)}`
+    : `${pad(minutes)}:${pad(seconds)}`;
+}
+
 function syncLevelHud() {
   if (levelSelect) levelSelect.value = String(world.level);
   if (loadingLevelLabel) loadingLevelLabel.textContent = world.levelLabel;
@@ -726,14 +743,32 @@ function setExitOverlayText(title, subtitle) {
   if (exitOverlaySubtitle) exitOverlaySubtitle.textContent = subtitle;
 }
 
+function setExitOverlayTime() {
+  if (!exitOverlayTime) return;
+  exitOverlayTime.textContent = formatLocalizedStatus("exitTotalTime", { time: formatDuration(runTime) });
+  exitOverlayTime.removeAttribute("hidden");
+}
+
+function hideExitOverlayTime() {
+  if (!exitOverlayTime) return;
+  exitOverlayTime.setAttribute("hidden", "");
+}
+
+function updateTimerReadout() {
+  if (!timerReadoutValue) return;
+  timerReadoutValue.textContent = formatDuration(runTime);
+}
+
 function showExitOverlay(title, subtitle) {
   setExitOverlayText(title, subtitle);
+  setExitOverlayTime();
   exitOverlay?.removeAttribute("hidden");
   exitOverlay?.classList.add("is-visible");
 }
 
 function hideExitOverlay() {
   exitOverlay?.classList.remove("is-visible");
+  hideExitOverlayTime();
   window.setTimeout(() => exitOverlay?.setAttribute("hidden", ""), OVERLAY_FADE_MS);
 }
 
@@ -784,6 +819,9 @@ languageSelect?.addEventListener("change", () => {
   renderInventoryBar();
   updateActionButtonState();
   if (lastMetrics) updateItemInfo(lastMetrics);
+  if (exitOverlay && !exitOverlay.hasAttribute("hidden")) {
+    setExitOverlayTime();
+  }
   if (isPaused) {
     if (pauseTitle) pauseTitle.textContent = formatLocalizedStatus("pauseTitle");
     if (pauseSubtitle) pauseSubtitle.textContent = formatLocalizedStatus("pauseSubtitle");
@@ -1319,9 +1357,25 @@ function findNearestPickupable(metrics) {
   return candidates[0];
 }
 
+function getPickupItemInfo(candidate) {
+  if (!candidate?.id) return null;
+  const text = getLocalizedText(ITEM_TEXT, candidate.id);
+  if (!text) return null;
+  return {
+    id: candidate.id,
+    type: "item",
+    name: text.name,
+    effect: text.effect,
+    action: text.action,
+    distance: candidate.distance,
+  };
+}
+
 function updateItemInfo(metrics) {
-  const item = metrics.focusItem ?? metrics.focusInteraction ?? metrics.focusEntity;
+  const aimItem = metrics.focusItem ?? metrics.focusInteraction ?? metrics.focusEntity;
   const pickupable = findNearestPickupable(metrics);
+  const inRangeItem = pickupable ? getPickupItemInfo(pickupable) : null;
+  const item = aimItem ?? inRangeItem;
   const canInteract = Boolean(metrics.focusInteraction?.available);
   const hasFocus = Boolean(item);
   const canPickup = Boolean(pickupable);
@@ -1340,7 +1394,7 @@ function updateItemInfo(metrics) {
     if (itemInfoEffect) itemInfoEffect.textContent = localized.effect ?? item.effect;
     if (itemInfoAction) itemInfoAction.textContent = localized.action ?? item.action;
   }
-  canvas.dataset.focusItem = metrics.focusItem?.id ?? "";
+  canvas.dataset.focusItem = aimItem?.id ?? inRangeItem?.id ?? "";
   canvas.dataset.focusEntity = metrics.focusEntity?.id ?? "";
   canvas.dataset.focusInfoType = item?.type ?? "";
   canvas.dataset.focusItemDistance = Number.isFinite(item?.distance)
@@ -1525,7 +1579,7 @@ function updateHud(metrics, controlState, elapsed) {
   updatePickupHud(metrics);
   updateItemInfo(metrics);
   showItemInfoPickupKey(
-    (Boolean(metrics.focusItem) && Boolean(findNearestPickupable(metrics))) ||
+    Boolean(findNearestPickupable(metrics)) ||
       Boolean(metrics.focusInteraction?.available),
   );
   updateStaminaHud(controlState);
@@ -1542,6 +1596,8 @@ function animate() {
   const delta = Math.min(rawDelta, 0.05);
   const elapsed = clock.elapsedTime;
   tickLongPressProgress();
+
+  if (!exitComplete && !gameFailed && !levelTransition) runTime += delta;
 
   updateLevelTransition(delta);
   if (!exitComplete && !gameFailed && !levelTransition) controls.update(delta);
@@ -1582,6 +1638,7 @@ function animate() {
   }
   ambientHum.update(metrics.flicker, controlState);
   updateHud(metrics, controlState, elapsed);
+  updateTimerReadout();
   updatePerformanceReadout(delta);
   updateLoadingOverlay();
   updateDrinkingMeter(controlState);

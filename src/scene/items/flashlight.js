@@ -176,6 +176,7 @@ export function createFlashlightPickup(
         respawnTimer -= delta;
         if (respawnTimer <= 0) placeAtRandomPosition();
         return {
+          id: "flashlight",
           visible: false,
           available: false,
           distance: Infinity,
@@ -187,6 +188,7 @@ export function createFlashlightPickup(
       marker.material.opacity = 0.08 + Math.sin(elapsed * 2.8) * 0.034 + 0.034;
       const distance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
       return {
+        id: "flashlight",
         visible: true,
         available: distance <= FLASHLIGHT_PICKUP_RADIUS,
         distance,

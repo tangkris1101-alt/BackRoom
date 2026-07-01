@@ -230,6 +230,7 @@ export function createAlmondWaterPickup(
         respawnTimer -= delta;
         if (respawnTimer <= 0) trySpawn(respawnChance);
         return {
+          id: itemId,
           visible: false,
           available: false,
           distance: Infinity,
@@ -243,6 +244,7 @@ export function createAlmondWaterPickup(
         (isSuper ? 0.14 : 0.1) + Math.sin(elapsed * (isSuper ? 3.8 : 3.2)) * 0.045 + 0.045;
       const distance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
       return {
+        id: itemId,
         visible: true,
         available: distance <= ALMOND_WATER_PICKUP_RADIUS,
         distance,

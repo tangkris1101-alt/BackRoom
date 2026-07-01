@@ -164,6 +164,7 @@ export function createDetectorPickup(
         respawnTimer -= delta;
         if (respawnTimer <= 0) placeAtRandomPosition();
         return {
+          id: "detector",
           visible: false,
           available: false,
           distance: Infinity,
@@ -175,6 +176,7 @@ export function createDetectorPickup(
       marker.material.opacity = 0.08 + Math.sin(elapsed * 3.4) * 0.038 + 0.04;
       const distance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
       return {
+        id: "detector",
         visible: true,
         available: distance <= DETECTOR_PICKUP_RADIUS,
         distance,
