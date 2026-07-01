@@ -1660,6 +1660,76 @@ body {
   cursor: pointer;
 }
 
+.pause-overlay__save {
+  position: absolute;
+  bottom: clamp(112px, 22vh, 188px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 12px 24px;
+  min-width: 220px;
+  border: 1px solid rgba(160, 220, 170, 0.42);
+  border-radius: 4px;
+  background: rgba(10, 22, 14, 0.82);
+  color: #b6e2bf;
+  font: inherit;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, color 140ms ease;
+}
+
+.pause-overlay__save strong {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.pause-overlay__save small {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(182, 226, 191, 0.7);
+  letter-spacing: 0.06em;
+}
+
+.pause-overlay__save:hover,
+.pause-overlay__save:focus-visible {
+  border-color: rgba(170, 240, 180, 0.72);
+  background: rgba(16, 36, 22, 0.9);
+  box-shadow: 0 0 22px rgba(140, 230, 170, 0.32);
+  outline: none;
+  transform: translateX(-50%) translateY(-1px);
+}
+
+.pause-overlay__save:active {
+  transform: translateX(-50%) translateY(0);
+}
+
+.pause-overlay__save.is-saved {
+  border-color: rgba(180, 255, 200, 0.92);
+  background: linear-gradient(180deg, rgba(20, 60, 30, 0.94), rgba(8, 26, 14, 0.94));
+  color: #d6ffe1;
+  box-shadow: 0 0 28px rgba(140, 255, 180, 0.55), inset 0 0 16px rgba(140, 255, 180, 0.18);
+}
+
+.pause-overlay__save.is-saved small {
+  color: rgba(214, 255, 225, 0.88);
+}
+
+.pause-overlay__save.is-saved:hover,
+.pause-overlay__save.is-saved:focus-visible {
+  border-color: rgba(200, 255, 220, 0.95);
+  box-shadow: 0 0 32px rgba(160, 255, 190, 0.6), inset 0 0 18px rgba(160, 255, 190, 0.2);
+}
+
+.pause-overlay__save.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .pause-overlay__reset {
   position: absolute;
   bottom: clamp(36px, 8vh, 80px);

@@ -30,6 +30,7 @@
 - **实体检测**（Level 4）：屏幕边缘箭头标记 + 探测器标记
 - 出口触发完成 overlay
 - ESC 暂停（冻结音频 + pointerlockchange 兜底）
+- 暂停界面**保存进度**按钮（单击立即写盘，绿色主题，1.4s 内显示「已保存」反馈，与 5s 自动保存 / beforeunload flush 互为补充）
 - 暂停界面**重置进度**按钮（两步确认：点击进入「再次按下以确认」武装态，3s 内再次按下清空全部存档并回到 L0；超时、恢复、ESC 自动取消）
 - 4 页教学弹窗（首次进入）
 - 中英双语 UI 切换（`localStorage` 持久化）
@@ -179,6 +180,7 @@ node scripts/validate-sb3.mjs    # 输出: VALIDATION OK
 | `SUPER_ALMOND_WATER_SPEED_MULTIPLIER` | 1.5 | 超级杏仁水 buff 期间角色移速倍率(走/跑) |
 | `WATER_LONG_PRESS_MS` | 600ms | 长按 E 触发饮水 |
 | `PAUSE_RESET_ARM_TIMEOUT_MS` | 3000ms | 暂停重置按钮武装态超时(超时自动取消确认) |
+| `PAUSE_SAVE_FLASH_MS` | 1400ms | 暂停保存按钮「已保存」反馈持续时间 |
 | `FPS_LOW/HIGH_THRESHOLD` | 48/58 | 动态像素比阈值 |
 
 ---
