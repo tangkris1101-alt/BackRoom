@@ -144,7 +144,7 @@ export function createDetectorPickup(
     active = true;
   }
 
-  if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
+if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
     active = Boolean(initialState.active);
     respawnTimer = Math.max(0, Number(initialState.respawnTimer ?? 0));
     group.position.set(initialState.position.x, 0, initialState.position.z);
@@ -152,23 +152,6 @@ export function createDetectorPickup(
     group.visible = active;
   } else {
     placeAtRandomPosition();
-}
-
-  function chooseCandidate() {
-    return candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
-  }
-
-  function placeAtRandomPosition() {
-    const candidate = chooseCandidate();
-    if (!candidate) {
-      group.visible = false;
-      active = false;
-      return;
-    }
-    group.position.set(candidate.x, 0, candidate.z);
-    group.rotation.y = Math.random() * Math.PI * 2;
-    group.visible = true;
-    active = true;
   }
 
   return {
@@ -202,15 +185,6 @@ export function createDetectorPickup(
 
     update(delta, elapsed, playerPosition) {
       if (!active) {
-        if (frozenItems) {
-          return {
-            id: "detector",
-            visible: false,
-            available: false,
-            distance: Infinity,
-            respawn: 0,
-          };
-        }
         respawnTimer -= delta;
         if (respawnTimer <= 0) placeAtRandomPosition();
         return {

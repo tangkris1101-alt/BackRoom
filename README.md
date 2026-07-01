@@ -24,12 +24,13 @@
 - 第一人称移动 + 冲刺 + 跳跃（带体力条）
 - Pointer Lock 视角 + 拖拽 fallback
 - 移动端摇杆 + 操作按钮
-- **道具系统**：手电筒（电量有限、SpotLight 锥光）、探测器（5s 扫描 / 60s 冷却、72m 范围）、杏仁水（+50 上限/45s）、超级杏仁水（上限 250 / 恢复×2 / 25s）
+- **道具系统**：手电筒（电量有限、SpotLight 锥光、可堆叠 3 个、电量耗尽自动消耗 1 个并回满）、探测器（5s 扫描 / 60s 冷却、72m 范围）、杏仁水（+50 上限/45s）、超级杏仁水（上限 250 / 恢复×2 / 移速×1.5 / 25s）
 - 拾取提示 + 检视信息面板 + 主动使用 + **长按 E 饮水**
 - 道具栏：主槽 + 侧槽 + 左右翻页
 - **实体检测**（Level 4）：屏幕边缘箭头标记 + 探测器标记
 - 出口触发完成 overlay
 - ESC 暂停（冻结音频 + pointerlockchange 兜底）
+- 暂停界面**重置进度**按钮（两步确认：点击进入「再次按下以确认」武装态，3s 内再次按下清空全部存档并回到 L0；超时、恢复、ESC 自动取消）
 - 4 页教学弹窗（首次进入）
 - 中英双语 UI 切换（`localStorage` 持久化）
 
@@ -169,12 +170,15 @@ node scripts/validate-sb3.mjs    # 输出: VALIDATION OK
 |---|---|---|
 | `FLASHLIGHT_BATTERY_MAX` | 100 | 手电筒满电 |
 | `FLASHLIGHT_DRAIN_RATE` | 4.2/s | 耗电速度 |
+| `FLASHLIGHT_MAX_STACK` | 3 | 手电筒堆叠上限 |
 | `DETECTOR_SCAN_DURATION` | 5s | 扫描时长 |
 | `DETECTOR_COOLDOWN_DURATION` | 60s | 扫描冷却 |
 | `DETECTOR_RANGE` | 72m | 扫描半径 |
 | `ALMOND_WATER_DURATION` | 45s | 杏仁水 buff 时长 |
 | `SUPER_ALMOND_WATER_DURATION` | 25s | 超级杏仁水 buff 时长 |
+| `SUPER_ALMOND_WATER_SPEED_MULTIPLIER` | 1.5 | 超级杏仁水 buff 期间角色移速倍率(走/跑) |
 | `WATER_LONG_PRESS_MS` | 600ms | 长按 E 触发饮水 |
+| `PAUSE_RESET_ARM_TIMEOUT_MS` | 3000ms | 暂停重置按钮武装态超时(超时自动取消确认) |
 | `FPS_LOW/HIGH_THRESHOLD` | 48/58 | 动态像素比阈值 |
 
 ---

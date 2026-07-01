@@ -171,13 +171,6 @@ export function createAlmondWaterPickup(
   let active = false;
   let respawnTimer = 0;
   let pickupCount = 0;
-  const preDepleted = frozenItems && alreadyPickedUp instanceof Set && alreadyPickedUp.has(itemId);
-
-  if (preDepleted) {
-    group.visible = false;
-  } else {
-    trySpawn(initialSpawnChance);
-  }
 
   function chooseCandidate() {
     return candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
@@ -251,15 +244,6 @@ export function createAlmondWaterPickup(
 
     update(delta, elapsed, playerPosition) {
       if (!active) {
-        if (frozenItems) {
-          return {
-            id: itemId,
-            visible: false,
-            available: false,
-            distance: Infinity,
-            respawn: 0,
-          };
-        }
         respawnTimer -= delta;
         if (respawnTimer <= 0) trySpawn(respawnChance);
         return {

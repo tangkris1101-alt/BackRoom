@@ -57,6 +57,10 @@ const entityMarkers = document.querySelector("#entity-markers");
 const pauseOverlay = document.querySelector("#pause-overlay");
 const pauseTitle = document.querySelector("#pause-title");
 const pauseSubtitle = document.querySelector("#pause-subtitle");
+const pauseResumeArea = document.querySelector("#pause-resume-area");
+const pauseResetButton = document.querySelector("#pause-reset");
+const pauseResetLabel = document.querySelector("#pause-reset-label");
+const pauseResetHint = document.querySelector("#pause-reset-hint");
 const inventoryBar = document.querySelector("#inventory-bar");
 const inventorySlots = document.querySelector("#inventory-slots");
 const inventoryPrev = document.querySelector("#inventory-prev");
@@ -103,6 +107,7 @@ const ALMOND_WATER_DRINK_DURATION = 1.0;
 const WATER_LONG_PRESS_MS = 600;
 const SAVE_AUTOSAVE_INTERVAL_MS = 5000;
 const SAVE_DEBOUNCE_MS = 250;
+const PAUSE_RESET_ARM_TIMEOUT_MS = 3000;
 
 const ITEM_TEXT = {
   "zh-CN": {
@@ -376,6 +381,10 @@ const STATUS_TEXT = {
     almondWaterCancelled: "饮用取消",
     pauseTitle: "已暂停",
     pauseSubtitle: "按 ESC 或点击继续",
+    pauseResetLabel: "重置进度",
+    pauseResetHint: "清空所有存档并回到 L0",
+    pauseResetArmedLabel: "再次按下以确认",
+    pauseResetArmedHint: "⚠ 所有进度将被清除且不可撤销",
     inventoryHint: "← → / 滚轮 切换 · 点击 切换 / E 使用",
     inventoryEmpty: "背包为空",
     pickupEmpty: "无物品可拾取",
@@ -408,6 +417,10 @@ const STATUS_TEXT = {
     almondWaterCancelled: "DRINK CANCELLED",
     pauseTitle: "PAUSED",
     pauseSubtitle: "ESC / TAP TO RESUME",
+    pauseResetLabel: "RESET PROGRESS",
+    pauseResetHint: "WIPE SAVE · RESTART AT L0",
+    pauseResetArmedLabel: "TAP AGAIN TO CONFIRM",
+    pauseResetArmedHint: "⚠ ALL PROGRESS WILL BE LOST",
     inventoryHint: "← → / WHEEL · TAP TO SWITCH / E USE",
     inventoryEmpty: "INVENTORY EMPTY",
     pickupEmpty: "NO ITEM IN RANGE",
@@ -632,6 +645,9 @@ let isInPauseTransition = false;
 let ePressStartTime = 0;
 let ePressActive = false;
 let ePressLongTriggered = false;
+let pauseResetArmed = false;
+let pauseResetArmedTimer = 0;
+let isResettingProgress = false;
 
 try {
   const savedLanguage = window.localStorage?.getItem(LANGUAGE_STORAGE_KEY);
@@ -864,7 +880,7 @@ function applySaveToRuntime(save) {
 }
 
 function writeSaveSnapshot() {
-  if (!world || !controls || gameFailed) return false;
+  if (isResettingProgress || !world || !controls || gameFailed) return false;
   const snapshot = world.getSnapshot?.();
   const playerState = controls.getPlayerState();
   const level = world.level;
@@ -1508,6 +1524,12 @@ function setPauseState(next, { fromUnlock = false } = {}) {
   if (pauseTitle) pauseTitle.textContent = formatLocalizedStatus("pauseTitle");
   if (pauseSubtitle) pauseSubtitle.textContent = formatLocalizedStatus("pauseSubtitle");
   if (isPaused) {
+    if (pauseResetLabel && !pauseResetArmed) {
+      pauseResetLabel.textContent = formatLocalizedStatus("pauseResetLabel");
+    }
+    if (pauseResetHint && !pauseResetArmed) {
+      pauseResetHint.textContent = formatLocalizedStatus("pauseResetHint");
+    }
     pauseAccumulatedDelta = clock.getDelta();
     if (document.pointerLockElement === canvas && document.exitPointerLock) {
       try {
@@ -1518,9 +1540,66 @@ function setPauseState(next, { fromUnlock = false } = {}) {
     }
     ambientHum.suspend();
   } else {
+    disarmPauseReset();
     clock.getDelta();
     ambientHum.resume();
   }
+}
+
+function disarmPauseReset() {
+  pauseResetArmed = false;
+  if (pauseResetArmedTimer) {
+    window.clearTimeout(pauseResetArmedTimer);
+    pauseResetArmedTimer = 0;
+  }
+  if (pauseResetButton) pauseResetButton.classList.remove("is-armed");
+  if (pauseResetLabel) pauseResetLabel.textContent = formatLocalizedStatus("pauseResetLabel");
+  if (pauseResetHint) pauseResetHint.textContent = formatLocalizedStatus("pauseResetHint");
+}
+
+function armPauseReset() {
+  pauseResetArmed = true;
+  if (pauseResetButton) pauseResetButton.classList.add("is-armed");
+  if (pauseResetLabel) pauseResetLabel.textContent = formatLocalizedStatus("pauseResetArmedLabel");
+  if (pauseResetHint) pauseResetHint.textContent = formatLocalizedStatus("pauseResetArmedHint");
+  if (pauseResetArmedTimer) window.clearTimeout(pauseResetArmedTimer);
+  pauseResetArmedTimer = window.setTimeout(() => {
+    pauseResetArmedTimer = 0;
+    disarmPauseReset();
+  }, PAUSE_RESET_ARM_TIMEOUT_MS);
+}
+
+function resetAllProgress() {
+  isResettingProgress = true;
+  if (saveDirtyTimer) {
+    window.clearTimeout(saveDirtyTimer);
+    saveDirtyTimer = 0;
+  }
+  if (pauseResetArmedTimer) {
+    window.clearTimeout(pauseResetArmedTimer);
+    pauseResetArmedTimer = 0;
+  }
+  try {
+    window.localStorage?.removeItem("backrooms-save");
+    window.localStorage?.removeItem(REACHED_KEY);
+    window.localStorage?.removeItem(COMPLETED_KEY);
+    window.localStorage?.removeItem(PICKED_UP_KEY);
+  } catch {
+    // localStorage may be unavailable.
+  }
+  inventory.length = 0;
+  equippedIndex = -1;
+  flashlightOwned = false;
+  flashlightOn = false;
+  flashlightBattery = 0;
+  detectorOwned = false;
+  detectorActiveTimer = 0;
+  detectorCooldownTimer = 0;
+  pickedUpItems.clear();
+  runTime = 0;
+  reachedLevels = new Set([0]);
+  completedLevels = new Set();
+  window.location.replace(window.location.pathname);
 }
 
 function handlePointerLockChange() {
@@ -2155,9 +2234,27 @@ pauseButton?.addEventListener("pointerdown", (event) => {
   event.stopPropagation();
   setPauseState(!isPaused);
 });
+pauseResumeArea?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  setPauseState(false);
+});
 pauseOverlay?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
-  setPauseState(false);
+  if (event.target === pauseOverlay) {
+    setPauseState(false);
+  }
+});
+pauseResetButton?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!isPaused) return;
+  if (pauseResetArmed) {
+    disarmPauseReset();
+    resetAllProgress();
+  } else {
+    armPauseReset();
+  }
 });
 flashlightButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
@@ -2321,13 +2418,13 @@ if (initialSave) {
 }
 
 window.setInterval(() => {
-  if (world && !gameFailed) {
+  if (!isResettingProgress && world && !gameFailed) {
     writeSaveSnapshot();
   }
 }, SAVE_AUTOSAVE_INTERVAL_MS);
 
 window.addEventListener("beforeunload", () => {
-  if (world && !gameFailed) {
+  if (!isResettingProgress && world && !gameFailed) {
     if (saveDirtyTimer) {
       window.clearTimeout(saveDirtyTimer);
       saveDirtyTimer = 0;
@@ -2338,14 +2435,19 @@ window.addEventListener("beforeunload", () => {
 
 if (typeof window !== "undefined") {
   window.__backroomsResetProgress = () => {
+    if (typeof resetAllProgress === "function") {
+      resetAllProgress();
+      return;
+    }
     try {
+      window.localStorage?.removeItem("backrooms-save");
       window.localStorage?.removeItem(REACHED_KEY);
       window.localStorage?.removeItem(COMPLETED_KEY);
       window.localStorage?.removeItem(PICKED_UP_KEY);
     } catch {
       // localStorage may be unavailable.
     }
-    window.location.reload();
+    window.location.replace(window.location.pathname);
   };
 }
 

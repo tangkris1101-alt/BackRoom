@@ -166,23 +166,6 @@ if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite
     placeAtRandomPosition();
   }
 
-  function chooseCandidate() {
-    return candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
-  }
-
-  function placeAtRandomPosition() {
-    const candidate = chooseCandidate();
-    if (!candidate) {
-      group.visible = false;
-      active = false;
-      return;
-    }
-    group.position.set(candidate.x, 0, candidate.z);
-    group.rotation.y = Math.random() * Math.PI * 2;
-    group.visible = true;
-    active = true;
-  }
-
   return {
     getState() {
       return {
@@ -214,15 +197,6 @@ if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite
 
     update(delta, elapsed, playerPosition) {
       if (!active) {
-        if (frozenItems) {
-          return {
-            id: "flashlight",
-            visible: false,
-            available: false,
-            distance: Infinity,
-            respawn: 0,
-          };
-        }
         respawnTimer -= delta;
         if (respawnTimer <= 0) placeAtRandomPosition();
         return {
