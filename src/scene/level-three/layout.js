@@ -8,13 +8,29 @@ export const LEVEL_THREE_EXIT_TRIGGER_RADIUS = CELL_SIZE * 0.74;
 export const LEVEL_THREE_MAX_POINT_LIGHTS = 8;
 export const LEVEL_THREE_MIN_FIXTURE_DISTANCE = CELL_SIZE * 5.25;
 
-// Industrial-feeling dark zones: bigger, fewer, clustered near the central power
-// station so the back half of the level reads as a dim utility basement.
+// Indestructible bars: actual blockers. These cells are NOT walkable and
+// are rendered with bar geometry instead of solid walls. Wiki describes
+// Level 3 as "riddled with various sets of indestructible bars that
+// render the majority of the level inaccessible". These four cells
+// block specific alternate routes so the player has to walk the
+// intended path through all four special rooms.
+export const LEVEL_THREE_BAR_POSITIONS = [
+  { col: 12, row: 7 },
+  { col: 16, row: 7 },
+  { col: 28, row: 14 },
+  { col: 32, row: 7 },
+];
+
+// Industrial-feeling dark zones: bigger, fewer, clustered near the special
+// rooms. Generator gets an NW shadow pocket; Assembly Line gets a SW
+// cluster; Boiler Room gets an NW pocket; the empty top-right corner
+// (above Sanctum, east of the map) gets one large pocket to give the
+// dead-end area a sense of dread.
 export const LEVEL_THREE_DARK_ZONES = [
-  { col: 14, row: 12, width: 7, height: 6 },
-  { col: 24, row: 14, width: 5, height: 4 },
+  { col: 4, row: 5, width: 4, height: 3 },
   { col: 4, row: 14, width: 5, height: 4 },
-  { col: 31, row: 5, width: 4, height: 4 },
+  { col: 27, row: 16, width: 5, height: 4 },
+  { col: 30, row: 5, width: 5, height: 5 },
 ];
 
 export function createLevelThreeLayout() {
@@ -23,7 +39,7 @@ export function createLevelThreeLayout() {
   );
 
   const carveCell = (col, row) => {
-    if (row > 0 && row < LEVEL_THREE_ROWS - 1 && col > 0 && col < LEVEL_THREE_COLS - 1) {
+    if (row >= 0 && row < LEVEL_THREE_ROWS && col >= 0 && col < LEVEL_THREE_COLS) {
       grid[row][col] = ".";
     }
   };
@@ -50,60 +66,55 @@ export function createLevelThreeLayout() {
     }
   };
 
-  // Top entry (from L2 exit) — small landing corridor
-  carveHorizontal(2, 12, 3, 2);
-  carveVertical(3, 3, 6, 2);
+  // === 4 special rooms (sized per wiki) ===
+  // Generator Room: 7 cols × 6 rows. Wiki: "large rooms that are riddled
+  // with lots of electrical equipment".
+  carveRoom(4, 5, 7, 6);
+  // Sanctum: 6 cols × 6 rows. Wiki: "cathedral interior with Greco-Roman
+  // architecture" — small intimate space, not a sprawling room.
+  carveRoom(19, 5, 6, 6);
+  // Assembly Line: 12 cols × 6 rows. Wiki: "extremely open and large,
+  // factory-like facilities" — the longest room.
+  carveRoom(4, 13, 12, 6);
+  // Boiler Room: 6 cols × 4 rows. Wiki: "fairly straightforward".
+  carveRoom(28, 17, 6, 4);
 
-  // Upper mid corridor — different from L2 (which has its spine at row 10).
-  carveHorizontal(8, 28, 8, 2);
-
-  // Central industrial spine (row 11) and lower exit corridor (row 20).
+  // === Connecting corridors ===
+  // Spawn crawlway: 1-cell-wide vertical (3 cells). Wiki: "extremely thin
+  // and/or low ceilings that require wanderers to bend, hunch, crawl".
+  carveVertical(3, 3, 5, 1);
+  // Spine: rows 11-12 cols 2-36 (width 2). Wide main east-west corridor
+  // that the Generator and Sanctum sit on top of. Player exits the rooms
+  // south into this corridor.
   carveHorizontal(2, 36, 11, 2);
-  carveHorizontal(2, 36, 20, 2);
+  // Lower corridor: rows 19-20 cols 2-36 (width 2). Connects Assembly
+  // Line south to Boiler Room and on to the exit at (36, 20).
+  carveHorizontal(2, 36, 19, 2);
+  // Assembly Line south connector: col 7 rows 18-19 width 1. The room
+  // already extends to row 18, the corridor already starts at row 19, so
+  // this is just one extra cell carved to confirm the path.
+  carveVertical(7, 18, 19, 1);
+  // Boiler north connector: col 28 rows 12-17 width 1. Connects the spine
+  // down to the Boiler Room north wall at (28, 17).
+  carveVertical(28, 12, 17, 1);
+  // Upper-east alt corridor: row 7 cols 25-35 width 1. Carved so the
+  // indestructible bar at (32, 7) has an actual corridor to bisect
+  // (otherwise the bar is meaningless — the cell would already be wall).
+  carveHorizontal(25, 35, 7, 1);
+  // Mid-east alt corridor: row 7 cols 11-17 width 1. Carved so the two
+  // indestructible bars at (12, 7) and (16, 7) have a corridor to bisect.
+  carveHorizontal(11, 17, 7, 1);
 
-  // Vertical feeders — denser in the back half to create industrial grid feel.
-  carveVertical(8, 3, 20, 2);
-  carveVertical(20, 3, 20, 2);
-  carveVertical(36, 3, 20, 2);
-
-  carveVertical(14, 7, 20, 2);
-  carveVertical(28, 8, 20, 2);
-
-  // Auxiliary feeders for prop positions not on a main corridor.
-  carveVertical(12, 11, 20, 2);
-  carveVertical(26, 11, 20, 2);
-  carveVertical(30, 14, 20, 2);
-  carveVertical(34, 14, 20, 2);
-
-  // Single-cell connector for cable at (19, 19).
-  carveCell(19, 19);
-
-  // Central power station — large room housing the breaker panel + generator.
-  carveRoom(15, 13, 8, 6);
-
-  // Equipment annex rooms around the spine.
-  carveRoom(3, 6, 4, 4);     // upper-left utility closet
-  carveRoom(22, 6, 5, 4);    // upper-right storage
-  carveRoom(3, 14, 5, 5);    // lower-left machinery bay
-  carveRoom(31, 14, 5, 5);   // lower-right switchgear room
-
-  // Bulkheads subdivide corridors into industrial compartments. Each one
-  // closes a single previously-carved corridor cell.
+  // === Bulkheads (visual only — wall cells inside open rooms) ===
   const bulkheads = [
-    { col: 6, row: 9 },
-    { col: 10, row: 9 },
-    { col: 18, row: 9 },
-    { col: 24, row: 9 },
-    { col: 32, row: 9 },
-    { col: 10, row: 12 },
-    { col: 22, row: 12 },
-    { col: 26, row: 12 },
-    { col: 10, row: 14 },
-    { col: 18, row: 14 },
-    { col: 22, row: 14 },
-    { col: 16, row: 18 },
-    { col: 26, row: 18 },
-    { col: 32, row: 18 },
+    { col: 6, row: 7 },
+    { col: 8, row: 8 },
+    { col: 22, row: 6 },
+    { col: 24, row: 10 },
+    { col: 7, row: 14 },
+    { col: 11, row: 16 },
+    { col: 13, row: 14 },
+    { col: 29, row: 18 },
   ];
   bulkheads.forEach(({ col, row }) => {
     if (
@@ -112,6 +123,14 @@ export function createLevelThreeLayout() {
     ) {
       grid[row][col] = "#";
     }
+  });
+
+  // === Indestructible bars ===
+  // Override the carved alt-corridor cells back to wall. The renderer
+  // distinguishes these via LEVEL_THREE_BAR_POSITIONS and paints bar
+  // geometry instead of solid wall instances at these cells.
+  LEVEL_THREE_BAR_POSITIONS.forEach(({ col, row }) => {
+    grid[row][col] = "#";
   });
 
   return grid.map((row) => row.join(""));

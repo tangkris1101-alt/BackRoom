@@ -4,7 +4,7 @@ import {
   CEILING_Y,
 } from "../constants.js";
 import { createWideSignTexture } from "../common/textures.js";
-import { levelThreeCellCenter, getLevelThreeTargetMount } from "./layout.js";
+import { levelThreeCellCenter, getLevelThreeTargetMount, LEVEL_THREE_BAR_POSITIONS } from "./layout.js";
 
 export function addLevelThreeElectricalDetails(scene) {
   const colliders = [];
@@ -31,11 +31,11 @@ export function addLevelThreeElectricalDetails(scene) {
   });
 
   const panels = [
-    { col: 7, row: 3 },
-    { col: 14, row: 8 },
-    { col: 21, row: 10 },
+    { col: 5, row: 5 },
+    { col: 8, row: 7 },
+    { col: 14, row: 14 },
+    { col: 11, row: 17 },
     { col: 30, row: 19 },
-    { col: 34, row: 19 },
   ];
   panels.forEach((location, index) => {
     const center = levelThreeCellCenter(location.col, location.row);
@@ -72,10 +72,11 @@ export function addLevelThreeElectricalDetails(scene) {
     }
   });
 
+  // 3 generators — all inside the new Generator Room (rows 5-10 cols 4-10)
   const generators = [
-    { col: 12, row: 13, x: -0.35, z: 0.48, rot: 0.12 },
-    { col: 26, row: 14, x: 0.52, z: -0.4, rot: -0.2 },
-    { col: 8, row: 18, x: -0.2, z: 0.48, rot: 0.32 },
+    { col: 5, row: 8, x: -0.35, z: 0.4, rot: 0.12 },
+    { col: 8, row: 6, x: 0.5, z: -0.3, rot: -0.2 },
+    { col: 6, row: 9, x: -0.15, z: 0.5, rot: 0.32 },
   ];
   generators.forEach((gen) => {
     const center = levelThreeCellCenter(gen.col, gen.row);
@@ -98,16 +99,16 @@ export function addLevelThreeElectricalDetails(scene) {
 
   const cableGeometry = new THREE.CylinderGeometry(0.035, 0.035, 1, 8);
   const cables = [
-    { col: 5, row: 3, axis: "x", length: CELL_SIZE * 9, y: CEILING_Y - 0.22, offsetZ: 0.88 },
-    { col: 14, row: 7, axis: "z", length: CELL_SIZE * 8, y: CEILING_Y - 0.26, offsetX: -0.9 },
-    { col: 19, row: 19, axis: "x", length: CELL_SIZE * 18, y: CEILING_Y - 0.24, offsetZ: -0.88 },
-    { col: 30, row: 15, axis: "z", length: CELL_SIZE * 8, y: 2.62, offsetX: 1.05 },
+    { col: 4, row: 11, axis: "x", length: CELL_SIZE * 7, y: CEILING_Y - 0.22, offsetZ: 0.85 },
+    { col: 15, row: 13, axis: "x", length: CELL_SIZE * 12, y: CEILING_Y - 0.26, offsetZ: -0.88 },
+    { col: 24, row: 11, axis: "x", length: CELL_SIZE * 10, y: CEILING_Y - 0.24, offsetZ: -0.88 },
+    { col: 30, row: 18, axis: "x", length: CELL_SIZE * 5, y: 2.62, offsetZ: 0.88 },
   ];
   cables.forEach((cable) => {
     const center = levelThreeCellCenter(cable.col, cable.row);
     const mesh = new THREE.Mesh(cableGeometry, cableMaterial);
     mesh.scale.y = cable.length;
-    mesh.position.set(center.x + (cable.offsetX ?? 0), cable.y, center.z + (cable.offsetZ ?? 0));
+    mesh.position.set(center.x, cable.y, center.z + cable.offsetZ);
     if (cable.axis === "x") mesh.rotation.z = Math.PI / 2;
     if (cable.axis === "z") mesh.rotation.x = Math.PI / 2;
     scene.add(mesh);
@@ -142,6 +143,7 @@ export function addLevelThreeBreakerDoor(scene, position) {
   );
   sign.position.set(mount.x, 2.42, mount.z);
   sign.rotation.y = mount.rotation;
+  scene.add(sign);
 }
 
 export function addLevelThreeBlackSludgePipes(scene) {
@@ -160,10 +162,10 @@ export function addLevelThreeBlackSludgePipes(scene) {
     metalness: 0.5,
   });
   const pipes = [
-    { col: 22, row: 12, axis: "z", length: CELL_SIZE * 6, radius: 0.18, y: 2.5 },
-    { col: 4, row: 5, axis: "x", length: CELL_SIZE * 9, radius: 0.14, y: 2.55, offsetZ: -0.92 },
-    { col: 28, row: 14, axis: "z", length: CELL_SIZE * 6, radius: 0.16, y: 2.6, offsetX: 0.94 },
-    { col: 4, row: 20, axis: "x", length: CELL_SIZE * 12, radius: 0.15, y: 2.45, offsetZ: 0.88 },
+    { col: 22, row: 11, axis: "z", length: CELL_SIZE * 5, radius: 0.18, y: 2.5 },
+    { col: 14, row: 13, axis: "x", length: CELL_SIZE * 6, radius: 0.14, y: 2.55, offsetZ: -0.92 },
+    { col: 28, row: 13, axis: "z", length: CELL_SIZE * 4, radius: 0.16, y: 2.6, offsetX: 0.94 },
+    { col: 4, row: 19, axis: "x", length: CELL_SIZE * 11, radius: 0.15, y: 2.45, offsetZ: 0.88 },
   ];
   pipes.forEach((pipe) => {
     const center = levelThreeCellCenter(pipe.col, pipe.row);
@@ -193,6 +195,10 @@ export function addLevelThreeBlackSludgePipes(scene) {
   });
 }
 
+// Renders the indestructible bars at LEVEL_THREE_BAR_POSITIONS. Each bar
+// is a small gate of 5 vertical metal rods welded between two horizontal
+// beams — visually heavy, clearly impassable, and the only way through
+// is to find another route.
 export function addLevelThreeIndestructibleBars(scene) {
   const barMaterial = new THREE.MeshStandardMaterial({
     color: 0x0a0908,
@@ -208,43 +214,36 @@ export function addLevelThreeIndestructibleBars(scene) {
     roughness: 0.5,
     metalness: 0.6,
   });
-  const gateCells = [
-    { col: 6, row: 9 },
-    { col: 18, row: 9 },
-    { col: 28, row: 12 },
-    { col: 10, row: 18 },
-    { col: 26, row: 18 },
-  ];
-  gateCells.forEach(({ col, row }) => {
+
+  LEVEL_THREE_BAR_POSITIONS.forEach(({ col, row }) => {
     const center = levelThreeCellCenter(col, row);
-    const mount = getLevelThreeTargetMount(center);
-    const barCount = 6;
-    const spacing = CELL_SIZE * 0.16;
+    const barCount = 5;
+    const spacing = CELL_SIZE * 0.18;
     const totalWidth = (barCount - 1) * spacing;
+
     const group = new THREE.Group();
     for (let i = 0; i < barCount; i += 1) {
       const bar = new THREE.Mesh(
-        new THREE.BoxGeometry(0.04, 2.0, 0.04),
+        new THREE.BoxGeometry(0.05, 2.6, 0.05),
         barMaterial,
       );
-      bar.position.set(-totalWidth / 2 + i * spacing, 1.0, 0);
+      bar.position.set(-totalWidth / 2 + i * spacing, 1.3, 0);
       group.add(bar);
     }
-    const beam = new THREE.Mesh(
-      new THREE.BoxGeometry(totalWidth + 0.18, 0.08, 0.08),
+    const topBeam = new THREE.Mesh(
+      new THREE.BoxGeometry(totalWidth + 0.2, 0.1, 0.1),
       frameMaterial,
     );
-    beam.position.set(0, 2.06, 0);
-    group.add(beam);
-    const bottom = new THREE.Mesh(
-      new THREE.BoxGeometry(totalWidth + 0.18, 0.05, 0.05),
+    topBeam.position.set(0, 2.62, 0);
+    group.add(topBeam);
+    const bottomBeam = new THREE.Mesh(
+      new THREE.BoxGeometry(totalWidth + 0.2, 0.08, 0.08),
       frameMaterial,
     );
-    bottom.position.set(0, 0.04, 0);
-    group.add(bottom);
-    group.position.set(mount.x, 0, mount.z);
-    group.rotation.y = mount.rotation;
+    bottomBeam.position.set(0, 0.06, 0);
+    group.add(bottomBeam);
     scene.add(group);
+    group.position.set(center.x, 0, center.z);
   });
 }
 
@@ -266,7 +265,9 @@ export function addLevelThreeSanctumStatue(scene) {
   const glyphMaterial = new THREE.MeshBasicMaterial({
     color: 0x080606,
   });
-  const center = levelThreeCellCenter(18, 15);
+  // Sanctum is rows 5-10 cols 19-24. Centre cell (21, 7) gives the statue
+  // room to be visible from any of the four cardinal entry cells.
+  const center = levelThreeCellCenter(21, 7);
   const group = new THREE.Group();
   const pedestal = new THREE.Mesh(
     new THREE.BoxGeometry(0.8, 0.4, 0.8),
@@ -312,7 +313,7 @@ export function addLevelThreeSanctumStatue(scene) {
   });
   group.position.set(center.x, 0, center.z);
   scene.add(group);
-  const halo = new THREE.PointLight(0xffd68a, 0.42, 3.5, 2);
+  const halo = new THREE.PointLight(0xffd68a, 0.6, 3.8, 2);
   halo.position.set(center.x, 1.7, center.z);
   scene.add(halo);
   return [{
@@ -332,12 +333,13 @@ export function addLevelThreeNotebookPapers(scene) {
     metalness: 0,
     side: THREE.DoubleSide,
   });
+  // Repositioned to the new room walls.
   const wallPapers = [
-    { col: 4, row: 5 },
-    { col: 14, row: 8 },
-    { col: 21, row: 10 },
-    { col: 7, row: 15 },
-    { col: 30, row: 18 },
+    { col: 5, row: 5 },
+    { col: 9, row: 8 },
+    { col: 20, row: 5 },
+    { col: 23, row: 9 },
+    { col: 14, row: 17 },
   ];
   wallPapers.forEach(({ col, row }) => {
     const center = levelThreeCellCenter(col, row);
@@ -350,7 +352,8 @@ export function addLevelThreeNotebookPapers(scene) {
     paper.rotation.y = mount.rotation;
     scene.add(paper);
   });
-  const floorCenter = levelThreeCellCenter(12, 12);
+  // 1 paper on the Assembly Line floor.
+  const floorCenter = levelThreeCellCenter(9, 16);
   const floorPaper = new THREE.Mesh(
     new THREE.PlaneGeometry(0.18, 0.24),
     paperMaterial,
@@ -382,7 +385,9 @@ export function addLevelThreeMural(scene) {
     color: 0x0a0805,
     side: THREE.DoubleSide,
   });
-  const center = levelThreeCellCenter(22, 15);
+  // Mural on the Sanctum west wall (col 19 row 8 — gets mounted against
+  // the west wall via getLevelThreeTargetMount).
+  const center = levelThreeCellCenter(19, 8);
   const mount = getLevelThreeTargetMount(center);
   const canvas = new THREE.Mesh(
     new THREE.PlaneGeometry(2.0, 1.2),
@@ -429,9 +434,10 @@ export function addLevelThreePurpificationSpots(scene) {
     metalness: 0.1,
     side: THREE.DoubleSide,
   });
+  // 1 in Generator Room, 1 near Boiler Room.
   const spots = [
-    { col: 14, row: 18 },
-    { col: 30, row: 12 },
+    { col: 8, row: 9 },
+    { col: 32, row: 18 },
   ];
   spots.forEach(({ col, row }) => {
     const center = levelThreeCellCenter(col, row);
@@ -456,3 +462,187 @@ export function addLevelThreePurpificationSpots(scene) {
   });
 }
 
+// New prop: Assembly Line equipment. The wiki says these rooms have
+// "conveyer belts that produce all objects that are multiple and not
+// confined to a specific level" — we render two static conveyor belts
+// plus a handful of scattered cardboard boxes to evoke that factory feel.
+export function addLevelThreeAssemblyLineEquipment(scene) {
+  const beltMaterial = new THREE.MeshStandardMaterial({
+    color: 0x1a1815,
+    emissive: 0x050403,
+    emissiveIntensity: 0.1,
+    roughness: 0.78,
+    metalness: 0.42,
+  });
+  const rollerMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2a2520,
+    emissive: 0x080604,
+    emissiveIntensity: 0.1,
+    roughness: 0.6,
+    metalness: 0.5,
+  });
+  const boxMaterial = new THREE.MeshStandardMaterial({
+    color: 0x6a4f30,
+    emissive: 0x1a0e04,
+    emissiveIntensity: 0.1,
+    roughness: 0.88,
+    metalness: 0.06,
+  });
+  const labelMaterial = new THREE.MeshStandardMaterial({
+    color: 0xc8b890,
+    emissive: 0x4a3a1c,
+    emissiveIntensity: 0.18,
+    roughness: 0.78,
+    side: THREE.DoubleSide,
+  });
+
+  const beltCenterY = 0.55;
+  const belts = [
+    { col: 5, row: 14, length: CELL_SIZE * 6, axis: "x" },
+    { col: 5, row: 17, length: CELL_SIZE * 6, axis: "x" },
+  ];
+  belts.forEach((belt) => {
+    const center = levelThreeCellCenter(belt.col, belt.row);
+    const beltMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(belt.length, 0.08, 0.7),
+      beltMaterial,
+    );
+    beltMesh.position.set(center.x, beltCenterY, center.z);
+    scene.add(beltMesh);
+
+    const rollerPositions = [-1, 1];
+    rollerPositions.forEach((sign) => {
+      const roller = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.12, 0.74, 10),
+        rollerMaterial,
+      );
+      roller.position.set(center.x + sign * belt.length / 2, beltCenterY, center.z);
+      roller.rotation.x = Math.PI / 2;
+      scene.add(roller);
+    });
+
+    const label = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.2, 0.32),
+      new THREE.MeshStandardMaterial({
+        map: createWideSignTexture("ASSEMBLY", "#1a1408", "#ffd68a"),
+        emissive: 0x4a2504,
+        emissiveIntensity: 0.28,
+        roughness: 0.6,
+        side: THREE.DoubleSide,
+      }),
+    );
+    label.position.set(center.x, beltCenterY + 0.05, center.z + 0.36);
+    scene.add(label);
+  });
+
+  // 5 scattered boxes (no collision — purely decorative)
+  const boxes = [
+    { col: 8, row: 13, w: 0.55, h: 0.4, d: 0.5, x: 0.3, z: 0.2, rot: 0.4 },
+    { col: 11, row: 15, w: 0.7, h: 0.45, d: 0.6, x: -0.4, z: 0.35, rot: -0.3 },
+    { col: 14, row: 14, w: 0.5, h: 0.35, d: 0.55, x: 0.45, z: -0.25, rot: 0.15 },
+    { col: 6, row: 18, w: 0.6, h: 0.5, d: 0.5, x: -0.35, z: 0.3, rot: -0.2 },
+    { col: 13, row: 18, w: 0.45, h: 0.3, d: 0.45, x: 0.2, z: -0.4, rot: 0.5 },
+  ];
+  boxes.forEach((box) => {
+    const center = levelThreeCellCenter(box.col, box.row);
+    const boxMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(box.w, box.h, box.d),
+      boxMaterial,
+    );
+    boxMesh.position.set(center.x + box.x, box.h / 2, center.z + box.z);
+    boxMesh.rotation.y = box.rot;
+    scene.add(boxMesh);
+  });
+
+  // 2 almond-water style bottles (using box, simple visual)
+  const bottles = [
+    { col: 7, row: 16, x: 0.3, z: -0.4 },
+    { col: 12, row: 17, x: -0.4, z: 0.3 },
+  ];
+  bottles.forEach((bottle) => {
+    const center = levelThreeCellCenter(bottle.col, bottle.row);
+    const bottleMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.28, 0.1),
+      labelMaterial,
+    );
+    bottleMesh.position.set(center.x + bottle.x, 0.14, center.z + bottle.z);
+    bottleMesh.rotation.y = Math.random() * Math.PI;
+    scene.add(bottleMesh);
+  });
+}
+
+// New prop: Boiler Room pipes. Wiki says boiler rooms are "the source
+// of the mysterious black liquid in the pipes" — render a thick vertical
+// boiler drum plus a couple of large horizontal pipes so the room reads
+// as "boiler".
+export function addLevelThreeBoilerRoomPipe(scene) {
+  const drumMaterial = new THREE.MeshStandardMaterial({
+    color: 0x18181a,
+    emissive: 0x1c1430,
+    emissiveIntensity: 0.32,
+    roughness: 0.55,
+    metalness: 0.5,
+  });
+  const pipeMaterial = new THREE.MeshStandardMaterial({
+    color: 0x0e0d10,
+    emissive: 0x18052a,
+    emissiveIntensity: 0.4,
+    roughness: 0.5,
+    metalness: 0.55,
+  });
+  const valveMaterial = new THREE.MeshStandardMaterial({
+    color: 0x6b3520,
+    emissive: 0x1a0703,
+    emissiveIntensity: 0.18,
+    roughness: 0.62,
+    metalness: 0.32,
+  });
+
+  // Boiler drum in the NE corner of the Boiler Room.
+  const drumCenter = levelThreeCellCenter(32, 18);
+  const drum = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.55, 0.55, 1.4, 14),
+    drumMaterial,
+  );
+  drum.position.set(drumCenter.x, 0.7, drumCenter.z);
+  scene.add(drum);
+  const drumCap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.42, 0.55, 0.18, 14),
+    drumMaterial,
+  );
+  drumCap.position.set(drumCenter.x, 1.49, drumCenter.z);
+  scene.add(drumCap);
+
+  // 2 large horizontal pipes running across the room.
+  const pipes = [
+    { col: 28, row: 17, axis: "x", length: CELL_SIZE * 6, radius: 0.22, y: 2.45, offsetZ: 0.95 },
+    { col: 28, row: 19, axis: "x", length: CELL_SIZE * 6, radius: 0.18, y: 2.3, offsetZ: -0.88 },
+  ];
+  pipes.forEach((pipe) => {
+    const center = levelThreeCellCenter(pipe.col, pipe.row);
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(pipe.radius, pipe.radius, pipe.length, 14),
+      pipeMaterial,
+    );
+    mesh.position.set(center.x, pipe.y, center.z + pipe.offsetZ);
+    mesh.rotation.z = Math.PI / 2;
+    scene.add(mesh);
+    [-1, 1].forEach((sign) => {
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(pipe.radius * 1.25, 12, 8),
+        pipeMaterial,
+      );
+      cap.position.set(center.x + sign * pipe.length / 2, pipe.y, center.z + pipe.offsetZ);
+      scene.add(cap);
+    });
+  });
+
+  // 1 valve wheel on the drum.
+  const valve = new THREE.Mesh(
+    new THREE.TorusGeometry(0.18, 0.024, 8, 20),
+    valveMaterial,
+  );
+  valve.position.set(drumCenter.x - 0.62, 0.8, drumCenter.z);
+  valve.rotation.y = Math.PI / 2;
+  scene.add(valve);
+}

@@ -23,6 +23,7 @@ import {
   LEVEL_THREE_ORIGIN_X,
   LEVEL_THREE_ORIGIN_Z,
   LEVEL_THREE_DARK_ZONES,
+  LEVEL_THREE_BAR_POSITIONS,
   isLevelThreeOpenCell,
   levelThreeCellCenter,
   levelThreeWorldToCell,
@@ -40,6 +41,8 @@ import {
   addLevelThreeNotebookPapers,
   addLevelThreeMural,
   addLevelThreePurpificationSpots,
+  addLevelThreeAssemblyLineEquipment,
+  addLevelThreeBoilerRoomPipe,
 } from "./props.js";
 import { snapEntityStates } from "../common/snap.js";
 import {
@@ -103,6 +106,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     startCell: LEVEL_THREE_START_CELL,
     targetCell: LEVEL_THREE_TARGET_CELL,
     minFixtureDistance: LEVEL_THREE_MIN_FIXTURE_DISTANCE,
+    isBarCell: (col, row) => LEVEL_THREE_BAR_POSITIONS.some((b) => b.col === col && b.row === row),
   });
   fixturePositions.forEach((fixture, index) => {
     fixture.color = index % 5 === 0 ? 0xff4d36 : 0xffd68a;
@@ -166,7 +170,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     dimDelay: 0.45,
     normalDelay: 0.8,
   });
-  addLevelThreeBreakerDoor(scene, targetPosition);
+addLevelThreeBreakerDoor(scene, targetPosition);
   addLayoutDarkPockets(scene, {
     darkZones: LEVEL_THREE_DARK_ZONES,
     originX: LEVEL_THREE_ORIGIN_X,
@@ -176,6 +180,8 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   propColliders = propColliders.concat(addLevelThreeSanctumStatue(scene));
   addLevelThreeBlackSludgePipes(scene);
   addLevelThreeIndestructibleBars(scene);
+  addLevelThreeAssemblyLineEquipment(scene);
+  addLevelThreeBoilerRoomPipe(scene);
   addLevelThreeNotebookPapers(scene);
   addLevelThreeMural(scene);
   addLevelThreePurpificationSpots(scene);
@@ -231,7 +237,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     }),
     createInteractionSpot({
       id: "level-three-generator",
-      position: levelThreeCellCenter(14, 12),
+      position: levelThreeCellCenter(7, 8),
       inspectHeight: 0.78,
       inspectRadius: 0.9,
       responseKey: "levelThreeGeneratorResponse",
@@ -254,6 +260,11 @@ export function createLevelThreeScene({ initialState = null } = {}) {
       speed: 1.48,
       id: "super-bacteria",
       initialState: savedBacteriaStates[index] ?? null,
+      cols: LEVEL_THREE_COLS,
+      rows: LEVEL_THREE_ROWS,
+      isCellOpen: isLevelThreeOpenCell,
+      worldToCell: levelThreeWorldToCell,
+      cellCenter: levelThreeCellCenter,
     }),
   );
   const hound = createHoundEntity(scene, {
@@ -271,6 +282,11 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     isWalkable,
     speed: 2.22,
     initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
+    cols: LEVEL_THREE_COLS,
+    rows: LEVEL_THREE_ROWS,
+    isCellOpen: isLevelThreeOpenCell,
+    worldToCell: levelThreeWorldToCell,
+    cellCenter: levelThreeCellCenter,
   });
   const ambushPosition = isLevelThreeOpenCell(24, 7)
     ? levelThreeCellCenter(24, 7)

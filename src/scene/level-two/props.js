@@ -47,9 +47,11 @@ export function collectLevelTransforms({
   startCell,
   targetCell,
   minFixtureDistance,
+  isBarCell = () => false,
 }) {
   const northSouth = [];
   const eastWest = [];
+  const barWalls = [];
   const fixtureCandidates = [];
 
   for (let row = 0; row < rows; row += 1) {
@@ -59,16 +61,24 @@ export function collectLevelTransforms({
       const center = getCellCenter(col, row);
       const isDarkPocket = isInAnyZone(col, row, darkZones);
       if (!isCellOpen(col, row - 1)) {
-        northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2));
+        const position = new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2);
+        if (isBarCell(col, row - 1)) barWalls.push(position);
+        else northSouth.push(position);
       }
       if (!isCellOpen(col, row + 1)) {
-        northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2));
+        const position = new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2);
+        if (isBarCell(col, row + 1)) barWalls.push(position);
+        else northSouth.push(position);
       }
       if (!isCellOpen(col - 1, row)) {
-        eastWest.push(new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+        const position = new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z);
+        if (isBarCell(col - 1, row)) barWalls.push(position);
+        else eastWest.push(position);
       }
       if (!isCellOpen(col + 1, row)) {
-        eastWest.push(new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+        const position = new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z);
+        if (isBarCell(col + 1, row)) barWalls.push(position);
+        else eastWest.push(position);
       }
 
       const neighbors = countOpenNeighbors(col, row);
@@ -110,7 +120,7 @@ export function collectLevelTransforms({
       if (!tooClose) fixturePositions.push(candidate);
     });
 
-  return { northSouth, eastWest, fixturePositions };
+  return { northSouth, eastWest, barWalls, fixturePositions };
 }
 
 export function createLevelTwoLights(scene, fixturePositions) {
