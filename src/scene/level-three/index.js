@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -13,16 +13,23 @@ import {
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import {
-  LEVEL_TWO_COLS,
-  LEVEL_TWO_ROWS,
-  LEVEL_TWO_EXIT_TRIGGER_RADIUS,
-  LEVEL_TWO_START_CELL,
-  LEVEL_TWO_TARGET_CELL,
-  isLevelTwoOpenCell,
-  levelTwoCellCenter,
-  levelTwoWorldToCell,
-} from "../level-two/layout.js";
-import { collectLevelTwoTransforms, createLevelTwoLights, addLevelTwoDarkPockets } from "../level-two/props.js";
+  LEVEL_THREE_COLS,
+  LEVEL_THREE_ROWS,
+  LEVEL_THREE_EXIT_TRIGGER_RADIUS,
+  LEVEL_THREE_START_CELL,
+  LEVEL_THREE_TARGET_CELL,
+  LEVEL_THREE_MAX_POINT_LIGHTS,
+  LEVEL_THREE_MIN_FIXTURE_DISTANCE,
+  LEVEL_THREE_ORIGIN_X,
+  LEVEL_THREE_ORIGIN_Z,
+  LEVEL_THREE_DARK_ZONES,
+  isLevelThreeOpenCell,
+  levelThreeCellCenter,
+  levelThreeWorldToCell,
+  countLevelThreeOpenNeighbors,
+  getLevelThreeTargetMount,
+} from "./layout.js";
+import { collectLevelTransforms, createLayoutLights, addLayoutDarkPockets } from "../level-two/props.js";
 import { createLevelThreeFloorTexture, createLevelThreeCeilingTexture, createLevelThreeBrickTexture } from "./textures.js";
 import { addLevelThreeElectricalDetails, addLevelThreeBreakerDoor } from "./props.js";
 import {
@@ -54,8 +61,8 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   scene.fog = new THREE.FogExp2(FOG_COLOR, 0.017);
 
   const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 78);
-  const spawnCell = levelTwoCellCenter(3, 3);
-  const targetPosition = levelTwoCellCenter(36, 20);
+  const spawnCell = levelThreeCellCenter(3, 3);
+  const targetPosition = levelThreeCellCenter(36, 20);
   const spawn = {
     x: spawnCell.x,
     z: spawnCell.z,
@@ -73,7 +80,17 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const entityInitial = Array.isArray(initialState?.entities) ? initialState.entities : [];
   const savedBacteriaStates = entityInitial.filter((entity) => entity.type === "bacteria");
 
-  const { northSouth, eastWest, fixturePositions } = collectLevelTwoTransforms();
+  const { northSouth, eastWest, fixturePositions } = collectLevelTransforms({
+    cols: LEVEL_THREE_COLS,
+    rows: LEVEL_THREE_ROWS,
+    isCellOpen: isLevelThreeOpenCell,
+    getCellCenter: levelThreeCellCenter,
+    countOpenNeighbors: countLevelThreeOpenNeighbors,
+    darkZones: LEVEL_THREE_DARK_ZONES,
+    startCell: LEVEL_THREE_START_CELL,
+    targetCell: LEVEL_THREE_TARGET_CELL,
+    minFixtureDistance: LEVEL_THREE_MIN_FIXTURE_DISTANCE,
+  });
   fixturePositions.forEach((fixture, index) => {
     fixture.color = index % 5 === 0 ? 0xff4d36 : 0xffd68a;
     fixture.baseIntensity *= index % 4 === 0 ? 0.72 : 0.92;
@@ -81,7 +98,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   });
 
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(LEVEL_TWO_COLS * CELL_SIZE, LEVEL_TWO_ROWS * CELL_SIZE),
+    new THREE.PlaneGeometry(LEVEL_THREE_COLS * CELL_SIZE, LEVEL_THREE_ROWS * CELL_SIZE),
     new THREE.MeshStandardMaterial({
       map: createLevelThreeFloorTexture(),
       color: 0xffffff,
@@ -93,7 +110,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   scene.add(floor);
 
   const ceiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(LEVEL_TWO_COLS * CELL_SIZE, LEVEL_TWO_ROWS * CELL_SIZE),
+    new THREE.PlaneGeometry(LEVEL_THREE_COLS * CELL_SIZE, LEVEL_THREE_ROWS * CELL_SIZE),
     new THREE.MeshStandardMaterial({
       map: createLevelThreeCeilingTexture(),
       color: 0xffffff,
@@ -127,7 +144,9 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   fill.position.set(-8, CEILING_Y - 0.4, 12);
   scene.add(fill);
 
-  const fixtures = createLevelTwoLights(scene, fixturePositions);
+  const fixtures = createLayoutLights(scene, fixturePositions, {
+    maxPointLights: LEVEL_THREE_MAX_POINT_LIGHTS,
+  });
   const updateLightState = createStableLightState("VOLT", {
     dimBelow: 0.32,
     normalAbove: 0.5,
@@ -135,22 +154,26 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     normalDelay: 0.8,
   });
   addLevelThreeBreakerDoor(scene, targetPosition);
-  addLevelTwoDarkPockets(scene);
+  addLayoutDarkPockets(scene, {
+    darkZones: LEVEL_THREE_DARK_ZONES,
+    originX: LEVEL_THREE_ORIGIN_X,
+    originZ: LEVEL_THREE_ORIGIN_Z,
+  });
   const propColliders = addLevelThreeElectricalDetails(scene);
   const almondWater = createAlmondWaterPickup(scene, {
-    cols: LEVEL_TWO_COLS,
-    rows: LEVEL_TWO_ROWS,
-    isCellOpen: isLevelTwoOpenCell,
-    getCellCenter: levelTwoCellCenter,
+    cols: LEVEL_THREE_COLS,
+    rows: LEVEL_THREE_ROWS,
+    isCellOpen: isLevelThreeOpenCell,
+    getCellCenter: levelThreeCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial["almond-water"] ?? null,
   });
   const superAlmondWater = createAlmondWaterPickup(scene, {
-    cols: LEVEL_TWO_COLS,
-    rows: LEVEL_TWO_ROWS,
-    isCellOpen: isLevelTwoOpenCell,
-    getCellCenter: levelTwoCellCenter,
+    cols: LEVEL_THREE_COLS,
+    rows: LEVEL_THREE_ROWS,
+    isCellOpen: isLevelThreeOpenCell,
+    getCellCenter: levelThreeCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     variant: "super",
@@ -161,19 +184,19 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     initialState: pickupInitial["super-almond-water"] ?? null,
   });
   const flashlight = createFlashlightPickup(scene, {
-    cols: LEVEL_TWO_COLS,
-    rows: LEVEL_TWO_ROWS,
-    isCellOpen: isLevelTwoOpenCell,
-    getCellCenter: levelTwoCellCenter,
+    cols: LEVEL_THREE_COLS,
+    rows: LEVEL_THREE_ROWS,
+    isCellOpen: isLevelThreeOpenCell,
+    getCellCenter: levelThreeCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial.flashlight ?? null,
   });
   const detector = createDetectorPickup(scene, {
-    cols: LEVEL_TWO_COLS,
-    rows: LEVEL_TWO_ROWS,
-    isCellOpen: isLevelTwoOpenCell,
-    getCellCenter: levelTwoCellCenter,
+    cols: LEVEL_THREE_COLS,
+    rows: LEVEL_THREE_ROWS,
+    isCellOpen: isLevelThreeOpenCell,
+    getCellCenter: levelThreeCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial.detector ?? null,
@@ -189,7 +212,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     }),
     createInteractionSpot({
       id: "level-three-generator",
-      position: levelTwoCellCenter(14, 12),
+      position: levelThreeCellCenter(14, 12),
       inspectHeight: 0.78,
       inspectRadius: 0.9,
       responseKey: "levelThreeGeneratorResponse",
@@ -197,10 +220,10 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     }),
   ];
   const bacteriaSpawns = pickBacteriaSpawnPositions({
-    cols: LEVEL_TWO_COLS,
-    rows: LEVEL_TWO_ROWS,
-    isCellOpen: isLevelTwoOpenCell,
-    getCellCenter: levelTwoCellCenter,
+    cols: LEVEL_THREE_COLS,
+    rows: LEVEL_THREE_ROWS,
+    isCellOpen: isLevelThreeOpenCell,
+    getCellCenter: levelThreeCellCenter,
     targetPosition,
     spawnPosition: spawnCell,
     count: 2,
@@ -217,10 +240,10 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const hound = createHoundEntity(scene, {
     spawnPosition:
       chooseBacteriaSpawn({
-        cols: LEVEL_TWO_COLS,
-        rows: LEVEL_TWO_ROWS,
-        isCellOpen: isLevelTwoOpenCell,
-        getCellCenter: levelTwoCellCenter,
+        cols: LEVEL_THREE_COLS,
+        rows: LEVEL_THREE_ROWS,
+        isCellOpen: isLevelThreeOpenCell,
+        getCellCenter: levelThreeCellCenter,
         targetPosition,
         spawnPosition: spawnCell,
         avoidPositions: bacteriaSpawns,
@@ -247,8 +270,8 @@ export function createLevelThreeScene({ initialState = null } = {}) {
       [-corner, -corner],
     ];
     const isInOpenCells = samples.every(([offsetX, offsetZ]) => {
-      const cell = levelTwoWorldToCell(x + offsetX, z + offsetZ);
-      return isLevelTwoOpenCell(cell.col, cell.row);
+      const cell = levelThreeWorldToCell(x + offsetX, z + offsetZ);
+      return isLevelThreeOpenCell(cell.col, cell.row);
     });
     if (!isInOpenCells) return false;
     return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
@@ -271,7 +294,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
       playerPosition.x - targetPosition.x,
       playerPosition.z - targetPosition.z,
     );
-    if (exitDistance < LEVEL_TWO_EXIT_TRIGGER_RADIUS) objectiveReached = true;
+    if (exitDistance < LEVEL_THREE_EXIT_TRIGGER_RADIUS) objectiveReached = true;
     scene.fog.density = 0.017 + (1 - flicker) * 0.012;
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);

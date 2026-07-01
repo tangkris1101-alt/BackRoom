@@ -24,36 +24,62 @@ isLevelTwoOpenCell,
 } from "./layout.js";
 
 export function collectLevelTwoTransforms() {
+  return collectLevelTransforms({
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    getCellCenter: levelTwoCellCenter,
+    countOpenNeighbors: countLevelTwoOpenNeighbors,
+    darkZones: LEVEL_TWO_DARK_ZONES,
+    startCell: LEVEL_TWO_START_CELL,
+    targetCell: LEVEL_TWO_TARGET_CELL,
+    minFixtureDistance: LEVEL_TWO_MIN_FIXTURE_DISTANCE,
+  });
+}
+
+export function collectLevelTransforms({
+  cols,
+  rows,
+  isCellOpen,
+  getCellCenter,
+  countOpenNeighbors,
+  darkZones,
+  startCell,
+  targetCell,
+  minFixtureDistance,
+}) {
   const northSouth = [];
   const eastWest = [];
   const fixtureCandidates = [];
 
-  for (let row = 0; row < LEVEL_TWO_ROWS; row += 1) {
-    for (let col = 0; col < LEVEL_TWO_COLS; col += 1) {
-      if (!isLevelTwoOpenCell(col, row)) continue;
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      if (!isCellOpen(col, row)) continue;
 
-      const center = levelTwoCellCenter(col, row);
-      const isDarkPocket = isInAnyZone(col, row, LEVEL_TWO_DARK_ZONES);
-      if (!isLevelTwoOpenCell(col, row - 1)) {
+      const center = getCellCenter(col, row);
+      const isDarkPocket = isInAnyZone(col, row, darkZones);
+      if (!isCellOpen(col, row - 1)) {
         northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2));
       }
-      if (!isLevelTwoOpenCell(col, row + 1)) {
+      if (!isCellOpen(col, row + 1)) {
         northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2));
       }
-      if (!isLevelTwoOpenCell(col - 1, row)) {
+      if (!isCellOpen(col - 1, row)) {
         eastWest.push(new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
       }
-      if (!isLevelTwoOpenCell(col + 1, row)) {
+      if (!isCellOpen(col + 1, row)) {
         eastWest.push(new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
       }
 
-      const neighbors = countLevelTwoOpenNeighbors(col, row);
-      const eastWestOpen = isLevelTwoOpenCell(col - 1, row) || isLevelTwoOpenCell(col + 1, row);
+      const neighbors = countOpenNeighbors(col, row);
+      const eastWestOpen = isCellOpen(col - 1, row) || isCellOpen(col + 1, row);
       const isCorridor = neighbors <= 2;
       const fixtureGrid = (col * 11 + row * 7) % 17 === 0;
-      const isCriticalFixture = (col === 3 && row === 3) || (col === 36 && row === 20);
+      const isStart = col === startCell.col && row === startCell.row;
+      const isTarget = col === targetCell.col && row === targetCell.row;
+      const isCriticalFixture = isStart || isTarget;
       if (isDarkPocket && !isCriticalFixture) continue;
-      if ((isCorridor && fixtureGrid) || (col === 3 && row === 3) || (col === 36 && row === 20)) {
+      if ((isCorridor && fixtureGrid) || isCriticalFixture) {
         fixtureCandidates.push({
           x: center.x,
           z: center.z,
@@ -61,12 +87,12 @@ export function collectLevelTwoTransforms() {
           phase: col * 0.57 + row * 1.17,
           speed: 3.8 + ((col + row) % 5) * 0.62,
           weak: 0.2 + ((col + row) % 3) * 0.04,
-          range: col === 3 || col === 36 ? 12.6 : 9.6,
-          baseIntensity: col === 3 || col === 36 ? 1.36 : 0.95,
+          range: isStart || isTarget ? 12.6 : 9.6,
+          baseIntensity: isStart || isTarget ? 1.36 : 0.95,
           panelWidth: 1.35 + ((col + row) % 2) * 0.38,
           color: (col + row) % 4 === 0 ? 0xff7a3d : 0xffb05c,
           hasPointLight: true,
-          priority: col === 3 || col === 36 ? 8 : isCorridor ? 3 : 1,
+          priority: isStart || isTarget ? 8 : isCorridor ? 3 : 1,
         });
       }
     }
@@ -79,7 +105,7 @@ export function collectLevelTwoTransforms() {
       const tooClose = fixturePositions.some(
         (fixture) =>
           Math.hypot(fixture.x - candidate.x, fixture.z - candidate.z) <
-          LEVEL_TWO_MIN_FIXTURE_DISTANCE,
+          minFixtureDistance,
       );
       if (!tooClose) fixturePositions.push(candidate);
     });
@@ -88,12 +114,18 @@ export function collectLevelTwoTransforms() {
 }
 
 export function createLevelTwoLights(scene, fixturePositions) {
+  return createLayoutLights(scene, fixturePositions, {
+    maxPointLights: LEVEL_TWO_MAX_POINT_LIGHTS,
+  });
+}
+
+export function createLayoutLights(scene, fixturePositions, { maxPointLights }) {
   const fixtures = [];
   const pointLightIndexes = new Set(
     fixturePositions
       .map((fixture, index) => ({ index, priority: fixture.priority }))
       .sort((a, b) => b.priority - a.priority)
-      .slice(0, LEVEL_TWO_MAX_POINT_LIGHTS)
+      .slice(0, maxPointLights)
       .map(({ index }) => index),
   );
   const panelGeometry = new THREE.BoxGeometry(1, 0.045, 0.34);
@@ -350,6 +382,14 @@ export function addLevelTwoFloorHeat(scene) {
 }
 
 export function addLevelTwoDarkPockets(scene) {
+  return addLayoutDarkPockets(scene, {
+    darkZones: LEVEL_TWO_DARK_ZONES,
+    originX: LEVEL_TWO_ORIGIN_X,
+    originZ: LEVEL_TWO_ORIGIN_Z,
+  });
+}
+
+export function addLayoutDarkPockets(scene, { darkZones, originX, originZ }) {
   const floorMaterial = new THREE.MeshBasicMaterial({
     color: 0x050403,
     transparent: true,
@@ -365,11 +405,11 @@ export function addLevelTwoDarkPockets(scene) {
     side: THREE.DoubleSide,
   });
 
-  LEVEL_TWO_DARK_ZONES.forEach((zone) => {
+  darkZones.forEach((zone) => {
     const width = zone.width * CELL_SIZE;
     const height = zone.height * CELL_SIZE;
-    const x = LEVEL_TWO_ORIGIN_X + zone.col * CELL_SIZE + width / 2;
-    const z = LEVEL_TWO_ORIGIN_Z + zone.row * CELL_SIZE + height / 2;
+    const x = originX + zone.col * CELL_SIZE + width / 2;
+    const z = originZ + zone.row * CELL_SIZE + height / 2;
 
     const floorShade = new THREE.Mesh(new THREE.PlaneGeometry(width, height), floorMaterial);
     floorShade.rotation.x = -Math.PI / 2;

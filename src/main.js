@@ -58,9 +58,9 @@ const pauseOverlay = document.querySelector("#pause-overlay");
 const pauseTitle = document.querySelector("#pause-title");
 const pauseSubtitle = document.querySelector("#pause-subtitle");
 const pauseResumeArea = document.querySelector("#pause-resume-area");
-const pauseSaveButton = document.querySelector("#pause-save");
-const pauseSaveLabel = document.querySelector("#pause-save-label");
-const pauseSaveHint = document.querySelector("#pause-save-hint");
+const pauseTutorialButton = document.querySelector("#pause-tutorial");
+const pauseTutorialLabel = document.querySelector("#pause-tutorial-label");
+const pauseTutorialHint = document.querySelector("#pause-tutorial-hint");
 const pauseResetButton = document.querySelector("#pause-reset");
 const pauseResetLabel = document.querySelector("#pause-reset-label");
 const pauseResetHint = document.querySelector("#pause-reset-hint");
@@ -118,7 +118,7 @@ const WATER_LONG_PRESS_MS = 600;
 const SAVE_AUTOSAVE_INTERVAL_MS = 5000;
 const SAVE_DEBOUNCE_MS = 250;
 const PAUSE_RESET_ARM_TIMEOUT_MS = 3000;
-const PAUSE_SAVE_FLASH_MS = 1400;
+const PAUSE_TUTORIAL_RETURN_DELAY_MS = 220;
 
 const ITEM_TEXT = {
   "zh-CN": {
@@ -392,10 +392,8 @@ const STATUS_TEXT = {
     almondWaterCancelled: "饮用取消",
     pauseTitle: "已暂停",
     pauseSubtitle: "按 ESC 或点击继续",
-    pauseSaveLabel: "保存进度",
-    pauseSaveHint: "写入当前进度到本地存储",
-    pauseSaveSavedLabel: "已保存",
-    pauseSaveSavedHint: "✓ 进度已写入本地存储",
+    pauseTutorialLabel: "查看教程",
+    pauseTutorialHint: "重新阅读操作说明",
     pauseResetLabel: "重置进度",
     pauseResetHint: "清空所有存档并回到 L0",
     pauseResetArmedLabel: "再次按下以确认",
@@ -432,10 +430,8 @@ const STATUS_TEXT = {
     almondWaterCancelled: "DRINK CANCELLED",
     pauseTitle: "PAUSED",
     pauseSubtitle: "ESC / TAP TO RESUME",
-    pauseSaveLabel: "SAVE PROGRESS",
-    pauseSaveHint: "WRITE CURRENT RUN TO STORAGE",
-    pauseSaveSavedLabel: "SAVED",
-    pauseSaveSavedHint: "✓ RUN WRITTEN TO STORAGE",
+    pauseTutorialLabel: "VIEW TUTORIAL",
+    pauseTutorialHint: "RE-READ THE CONTROLS",
     pauseResetLabel: "RESET PROGRESS",
     pauseResetHint: "WIPE SAVE · RESTART AT L0",
     pauseResetArmedLabel: "TAP AGAIN TO CONFIRM",
@@ -666,7 +662,6 @@ let ePressActive = false;
 let ePressLongTriggered = false;
 let pauseResetArmed = false;
 let pauseResetArmedTimer = 0;
-let pauseSaveFlashTimer = 0;
 let isResettingProgress = false;
 
 try {
@@ -1551,7 +1546,12 @@ function setPauseState(next, { fromUnlock = false } = {}) {
     if (pauseResetHint && !pauseResetArmed) {
       pauseResetHint.textContent = formatLocalizedStatus("pauseResetHint");
     }
-    disarmPauseSaveFlash();
+    if (pauseTutorialLabel) {
+      pauseTutorialLabel.textContent = formatLocalizedStatus("pauseTutorialLabel");
+    }
+    if (pauseTutorialHint) {
+      pauseTutorialHint.textContent = formatLocalizedStatus("pauseTutorialHint");
+    }
     pauseAccumulatedDelta = clock.getDelta();
     if (document.pointerLockElement === canvas && document.exitPointerLock) {
       try {
@@ -1563,7 +1563,6 @@ function setPauseState(next, { fromUnlock = false } = {}) {
     ambientHum.suspend();
   } else {
     disarmPauseReset();
-    disarmPauseSaveFlash();
     clock.getDelta();
     ambientHum.resume();
   }
@@ -1592,36 +1591,10 @@ function armPauseReset() {
   }, PAUSE_RESET_ARM_TIMEOUT_MS);
 }
 
-function disarmPauseSaveFlash() {
-  if (pauseSaveFlashTimer) {
-    window.clearTimeout(pauseSaveFlashTimer);
-    pauseSaveFlashTimer = 0;
-  }
-  if (pauseSaveButton) pauseSaveButton.classList.remove("is-saved");
-  if (pauseSaveLabel) pauseSaveLabel.textContent = formatLocalizedStatus("pauseSaveLabel");
-  if (pauseSaveHint) pauseSaveHint.textContent = formatLocalizedStatus("pauseSaveHint");
-}
-
-function flashPauseSaveSuccess() {
-  if (pauseSaveButton) pauseSaveButton.classList.add("is-saved");
-  if (pauseSaveLabel) pauseSaveLabel.textContent = formatLocalizedStatus("pauseSaveSavedLabel");
-  if (pauseSaveHint) pauseSaveHint.textContent = formatLocalizedStatus("pauseSaveSavedHint");
-  if (pauseSaveFlashTimer) window.clearTimeout(pauseSaveFlashTimer);
-  pauseSaveFlashTimer = window.setTimeout(() => {
-    pauseSaveFlashTimer = 0;
-    disarmPauseSaveFlash();
-  }, PAUSE_SAVE_FLASH_MS);
-}
-
-function handlePauseSave() {
+function handlePauseTutorial() {
   if (!isPaused) return;
-  if (isResettingProgress) return;
-  if (!world || !controls || gameFailed) return;
   if (pauseResetArmed) disarmPauseReset();
-  const saved = writeSaveSnapshot();
-  if (saved) {
-    flashPauseSaveSuccess();
-  }
+  showTutorial();
 }
 
 function resetAllProgress() {
@@ -1633,10 +1606,6 @@ function resetAllProgress() {
   if (pauseResetArmedTimer) {
     window.clearTimeout(pauseResetArmedTimer);
     pauseResetArmedTimer = 0;
-  }
-  if (pauseSaveFlashTimer) {
-    window.clearTimeout(pauseSaveFlashTimer);
-    pauseSaveFlashTimer = 0;
   }
   try {
     window.localStorage?.removeItem("backrooms-save");
@@ -2305,10 +2274,10 @@ pauseOverlay?.addEventListener("pointerdown", (event) => {
     setPauseState(false);
   }
 });
-pauseSaveButton?.addEventListener("pointerdown", (event) => {
+pauseTutorialButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
-  handlePauseSave();
+  handlePauseTutorial();
 });
 pauseResetButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();

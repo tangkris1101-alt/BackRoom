@@ -1,10 +1,10 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import {
   CELL_SIZE,
   CEILING_Y,
 } from "../constants.js";
 import { createWideSignTexture } from "../common/textures.js";
-import { levelTwoCellCenter, getLevelTwoTargetMount } from "../level-two/layout.js";
+import { levelThreeCellCenter, getLevelThreeTargetMount } from "./layout.js";
 
 export function addLevelThreeElectricalDetails(scene) {
   const colliders = [];
@@ -38,8 +38,8 @@ export function addLevelThreeElectricalDetails(scene) {
     { col: 34, row: 19 },
   ];
   panels.forEach((location, index) => {
-    const center = levelTwoCellCenter(location.col, location.row);
-    const mount = getLevelTwoTargetMount(center);
+    const center = levelThreeCellCenter(location.col, location.row);
+    const mount = getLevelThreeTargetMount(center);
     const panel = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.18, 0.12), panelMaterial);
     panel.position.set(mount.x, 1.25, mount.z);
     panel.rotation.y = mount.rotation;
@@ -78,7 +78,7 @@ export function addLevelThreeElectricalDetails(scene) {
     { col: 8, row: 18, x: -0.2, z: 0.48, rot: 0.32 },
   ];
   generators.forEach((gen) => {
-    const center = levelTwoCellCenter(gen.col, gen.row);
+    const center = levelThreeCellCenter(gen.col, gen.row);
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.82, 0.78), panelMaterial);
     mesh.position.set(center.x + gen.x, 0.43, center.z + gen.z);
     mesh.rotation.y = gen.rot;
@@ -104,7 +104,7 @@ export function addLevelThreeElectricalDetails(scene) {
     { col: 30, row: 15, axis: "z", length: CELL_SIZE * 8, y: 2.62, offsetX: 1.05 },
   ];
   cables.forEach((cable) => {
-    const center = levelTwoCellCenter(cable.col, cable.row);
+    const center = levelThreeCellCenter(cable.col, cable.row);
     const mesh = new THREE.Mesh(cableGeometry, cableMaterial);
     mesh.scale.y = cable.length;
     mesh.position.set(center.x + (cable.offsetX ?? 0), cable.y, center.z + (cable.offsetZ ?? 0));
@@ -117,7 +117,7 @@ export function addLevelThreeElectricalDetails(scene) {
 }
 
 export function addLevelThreeBreakerDoor(scene, position) {
-  const mount = getLevelTwoTargetMount(position);
+  const mount = getLevelThreeTargetMount(position);
   const doorMaterial = new THREE.MeshStandardMaterial({
     color: 0x171b18,
     emissive: 0x06120d,

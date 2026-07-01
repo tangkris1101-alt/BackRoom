@@ -42,6 +42,7 @@ import {
   getFocusedInteraction,
   getFocusedItem,
   tryInteractWithSpots,
+  createInteractionSpot,
 } from "../entities/index.js";
 
 export function createLevelFourScene({ initialState = null } = {}) {
