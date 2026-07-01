@@ -1,4 +1,5 @@
-﻿import { makeTexture } from "./texture-utils.js";
+﻿import * as THREE from "three";
+import { makeTexture } from "./texture-utils.js";
 export function createWallpaperTexture() {
   return makeTexture(
     512,
