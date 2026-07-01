@@ -17,6 +17,10 @@ import {
   countOpenNeighbors,
   ORIGIN_X,
   ORIGIN_Z,
+  START_CELL,
+  EXIT_CELL,
+  COLS,
+  ROWS,
 } from "./layout.js";
 
 export const BRIGHT_ZONES = [

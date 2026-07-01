@@ -24,6 +24,8 @@ import {
   START_CELL,
   EXIT_CELL,
   EXIT_TRIGGER_RADIUS,
+  COLS,
+  ROWS,
 } from "./layout.js";
 import { createAlmondWaterPickup, createFlashlightPickup } from "../items/index.js";
 import { tryPickupItems, getFocusedItem } from "../entities/index.js";
