@@ -501,7 +501,7 @@ body {
 .item-info {
   position: fixed;
   left: 50%;
-  bottom: max(96px, calc(env(safe-area-inset-bottom) + 88px));
+  bottom: max(150px, calc(env(safe-area-inset-bottom) + 142px));
   z-index: 5;
   display: grid;
   min-width: min(74vw, 360px);
@@ -1135,7 +1135,7 @@ body {
   }
 
   .item-info {
-    bottom: max(258px, calc(env(safe-area-inset-bottom) + 252px));
+    bottom: max(290px, calc(env(safe-area-inset-bottom) + 282px));
     min-width: min(78vw, 320px);
   }
 
@@ -1257,14 +1257,14 @@ body {
 
 .inventory-slots {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   overflow-x: auto;
   overflow-y: visible;
   scroll-behavior: smooth;
   scrollbar-width: none;
   max-width: 100%;
-  padding: 0 2px;
+  padding: 6px 2px 0;
 }
 
 .inventory-slots::-webkit-scrollbar {
