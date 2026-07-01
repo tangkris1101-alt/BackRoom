@@ -948,6 +948,7 @@ function loadLevel(level, { updateUrl = false } = {}) {
   if (world && !gameFailed) {
     writeSaveSnapshot();
   }
+  ambientHum.stopAllEntityAudio();
   const previousWorld = world;
   reachedLevels.add(level);
   saveIntegerSet(REACHED_KEY, reachedLevels);
@@ -2097,6 +2098,7 @@ function animate() {
     }
   }
   ambientHum.update(metrics.flicker, controlState);
+  ambientHum.updateEntityAudio(metrics.entities);
   updateHud(metrics, controlState, elapsed);
   updateTimerReadout();
   updatePerformanceReadout(delta);
