@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CEILING_Y, CELL_SIZE, WALL_HEIGHT, MIN_FIXTURE_DISTANCE, MAX_POINT_LIGHTS } from "../constants.js";
+import { CEILING_Y, CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS, MIN_FIXTURE_DISTANCE, MAX_POINT_LIGHTS } from "../constants.js";
 import { createFixturePointLight } from "../common/lighting.js";
 import { createWideSignTexture } from "../common/textures.js";
 import { isInAnyZone } from "../common/layout.js";
