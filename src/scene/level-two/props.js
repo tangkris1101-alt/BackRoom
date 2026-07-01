@@ -2,6 +2,7 @@
 import {
   CELL_SIZE,
   CEILING_Y,
+  WALL_HEIGHT,
 } from "../constants.js";
 import { createFixturePointLight } from "../common/lighting.js";
 import { createWideSignTexture } from "../common/textures.js";
@@ -13,6 +14,9 @@ import {
   LEVEL_TWO_DARK_ZONES,
   LEVEL_TWO_START_CELL,
   LEVEL_TWO_TARGET_CELL,
+  LEVEL_TWO_MAX_POINT_LIGHTS,
+  LEVEL_TWO_ORIGIN_X,
+  LEVEL_TWO_ORIGIN_Z,
 isLevelTwoOpenCell,
   levelTwoCellCenter,
   countLevelTwoOpenNeighbors,

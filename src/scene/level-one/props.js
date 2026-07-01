@@ -2,6 +2,7 @@
 import {
   CELL_SIZE,
   CEILING_Y,
+  WALL_HEIGHT,
 } from "../constants.js";
 import { createFixturePointLight } from "../common/lighting.js";
 import { createWideSignTexture } from "../common/textures.js";
@@ -14,6 +15,9 @@ import {
   LEVEL_ONE_SUPPLY_ZONES,
   LEVEL_ONE_START_CELL,
   LEVEL_ONE_TARGET_CELL,
+  LEVEL_ONE_MAX_POINT_LIGHTS,
+  LEVEL_ONE_ORIGIN_X,
+  LEVEL_ONE_ORIGIN_Z,
 } from "./layout.js";
 import {
   isLevelOneOpenCell,

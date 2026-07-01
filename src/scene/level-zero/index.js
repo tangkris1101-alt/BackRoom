@@ -4,10 +4,10 @@ import {
   WALL_HEIGHT,
   WALL_THICKNESS,
   CEILING_Y,
-
-
-
-
+  SUPER_ALMOND_WATER_RESPAWN_MIN,
+  SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
+  SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
+  SUPER_ALMOND_WATER_RESPAWN_CHANCE,
 } from "../constants.js";
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
