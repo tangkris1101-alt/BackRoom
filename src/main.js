@@ -864,7 +864,14 @@ function buildLevelInitialState(level, save) {
   return {
     pickups: save.pickups?.[level] ?? {},
     interactions: save.interactions?.[level] ?? {},
-    objectives: save.objectives?.[level] ?? { reached: false },
+    // Always start a level visit with objectives.reached = false. The saved
+    // flag is a historical record ("this level's exit was triggered in a
+    // previous run") — restoring it on re-entry would make the scene's
+    // first frame report metrics.exitReached = true, which would queue
+    // beginLevelTransition and, 1.25s later, auto-switch the player to
+    // world.nextLevel. The authoritative "completed" state for UI and
+    // dataset purposes is the separate completedLevels Set, not this flag.
+    objectives: { reached: false },
     entities: save.entities?.[level] ?? [],
   };
 }
