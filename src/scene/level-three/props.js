@@ -429,10 +429,23 @@ export function addLevelThreePurpificationSpots(scene) {
   const purpleMaterial = new THREE.MeshStandardMaterial({
     color: 0x4a1c6a,
     emissive: 0x8a3aff,
-    emissiveIntensity: 0.95,
+    emissiveIntensity: 0.55,
     roughness: 0.5,
     metalness: 0.1,
     side: THREE.DoubleSide,
+  });
+  // The half-no-clipped entity silhouette: a dim, dark red-purple figure
+  // fused with the purple energy. Wiki says the entity is "partially
+  // noclipped into the wall", so the silhouette is half behind the wall
+  // patch (z<0 in group space) and half in front of it (z>0). Slight
+  // emissive keeps the figure visible against the dark generator/boiler
+  // walls without overpowering the surrounding purple.
+  const silhouetteMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2a0a18,
+    emissive: 0x6a1a4a,
+    emissiveIntensity: 0.45,
+    roughness: 0.65,
+    metalness: 0.1,
   });
   // 1 in Generator Room, 1 near Boiler Room.
   const spots = [
@@ -441,23 +454,60 @@ export function addLevelThreePurpificationSpots(scene) {
   ];
   spots.forEach(({ col, row }) => {
     const center = levelThreeCellCenter(col, row);
+
+    // Floor patch — purple energy bleeding onto the floor under the spot.
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.4, 1.0),
+      new THREE.PlaneGeometry(1.0, 0.7),
       purpleMaterial,
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(center.x, 0.045, center.z);
     scene.add(floor);
+
+    // Wall group — smaller purple patch + half-embedded silhouette.
     const mount = getLevelThreeTargetMount(center);
+    const group = new THREE.Group();
+    group.position.set(mount.x, 1.4, mount.z);
+    group.rotation.y = mount.rotation;
+
+    // Smaller wall patch (was 1.0 × 1.4).
     const wall = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.0, 1.4),
+      new THREE.PlaneGeometry(0.6, 0.8),
       purpleMaterial,
     );
-    wall.position.set(mount.x, 1.4, mount.z);
-    wall.rotation.y = mount.rotation;
-    scene.add(wall);
-    const light = new THREE.PointLight(0x8a3aff, 1.2, 4.2, 2);
-    light.position.set(center.x, 0.6, center.z);
+    group.add(wall);
+
+    // Torso — half-buried in the wall (z = +0.15 means roughly half out).
+    const torso = new THREE.Mesh(
+      new THREE.BoxGeometry(0.32, 0.6, 0.4),
+      silhouetteMaterial,
+    );
+    torso.position.set(0, -0.1, 0.15);
+    group.add(torso);
+
+    // Head sphere on top of the torso.
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 12, 10),
+      silhouetteMaterial,
+    );
+    head.position.set(0, 0.32, 0.15);
+    group.add(head);
+
+    // One arm reaching further out of the wall.
+    const arm = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.45, 0.08),
+      silhouetteMaterial,
+    );
+    arm.position.set(0.18, 0.05, 0.3);
+    arm.rotation.z = -0.4;
+    group.add(arm);
+
+    scene.add(group);
+
+    // Dimmer purple glow (was 1.2 / 4.2 m) so it doesn't blast the
+    // surrounding walls with purple.
+    const light = new THREE.PointLight(0x8a3aff, 0.7, 3.5, 2);
+    light.position.set(mount.x, 1.4, mount.z);
     scene.add(light);
   });
 }
