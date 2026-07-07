@@ -102,41 +102,54 @@
 
       <div id="save-prompt" class="save-prompt" role="dialog" aria-modal="true" aria-labelledby="save-prompt-title" aria-describedby="save-prompt-desc" hidden>
         <article class="save-prompt__panel">
-          <header class="save-prompt__header">
-            <span id="save-prompt-eyebrow" class="save-prompt__eyebrow">PREVIOUS RUN DETECTED</span>
-            <h2 id="save-prompt-title" class="save-prompt__title">继续上次进度</h2>
-            <p id="save-prompt-desc" class="save-prompt__desc">
-              检测到一份未完成的进度。是否恢复?
-            </p>
-          </header>
-          <dl class="save-prompt__summary">
-            <div class="save-prompt__row">
-              <dt>LEVEL</dt>
-              <dd id="save-prompt-level">LEVEL 0</dd>
-            </div>
-            <div class="save-prompt__row">
-              <dt>STAMINA</dt>
-              <dd id="save-prompt-stamina">0 / 0</dd>
-            </div>
-            <div class="save-prompt__row">
-              <dt>TIME</dt>
-              <dd id="save-prompt-runtime">00:00</dd>
-            </div>
-            <div class="save-prompt__row save-prompt__row--items">
-              <dt>ITEMS</dt>
-              <dd id="save-prompt-items">--</dd>
-            </div>
-          </dl>
-          <footer class="save-prompt__actions">
-            <button id="save-prompt-restart" class="save-prompt__btn save-prompt__btn--ghost" type="button">
-              <strong id="save-prompt-restart-label">重新开始</strong>
-              <small id="save-prompt-restart-hint">清空存档,从头开始</small>
-            </button>
-            <button id="save-prompt-continue" class="save-prompt__btn save-prompt__btn--primary" type="button">
-              <strong id="save-prompt-continue-label">继续</strong>
-              <small id="save-prompt-continue-hint">恢复上次进度</small>
-            </button>
-          </footer>
+          <div class="save-prompt__main">
+            <header class="save-prompt__header">
+              <span id="save-prompt-eyebrow" class="save-prompt__eyebrow">PREVIOUS RUN DETECTED</span>
+              <h2 id="save-prompt-title" class="save-prompt__title">继续上次进度</h2>
+              <p id="save-prompt-desc" class="save-prompt__desc">
+                检测到一份未完成的进度。是否恢复?
+              </p>
+            </header>
+            <dl class="save-prompt__summary">
+              <div class="save-prompt__row">
+                <dt>LEVEL</dt>
+                <dd id="save-prompt-level">LEVEL 0</dd>
+              </div>
+              <div class="save-prompt__row">
+                <dt>STAMINA</dt>
+                <dd id="save-prompt-stamina">0 / 0</dd>
+              </div>
+              <div class="save-prompt__row">
+                <dt>TIME</dt>
+                <dd id="save-prompt-runtime">00:00</dd>
+              </div>
+              <div class="save-prompt__row save-prompt__row--items">
+                <dt>ITEMS</dt>
+                <dd id="save-prompt-items">--</dd>
+              </div>
+            </dl>
+            <footer class="save-prompt__actions">
+              <button id="save-prompt-restart" class="save-prompt__btn save-prompt__btn--ghost" type="button">
+                <strong id="save-prompt-restart-label">重新开始</strong>
+                <small id="save-prompt-restart-hint">清空存档,从头开始</small>
+              </button>
+              <button id="save-prompt-jump" class="save-prompt__btn save-prompt__btn--accent" type="button">
+                <strong id="save-prompt-jump-label">前往其他层级</strong>
+                <small id="save-prompt-jump-hint">选择已解锁的层级开始</small>
+              </button>
+              <button id="save-prompt-continue" class="save-prompt__btn save-prompt__btn--primary" type="button">
+                <strong id="save-prompt-continue-label">继续</strong>
+                <small id="save-prompt-continue-hint">恢复上次进度</small>
+              </button>
+            </footer>
+          </div>
+          <div class="save-prompt__levels" hidden>
+            <header class="save-prompt__levels-header">
+              <h2 id="save-prompt-levels-title" class="save-prompt__title">选择层级</h2>
+              <button id="save-prompt-levels-back" class="save-prompt__levels-back" type="button">返回</button>
+            </header>
+            <ul id="save-prompt-levels-list" class="save-prompt__levels-list"></ul>
+          </div>
         </article>
       </div>
 
