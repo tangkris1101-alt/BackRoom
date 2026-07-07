@@ -56,7 +56,7 @@ export function createLevelFiveScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
   const FOG_COLOR = 0x2b1712;
   scene.background = new THREE.Color(FOG_COLOR);
-  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0145);
+  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0112);
 
   const cameraFar =
     Math.hypot(LEVEL_FIVE_COLS * CELL_SIZE, LEVEL_FIVE_ROWS * CELL_SIZE) + CELL_SIZE * 2;
@@ -85,27 +85,27 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     map: createLevelFiveCarpetTexture(),
     color: 0xffffff,
     emissive: 0x130503,
-    emissiveIntensity: 0.18,
+    emissiveIntensity: 0.32,
     roughness: 0.94,
   });
   const wallMaterial = new THREE.MeshStandardMaterial({
     map: createLevelFiveWallpaperTexture(),
     color: 0xffffff,
     emissive: 0x1a0603,
-    emissiveIntensity: 0.18,
+    emissiveIntensity: 0.30,
     roughness: 0.88,
   });
   const ceilingMaterial = new THREE.MeshStandardMaterial({
     map: createLevelFiveCeilingTexture(),
     color: 0xffffff,
     emissive: 0x241208,
-    emissiveIntensity: 0.24,
+    emissiveIntensity: 0.38,
     roughness: 0.84,
   });
   const wallCapMaterial = new THREE.MeshStandardMaterial({
     color: 0x5a3923,
     emissive: 0x140704,
-    emissiveIntensity: 0.12,
+    emissiveIntensity: 0.22,
     roughness: 0.88,
   });
 
@@ -146,10 +146,13 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     eastWest,
   );
 
-  scene.add(new THREE.HemisphereLight(0xffd9a3, 0x170705, 0.82));
-  const warmFill = new THREE.DirectionalLight(0xffb06a, 0.16);
+  scene.add(new THREE.HemisphereLight(0xffd9a3, 0x170705, 1.32));
+  const warmFill = new THREE.DirectionalLight(0xffb06a, 0.36);
   warmFill.position.set(-10, CEILING_Y - 0.4, 12);
   scene.add(warmFill);
+  const playerAmbient = new THREE.PointLight(0xffd9a8, 0.42, 8.5, 1.8);
+  playerAmbient.position.set(0, CEILING_Y - 0.6, 0);
+  camera.add(playerAmbient);
 
   const fixtures = createLevelFiveLights(scene, fixturePositions);
   const updateLightState = createStableLightState("JAZZ", {
@@ -268,7 +271,7 @@ export function createLevelFiveScene({ initialState = null } = {}) {
       const hum = 0.76 + Math.sin(elapsed * fixture.speed + fixture.phase) * 0.055;
       const boilerBrownout = index % 4 === 0 && Math.sin(elapsed * 1.7 + fixture.phase) > 0.9 ? 0.52 : 1;
       const pulse = Math.max(0.2, hum * boilerBrownout - fixture.weak);
-      fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.35;
+      fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.56;
       updateFixturePointLight(fixture, pulse, 1.0);
       lightTotal += pulse;
     });

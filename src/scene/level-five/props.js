@@ -101,8 +101,8 @@ export function collectLevelFiveTransforms() {
       const isBoiler = type === CELL_BOILER || type === CELL_STAFF;
       const neighbors = countLevelFiveOpenNeighbors(col, row);
       const fixtureGrid = (col * 13 + row * 7) % (isBoiler ? 9 : 14) === 0;
-      if (isDark && !isStart && !isTarget && !isBoiler) continue;
-      if (isStart || isTarget || isBallroomCenter || (neighbors <= 3 && fixtureGrid)) {
+      const isDarkFixture = isDark && !isStart && !isTarget && !isBoiler;
+      if (isStart || isTarget || isBallroomCenter || (neighbors <= 3 && fixtureGrid) || isDarkFixture) {
         const eastWestOpen = isLevelFiveOpenCell(col - 1, row) || isLevelFiveOpenCell(col + 1, row);
         fixtureCandidates.push({
           x: center.x,
@@ -110,11 +110,11 @@ export function collectLevelFiveTransforms() {
           rotation: eastWestOpen ? 0 : Math.PI / 2,
           phase: col * 0.47 + row * 0.93,
           speed: 1.8 + ((col + row) % 5) * 0.28,
-          weak: isBoiler ? 0.34 : isDark ? 0.28 : 0.12,
-          range: isStart || isTarget ? 13.8 : isBallroomCenter ? 12.8 : isBoiler ? 8.8 : 10.4,
-          baseIntensity: isStart || isTarget ? 1.42 : isBallroomCenter ? 1.22 : isBoiler ? 0.82 : 1.0,
+          weak: isBoiler ? 0.34 : isDark ? 0.42 : 0.12,
+          range: isStart || isTarget ? 15.5 : isBallroomCenter ? 14.2 : isBoiler ? 10.5 : isDarkFixture ? 7.2 : 11.8,
+          baseIntensity: isStart || isTarget ? 1.65 : isBallroomCenter ? 1.45 : isBoiler ? 1.0 : isDarkFixture ? 0.48 : 1.18,
           color: isBoiler ? 0xff7a36 : 0xffd38a,
-          priority: isStart || isTarget ? 9 : isBallroomCenter ? 6 : isBoiler ? 4 : 2,
+          priority: isStart || isTarget ? 9 : isBallroomCenter ? 6 : isBoiler ? 4 : isDarkFixture ? 0 : 2,
         });
       }
     }
@@ -171,8 +171,8 @@ export function createLevelFiveLights(scene, fixturePositions) {
     let light = null;
     if (pointLightIndexes.has(index)) {
       light = createFixturePointLight(fixture, CEILING_Y - 0.42, {
-        rangeScale: 1.56,
-        intensityScale: 1.18,
+        rangeScale: 1.72,
+        intensityScale: 1.34,
         decay: 2.1,
       });
       scene.add(light);
