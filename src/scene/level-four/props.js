@@ -53,6 +53,13 @@ export function addLevelFourOfficeDetails(scene, interactionInitial = {}) {
     roughness: 0.72,
     metalness: 0.18,
   });
+  const indentMaterial = new THREE.MeshBasicMaterial({
+    color: 0x30372f,
+    transparent: true,
+    opacity: 0.16,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
   const glassMaterial = new THREE.MeshBasicMaterial({
     color: 0x050606,
     transparent: true,
@@ -75,6 +82,9 @@ export function addLevelFourOfficeDetails(scene, interactionInitial = {}) {
     { col: 18, row: 11 },
     { col: 23, row: 9 },
     { col: 27, row: 13 },
+    { col: 16, row: 6 },
+    { col: 21, row: 6 },
+    { col: 27, row: 21 },
   ];
 
   cubicles.forEach((cubicle, index) => {
@@ -113,6 +123,21 @@ export function addLevelFourOfficeDetails(scene, interactionInitial = {}) {
     }
   });
 
+  [
+    { col: 4, row: 9, width: 2.6, depth: 1.25 },
+    { col: 10, row: 5, width: 3.2, depth: 1.18 },
+    { col: 23, row: 15, width: 3.4, depth: 1.2 },
+    { col: 30, row: 20, width: 2.8, depth: 1.1 },
+    { col: 14, row: 21, width: 2.2, depth: 1.0 },
+  ].forEach((mark) => {
+    const center = levelOneCellCenter(mark.col, mark.row);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(mark.width, mark.depth), indentMaterial);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.rotation.z = (mark.col + mark.row) % 2 === 0 ? 0.03 : -0.025;
+    mesh.position.set(center.x, 0.045, center.z);
+    scene.add(mesh);
+  });
+
   const vendingPositions = [
     { col: 4, row: 6, id: "level-four-vending", color: 0x24424a },
     { col: 29, row: 6, id: "level-four-water-cooler", color: 0xb7d6e2 },
@@ -148,6 +173,27 @@ export function addLevelFourOfficeDetails(scene, interactionInitial = {}) {
   });
 
   [
+    { col: 11, row: 21, color: 0xb7d6e2 },
+    { col: 16, row: 3, color: 0x24424a },
+    { col: 25, row: 5, color: 0x55736a },
+  ].forEach((spot) => {
+    const center = levelOneCellCenter(spot.col, spot.row);
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.72, 1.45, 0.44),
+      new THREE.MeshStandardMaterial({
+        color: spot.color,
+        emissive: 0x0d1a18,
+        emissiveIntensity: 0.12,
+        roughness: 0.62,
+        metalness: 0.06,
+      }),
+    );
+    body.position.set(center.x, 0.72, center.z);
+    scene.add(body);
+    addCollider(center.x, center.z, 0.4, 0.28);
+  });
+
+  [
     { col: 2, row: 4, rotation: 0 },
     { col: 11, row: 2, rotation: 0 },
     { col: 21, row: 2, rotation: 0 },
@@ -165,6 +211,7 @@ export function addLevelFourOfficeDetails(scene, interactionInitial = {}) {
   [
     { col: 5, row: 21, text: "M.E.G. OUTPOST", bg: "#17231f", fg: "#c8ffe0" },
     { col: 26, row: 15, text: "NO WINDOWS", bg: "#201a16", fg: "#ffd2a4" },
+    { col: 18, row: 3, text: "STOCK WATER", bg: "#17231f", fg: "#c8ffe0" },
   ].forEach((sign) => {
     const center = levelOneCellCenter(sign.col, sign.row);
     const mount = getLevelOneTargetMount(center);

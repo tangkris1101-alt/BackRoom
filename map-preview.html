@@ -91,7 +91,8 @@
           <h2>Notes</h2>
           <p class="help">
             • 全部地图数据来自 <code>src/scene/**/layout.js</code> 的真实导出,不会和游戏偏离<br />
-            • Level 4 复用 Level 1 的 35×25 网格,只多办公区装饰(cubicle / vending / window / sign)<br />
+            • Level 4 是低危险补给办公室：cubicle / vending / blacked-out window / carpet indent / stair exit<br />
+            • Level 5 是 Terror Hotel：Main Hall / Beverly Room / Staff Only / Boiler Room 路线<br />
             • 实体热力图用 <code>chooseBacteriaSpawn</code> 同款算法(从 exit 近 + 距 player 远),top-1 圈出 = 游戏中实际 spawn 位置<br />
             • 道具候选格 = <code>createAlmondWaterPickup</code> 内部过滤的合法 open cell(避让 start/exit CELL_SIZE×4)<br />
             • <strong>dev-only</strong>: <code>vite.config.js</code> 的 <code>rollupOptions.input</code> 仍是 <code>app.html</code>,本文件不进 <code>npm run build</code> 产物

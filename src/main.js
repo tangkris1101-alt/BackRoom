@@ -300,6 +300,54 @@ const INTERACTION_TEXT = {
       action: "F / \u6309\u94ae\u68c0\u67e5",
       response: "\u95e8\u628a\u624b\u5f88\u51b7\uff0c\u697c\u68af\u95f4\u91cc\u6ca1\u6709\u56de\u58f0",
     },
+    "level-five-beverly-table": {
+      name: "\u8d1d\u5f17\u5229\u623f\u95f4\u684c",
+      effect: "\u9152\u676f\u548c\u9ebb\u5c06\u724c\u50cf\u662f\u521a\u88ab\u79fb\u52a8\u8fc7",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u4e00\u679a\u724c\u7ffb\u5230\u80cc\u9762\uff0c\u58f0\u97f3\u6765\u81ea\u4f60\u80cc\u540e",
+    },
+    "level-five-portrait-a": {
+      name: "\u8001\u5f0f\u8096\u50cf",
+      effect: "\u773c\u775b\u7684\u65b9\u5411\u4e0d\u592a\u5bf9",
+      action: "F / \u6309\u94ae\u89c2\u5bdf",
+      response: "\u753b\u6846\u5185\u4f20\u6765\u5f88\u8f7b\u7684\u547c\u5438\u58f0",
+    },
+    "level-five-portrait-b": {
+      name: "\u8001\u5f0f\u8096\u50cf",
+      effect: "\u773c\u775b\u7684\u65b9\u5411\u4e0d\u592a\u5bf9",
+      action: "F / \u6309\u94ae\u89c2\u5bdf",
+      response: "\u753b\u6846\u5185\u4f20\u6765\u5f88\u8f7b\u7684\u547c\u5438\u58f0",
+    },
+    "level-five-portrait-c": {
+      name: "\u8001\u5f0f\u8096\u50cf",
+      effect: "\u773c\u775b\u7684\u65b9\u5411\u4e0d\u592a\u5bf9",
+      action: "F / \u6309\u94ae\u89c2\u5bdf",
+      response: "\u753b\u6846\u5185\u4f20\u6765\u5f88\u8f7b\u7684\u547c\u5438\u58f0",
+    },
+    "level-five-boiler-valve": {
+      name: "\u9505\u7089\u9600\u95e8",
+      effect: "\u7ba1\u9053\u91cc\u6709\u674f\u4ec1\u6c34\u7684\u6e17\u6f0f\u58f0",
+      action: "F / \u6309\u94ae\u8f6c\u52a8",
+      response: "\u70ed\u6c14\u9876\u4f4f\u9600\u95e8\uff0c\u4f60\u53ea\u542c\u5230\u66f4\u8fd1\u7684\u722a\u58f0",
+    },
+    "level-five-dining-cart": {
+      name: "\u9910\u8f66",
+      effect: "\u5e72\u51c0\u5f97\u8fc7\u5206\uff0c\u50cf\u662f\u6bcf\u5206\u949f\u90fd\u88ab\u64e6\u62ed",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u94f6\u76d8\u4e0a\u53ea\u6709\u4e00\u6ef4\u51b0\u51b7\u7684\u6c34",
+    },
+    "level-five-staff-door": {
+      name: "STAFF ONLY",
+      effect: "\u901a\u5f80\u9505\u7089\u533a\u7684\u5458\u5de5\u95e8",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u95e8\u724c\u8f7b\u8f7b\u6643\u52a8\uff0c\u4f46\u8d70\u5eca\u6ca1\u6709\u98ce",
+    },
+    "level-five-boiler-exit": {
+      name: "\u9505\u7089\u51fa\u53e3",
+      effect: "\u91d1\u5c5e\u95e8\u540e\u662f\u66f4\u6df1\u7684\u70ed\u6c14",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u8def\u5f84\u88ab\u6807\u8bb0\uff0c\u4f46\u4e0d\u5efa\u8bae\u7ee7\u7eed\u6df1\u5165",
+    },
   },
   en: {
     "level-one-elevator-panel": {
@@ -361,6 +409,54 @@ const INTERACTION_TEXT = {
       effect: "Leads deeper into the office level.",
       action: "F / BUTTON INSPECT",
       response: "The handle is cold; no echo comes back.",
+    },
+    "level-five-beverly-table": {
+      name: "BEVERLY ROOM TABLE",
+      effect: "Glasses and Mahjong tiles look recently moved.",
+      action: "F / BUTTON INSPECT",
+      response: "A tile flips face-down; the sound comes from behind you.",
+    },
+    "level-five-portrait-a": {
+      name: "AGED PORTRAIT",
+      effect: "The eyes are not pointing where they should.",
+      action: "F / BUTTON OBSERVE",
+      response: "A faint breath comes from inside the frame.",
+    },
+    "level-five-portrait-b": {
+      name: "AGED PORTRAIT",
+      effect: "The eyes are not pointing where they should.",
+      action: "F / BUTTON OBSERVE",
+      response: "A faint breath comes from inside the frame.",
+    },
+    "level-five-portrait-c": {
+      name: "AGED PORTRAIT",
+      effect: "The eyes are not pointing where they should.",
+      action: "F / BUTTON OBSERVE",
+      response: "A faint breath comes from inside the frame.",
+    },
+    "level-five-boiler-valve": {
+      name: "BOILER VALVE",
+      effect: "Almond Water leaks somewhere inside the pipes.",
+      action: "F / BUTTON TURN",
+      response: "Heat locks the valve; the only answer is closer clawing.",
+    },
+    "level-five-dining-cart": {
+      name: "DINING CART",
+      effect: "Too clean, as if wiped every minute.",
+      action: "F / BUTTON INSPECT",
+      response: "Only one cold drop of water sits on the silver tray.",
+    },
+    "level-five-staff-door": {
+      name: "STAFF ONLY",
+      effect: "A staff route into the boiler area.",
+      action: "F / BUTTON INSPECT",
+      response: "The placard sways slightly, but there is no draft.",
+    },
+    "level-five-boiler-exit": {
+      name: "BOILER EXIT",
+      effect: "Hot air waits behind the metal door.",
+      action: "F / BUTTON INSPECT",
+      response: "Route marked. Proceeding deeper is not advised.",
     },
   },
 };
@@ -720,7 +816,7 @@ function loadIntegerSet(key) {
     if (!raw) return new Set();
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((n) => Number.isInteger(n) && n >= 0 && n <= 4));
+    return new Set(parsed.filter((n) => Number.isInteger(n) && n >= 0 && n <= 5));
   } catch {
     return new Set();
   }
@@ -2649,7 +2745,7 @@ function showSavePromptLevels() {
 function populateSavePromptLevels() {
   if (!savePromptLevelsList) return;
   savePromptLevelsList.replaceChildren();
-  for (let lv = 0; lv <= 4; lv += 1) {
+  for (let lv = 0; lv <= 5; lv += 1) {
     const info = getBackroomsLevelInfo(lv);
     const reached = reachedLevels.has(lv);
     const li = document.createElement("li");

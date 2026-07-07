@@ -68,7 +68,7 @@ function sanitizePlayer(raw) {
   const position = raw.position;
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) return null;
   return {
-    level: Math.max(0, Math.min(4, Math.floor(raw.level ?? 0))),
+    level: Math.max(0, Math.min(5, Math.floor(raw.level ?? 0))),
     position: {
       x: position.x,
       y: Number.isFinite(position.y) ? position.y : 0,

@@ -41,6 +41,7 @@ const LEVEL_INFOS = new Map([
   [2, { level: 2, levelLabel: "LEVEL 2", levelName: "PIPE DREAMS" }],
   [3, { level: 3, levelLabel: "LEVEL 3", levelName: "ELECTRICAL STATION" }],
   [4, { level: 4, levelLabel: "LEVEL 4", levelName: "ABANDONED OFFICE" }],
+  [5, { level: 5, levelLabel: "LEVEL 5", levelName: "TERROR HOTEL" }],
 ]);
 
 export function getBackroomsLevelInfo(level = 0) {

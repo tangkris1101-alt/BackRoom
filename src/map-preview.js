@@ -62,6 +62,27 @@ import {
   countLevelThreeOpenNeighbors,
 } from "./scene/level-three/layout.js";
 import { collectLevelTransforms } from "./scene/level-two/props.js";
+import {
+  LEVEL_FIVE_MAP,
+  LEVEL_FIVE_COLS,
+  LEVEL_FIVE_ROWS,
+  LEVEL_FIVE_ORIGIN_X as L5_OX,
+  LEVEL_FIVE_ORIGIN_Z as L5_OZ,
+  LEVEL_FIVE_START_CELL as L5_START,
+  LEVEL_FIVE_TARGET_CELL as L5_TARGET,
+  LEVEL_FIVE_DARK_ZONES,
+  LEVEL_FIVE_SUPPLY_ZONES,
+  CELL_WALL as L5_WALL,
+  CELL_OPEN as L5_OPEN,
+  CELL_BALLROOM as L5_BALLROOM,
+  CELL_BOILER as L5_BOILER,
+  CELL_DOOR as L5_DOOR,
+  CELL_STAFF as L5_STAFF,
+  isLevelFiveOpenCell as l5IsOpen,
+  levelFiveCellCenter as l5CellCenter,
+  levelFiveCellType,
+} from "./scene/level-five/layout.js";
+import { collectLevelFiveTransforms } from "./scene/level-five/props.js";
 import { chooseBacteriaSpawn, pickBacteriaSpawnPositions } from "./scene/entities/spawn.js";
 
 const ITEM_AVOID_RADIUS = CELL_SIZE * 4;
@@ -109,6 +130,9 @@ const L4_CUBICLES = [
   { col: 18, row: 11 },
   { col: 23, row: 9 },
   { col: 27, row: 13 },
+  { col: 16, row: 6 },
+  { col: 21, row: 6 },
+  { col: 27, row: 21 },
 ];
 
 const L4_VENDING = [
@@ -127,6 +151,29 @@ const L4_WINDOWS = [
 const L4_SIGNS = [
   { col: 5, row: 21, text: "M.E.G." },
   { col: 26, row: 15, text: "NO WIN" },
+  { col: 18, row: 3, text: "WATER" },
+];
+
+const L5_FURNITURE = [
+  { col: 6, row: 14, width: 1, height: 1 },
+  { col: 18, row: 14, width: 1, height: 1 },
+  { col: 26, row: 14, width: 1, height: 1 },
+  { col: 8, row: 20, width: 1, height: 1 },
+  { col: 29, row: 19, width: 1, height: 1 },
+  { col: 21, row: 13, width: 1, height: 1 },
+  { col: 35, row: 22, width: 1, height: 1 },
+  { col: 41, row: 21, width: 1, height: 1 },
+];
+
+const L5_WINDOWS = [
+  { col: 6, row: 5 },
+  { col: 28, row: 5 },
+  { col: 39, row: 8 },
+];
+
+const L5_SIGNS = [
+  { col: 36, row: 17, text: "STAFF" },
+  { col: L5_TARGET.col, row: L5_TARGET.row, text: "EXIT" },
 ];
 
 const L3_BULKHEADS = [
@@ -581,7 +628,7 @@ function buildLevel4() {
   return {
     level: 4,
     label: "LEVEL 4",
-    name: "ABANDONED OFFICE (reuses L1 grid)",
+    name: "ABANDONED OFFICE",
     cols: LEVEL_ONE_COLS,
     rows: LEVEL_ONE_ROWS,
     originX: L1_OX,
@@ -620,7 +667,74 @@ function buildLevel4() {
   };
 }
 
-const LEVELS = [buildLevel0(), buildLevel1(), buildLevel2(), buildLevel3(), buildLevel4()];
+function buildLevel5() {
+  const grid = buildGrid(LEVEL_FIVE_MAP);
+  const startCenter = l5CellCenter(L5_START.col, L5_START.row);
+  const targetCenter = l5CellCenter(L5_TARGET.col, L5_TARGET.row);
+  const houndCandidates = chooseBacteriaSpawn({
+    cols: LEVEL_FIVE_COLS,
+    rows: LEVEL_FIVE_ROWS,
+    isCellOpen: l5IsOpen,
+    getCellCenter: l5CellCenter,
+    targetPosition: targetCenter,
+    spawnPosition: startCenter,
+  });
+  const { fixturePositions } = collectLevelFiveTransforms();
+  return {
+    level: 5,
+    label: "LEVEL 5",
+    name: "TERROR HOTEL",
+    cols: LEVEL_FIVE_COLS,
+    rows: LEVEL_FIVE_ROWS,
+    originX: L5_OX,
+    originZ: L5_OZ,
+    cellSize: CELL_SIZE,
+    grid,
+    floorColors: computeFloorColors(LEVEL_FIVE_COLS, LEVEL_FIVE_ROWS, [], LEVEL_FIVE_DARK_ZONES, LEVEL_FIVE_SUPPLY_ZONES),
+    getCellType(col, row) {
+      const ch = levelFiveCellType(col, row);
+      if (ch === L5_WALL) return "wall";
+      if (ch === L5_DOOR) return "door";
+      if (ch === L5_BOILER) return "bulkhead";
+      if (ch === L5_STAFF) return "valve";
+      if (ch === L5_BALLROOM || ch === L5_OPEN) return "open";
+      return "open";
+    },
+    startCell: L5_START,
+    targetCell: L5_TARGET,
+    zones: { bright: [], dark: LEVEL_FIVE_DARK_ZONES, supply: LEVEL_FIVE_SUPPLY_ZONES },
+    fixedProps: {
+      pillars: [],
+      blocks: L5_FURNITURE,
+      bulkheads: [],
+      cubicles: [],
+      vending: [],
+      windows: L5_WINDOWS,
+      signs: L5_SIGNS,
+    },
+    lightFixtures: worldPointsToCells(fixturePositions, L5_OX, L5_OZ, CELL_SIZE),
+    itemCandidates: {
+      "almond-water": computeItemCandidates(LEVEL_FIVE_COLS, LEVEL_FIVE_ROWS, l5IsOpen, l5CellCenter, [startCenter, targetCenter]),
+      "super-almond-water": computeItemCandidates(LEVEL_FIVE_COLS, LEVEL_FIVE_ROWS, l5IsOpen, l5CellCenter, [startCenter, targetCenter]),
+      flashlight: computeItemCandidates(LEVEL_FIVE_COLS, LEVEL_FIVE_ROWS, l5IsOpen, l5CellCenter, [startCenter, targetCenter]),
+      detector: computeItemCandidates(LEVEL_FIVE_COLS, LEVEL_FIVE_ROWS, l5IsOpen, l5CellCenter, [startCenter, targetCenter]),
+    },
+    entityCandidates: {
+      bacteria: [],
+      hound: withCellCoords(houndCandidates, L5_OX, L5_OZ, CELL_SIZE),
+      "ambush-hound": [],
+    },
+    interactions: [
+      { id: "level-five-beverly-table", col: 21, row: 13, label: "TABLE" },
+      { id: "level-five-dining-cart", col: 6, row: 21, label: "CART" },
+      { id: "level-five-staff-door", col: 36, row: 17, label: "STAFF" },
+      { id: "level-five-boiler-valve", col: 38, row: 22, label: "VALVE" },
+      { id: "level-five-boiler-exit", col: L5_TARGET.col, row: L5_TARGET.row, label: "BOILER EXIT" },
+    ],
+  };
+}
+
+const LEVELS = [buildLevel0(), buildLevel1(), buildLevel2(), buildLevel3(), buildLevel4(), buildLevel5()];
 
 const ITEM_COLORS = {
   "almond-water": "#9be5b6",

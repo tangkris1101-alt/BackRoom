@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -12,121 +12,119 @@ import {
 } from "../constants.js";
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
+import { snapEntityStates } from "../common/snap.js";
+import { addLayoutDarkPockets } from "../level-two/props.js";
 import {
-  LEVEL_ONE_COLS,
-  LEVEL_ONE_ROWS,
-  LEVEL_ONE_EXIT_TRIGGER_RADIUS,
-  LEVEL_ONE_START_CELL,
-  LEVEL_ONE_TARGET_CELL,
-  isLevelOneOpenCell,
-  levelOneCellCenter,
-  levelOneWorldToCell,
-} from "../level-one/layout.js";
-import { createLevelOneLights, collectLevelOneTransforms } from "../level-one/props.js";
-import { createLevelFourCarpetTexture, createLevelFourWallTexture, createLevelFourCeilingTexture } from "./textures.js";
-import { addLevelFourStairDoor, addLevelFourOfficeDetails } from "./props.js";
+  LEVEL_FIVE_COLS,
+  LEVEL_FIVE_ROWS,
+  LEVEL_FIVE_EXIT_TRIGGER_RADIUS,
+  LEVEL_FIVE_START_CELL,
+  LEVEL_FIVE_TARGET_CELL,
+  LEVEL_FIVE_DARK_ZONES,
+  isLevelFiveOpenCell,
+  levelFiveCellCenter,
+  levelFiveWorldToCell,
+} from "./layout.js";
+import {
+  createLevelFiveCarpetTexture,
+  createLevelFiveWallpaperTexture,
+  createLevelFiveCeilingTexture,
+} from "./textures.js";
+import {
+  collectLevelFiveTransforms,
+  createLevelFiveLights,
+  addLevelFiveExitDoor,
+  addLevelFiveHotelDetails,
+} from "./props.js";
 import {
   createAlmondWaterPickup,
   createFlashlightPickup,
   createDetectorPickup,
-
-
-
-
 } from "../items/index.js";
 import {
   createHoundEntity,
   chooseBacteriaSpawn,
+  createInteractionSpot,
   tryPickupItems,
   getFocusedEntity,
   getFocusedInteraction,
   getFocusedItem,
   tryInteractWithSpots,
-  createInteractionSpot,
 } from "../entities/index.js";
-import { snapEntityStates } from "../common/snap.js";
 
-export function createLevelFourScene({ initialState = null } = {}) {
+export function createLevelFiveScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
-  const FOG_COLOR = 0xb8b9a7;
+  const FOG_COLOR = 0x2b1712;
   scene.background = new THREE.Color(FOG_COLOR);
-  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0088);
+  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0145);
 
   const cameraFar =
-    Math.hypot(LEVEL_ONE_COLS * CELL_SIZE, LEVEL_ONE_ROWS * CELL_SIZE) + CELL_SIZE * 2;
+    Math.hypot(LEVEL_FIVE_COLS * CELL_SIZE, LEVEL_FIVE_ROWS * CELL_SIZE) + CELL_SIZE * 2;
   const camera = new THREE.PerspectiveCamera(74, 1, 0.05, cameraFar);
   const viewModel = attachFirstPersonViewModel(camera);
   scene.add(camera);
 
-  const spawnCell = levelOneCellCenter(LEVEL_ONE_START_CELL.col, LEVEL_ONE_START_CELL.row);
-  const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: -Math.PI * 0.12 };
-  const targetPosition = levelOneCellCenter(LEVEL_ONE_TARGET_CELL.col, LEVEL_ONE_TARGET_CELL.row);
-
-  addLevelFourStairDoor(scene, targetPosition);
-  const { colliders: propColliders, interactions: propInteractions } = addLevelFourOfficeDetails(
-    scene,
-    initialState?.interactions ?? {},
-  );
+  const spawnCell = levelFiveCellCenter(LEVEL_FIVE_START_CELL.col, LEVEL_FIVE_START_CELL.row);
+  const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: LEVEL_FIVE_START_CELL.yaw };
+  const targetPosition = levelFiveCellCenter(LEVEL_FIVE_TARGET_CELL.col, LEVEL_FIVE_TARGET_CELL.row);
 
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
+  const { colliders: propColliders, interactions: propInteractions } = addLevelFiveHotelDetails(
+    scene,
+    interactionInitial,
+  );
   const entityInitial = snapEntityStates(
     Array.isArray(initialState?.entities) ? initialState.entities : [],
     isWalkable,
   );
+  addLevelFiveExitDoor(scene, targetPosition);
 
   const floorMaterial = new THREE.MeshStandardMaterial({
-    map: createLevelFourCarpetTexture(),
-    color: 0xdfe4d7,
-    emissive: 0x596454,
+    map: createLevelFiveCarpetTexture(),
+    color: 0xffffff,
+    emissive: 0x130503,
     emissiveIntensity: 0.18,
-    roughness: 0.97,
+    roughness: 0.94,
   });
   const wallMaterial = new THREE.MeshStandardMaterial({
-    map: createLevelFourWallTexture(),
-    color: 0xf1ecd9,
-    emissive: 0x545046,
-    emissiveIntensity: 0.16,
-    roughness: 0.92,
+    map: createLevelFiveWallpaperTexture(),
+    color: 0xffffff,
+    emissive: 0x1a0603,
+    emissiveIntensity: 0.18,
+    roughness: 0.88,
   });
   const ceilingMaterial = new THREE.MeshStandardMaterial({
-    map: createLevelFourCeilingTexture(),
-    color: 0xf4f0d9,
-    emissive: 0x807a60,
-    emissiveIntensity: 0.32,
-    roughness: 0.86,
+    map: createLevelFiveCeilingTexture(),
+    color: 0xffffff,
+    emissive: 0x241208,
+    emissiveIntensity: 0.24,
+    roughness: 0.84,
   });
   const wallCapMaterial = new THREE.MeshStandardMaterial({
-    color: 0xaaa189,
-    emissive: 0x332f26,
-    emissiveIntensity: 0.08,
-    roughness: 0.96,
+    color: 0x5a3923,
+    emissive: 0x140704,
+    emissiveIntensity: 0.12,
+    roughness: 0.88,
   });
 
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(LEVEL_ONE_COLS * CELL_SIZE, LEVEL_ONE_ROWS * CELL_SIZE),
+    new THREE.PlaneGeometry(LEVEL_FIVE_COLS * CELL_SIZE, LEVEL_FIVE_ROWS * CELL_SIZE),
     floorMaterial,
   );
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
 
   const ceiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(LEVEL_ONE_COLS * CELL_SIZE, LEVEL_ONE_ROWS * CELL_SIZE),
+    new THREE.PlaneGeometry(LEVEL_FIVE_COLS * CELL_SIZE, LEVEL_FIVE_ROWS * CELL_SIZE),
     ceilingMaterial,
   );
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.set(0, CEILING_Y, 0);
   scene.add(ceiling);
 
-  const { northSouth, eastWest, fixturePositions } = collectLevelOneTransforms();
-  fixturePositions.forEach((fixture, index) => {
-    fixture.color = index % 6 === 0 ? 0xd8fff0 : 0xfff7da;
-    fixture.baseIntensity *= index % 5 === 0 ? 0.66 : 0.9;
-    fixture.range *= 0.92;
-    fixture.weak = Math.max(fixture.weak, index % 5 === 0 ? 0.18 : 0.05);
-  });
-
+  const { northSouth, eastWest, fixturePositions } = collectLevelFiveTransforms();
   const wallMaterials = [
     wallMaterial,
     wallMaterial,
@@ -148,89 +146,97 @@ export function createLevelFourScene({ initialState = null } = {}) {
     eastWest,
   );
 
-  scene.add(new THREE.HemisphereLight(0xffffee, 0x8d9b8a, 1.28));
-  const fill = new THREE.DirectionalLight(0xf3ffe4, 0.18);
-  fill.position.set(12, CEILING_Y - 0.3, -14);
-  scene.add(fill);
+  scene.add(new THREE.HemisphereLight(0xffd9a3, 0x170705, 0.82));
+  const warmFill = new THREE.DirectionalLight(0xffb06a, 0.16);
+  warmFill.position.set(-10, CEILING_Y - 0.4, 12);
+  scene.add(warmFill);
 
-  const fixtures = createLevelOneLights(scene, fixturePositions);
-  const updateLightState = createStableLightState("QUIET", {
-    dimBelow: 0.46,
-    normalAbove: 0.62,
-    dimDelay: 0.62,
-    normalDelay: 0.86,
+  const fixtures = createLevelFiveLights(scene, fixturePositions);
+  const updateLightState = createStableLightState("JAZZ", {
+    dimBelow: 0.38,
+    normalAbove: 0.58,
+    dimDelay: 0.7,
+    normalDelay: 1.1,
   });
-  const interactions = [
-    ...propInteractions,
-    createInteractionSpot({
-      id: "level-four-stair-door",
-      position: targetPosition,
-      inspectHeight: 1.58,
-      inspectRadius: 0.82,
-      responseKey: "levelFourStairDoorResponse",
-      initialState: interactionInitial["level-four-stair-door"] ?? null,
-    }),
-  ];
+  addLayoutDarkPockets(scene, {
+    darkZones: LEVEL_FIVE_DARK_ZONES,
+    originX: -(LEVEL_FIVE_COLS * CELL_SIZE) / 2,
+    originZ: -(LEVEL_FIVE_ROWS * CELL_SIZE) / 2,
+  });
 
   const almondWater = createAlmondWaterPickup(scene, {
-    cols: LEVEL_ONE_COLS,
-    rows: LEVEL_ONE_ROWS,
-    isCellOpen: isLevelOneOpenCell,
-    getCellCenter: levelOneCellCenter,
+    cols: LEVEL_FIVE_COLS,
+    rows: LEVEL_FIVE_ROWS,
+    isCellOpen: isLevelFiveOpenCell,
+    getCellCenter: levelFiveCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial["almond-water"] ?? null,
   });
   const superAlmondWater = createAlmondWaterPickup(scene, {
-    cols: LEVEL_ONE_COLS,
-    rows: LEVEL_ONE_ROWS,
-    isCellOpen: isLevelOneOpenCell,
-    getCellCenter: levelOneCellCenter,
+    cols: LEVEL_FIVE_COLS,
+    rows: LEVEL_FIVE_ROWS,
+    isCellOpen: isLevelFiveOpenCell,
+    getCellCenter: levelFiveCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     variant: "super",
     respawnMin: SUPER_ALMOND_WATER_RESPAWN_MIN,
     respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
-    initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
-    respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+    initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE * 0.7,
+    respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE * 0.75,
     initialState: pickupInitial["super-almond-water"] ?? null,
   });
   const flashlight = createFlashlightPickup(scene, {
-    cols: LEVEL_ONE_COLS,
-    rows: LEVEL_ONE_ROWS,
-    isCellOpen: isLevelOneOpenCell,
-    getCellCenter: levelOneCellCenter,
+    cols: LEVEL_FIVE_COLS,
+    rows: LEVEL_FIVE_ROWS,
+    isCellOpen: isLevelFiveOpenCell,
+    getCellCenter: levelFiveCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial.flashlight ?? null,
   });
   const detector = createDetectorPickup(scene, {
-    cols: LEVEL_ONE_COLS,
-    rows: LEVEL_ONE_ROWS,
-    isCellOpen: isLevelOneOpenCell,
-    getCellCenter: levelOneCellCenter,
+    cols: LEVEL_FIVE_COLS,
+    rows: LEVEL_FIVE_ROWS,
+    isCellOpen: isLevelFiveOpenCell,
+    getCellCenter: levelFiveCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial.detector ?? null,
   });
+
+  const interactions = [
+    ...propInteractions,
+    createInteractionSpot({
+      id: "level-five-boiler-exit",
+      position: targetPosition,
+      inspectHeight: 1.58,
+      inspectRadius: 0.9,
+      responseKey: "levelFiveBoilerExitResponse",
+      initialState: interactionInitial["level-five-boiler-exit"] ?? null,
+    }),
+  ];
+
+  const houndSpawn =
+    chooseBacteriaSpawn({
+      cols: LEVEL_FIVE_COLS,
+      rows: LEVEL_FIVE_ROWS,
+      isCellOpen: isLevelFiveOpenCell,
+      getCellCenter: levelFiveCellCenter,
+      targetPosition,
+      spawnPosition: spawnCell,
+    })[0] ?? targetPosition;
   const hound = createHoundEntity(scene, {
-    spawnPosition:
-      chooseBacteriaSpawn({
-        cols: LEVEL_ONE_COLS,
-        rows: LEVEL_ONE_ROWS,
-        isCellOpen: isLevelOneOpenCell,
-        getCellCenter: levelOneCellCenter,
-        targetPosition,
-        spawnPosition: spawnCell,
-      })[0] ?? targetPosition,
+    spawnPosition: houndSpawn,
     isWalkable,
-    speed: 0.92,
+    speed: 1.28,
     initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
-    cols: LEVEL_ONE_COLS,
-    rows: LEVEL_ONE_ROWS,
-    isCellOpen: isLevelOneOpenCell,
-    worldToCell: levelOneWorldToCell,
-    cellCenter: levelOneCellCenter,
+    cols: LEVEL_FIVE_COLS,
+    rows: LEVEL_FIVE_ROWS,
+    isCellOpen: isLevelFiveOpenCell,
+    worldToCell: levelFiveWorldToCell,
+    cellCenter: levelFiveCellCenter,
   });
 
   let objectiveReached = Boolean(objectiveInitial.reached);
@@ -249,8 +255,8 @@ export function createLevelFourScene({ initialState = null } = {}) {
       [-corner, -corner],
     ];
     const isInOpenCells = samples.every(([offsetX, offsetZ]) => {
-      const cell = levelOneWorldToCell(x + offsetX, z + offsetZ);
-      return isLevelOneOpenCell(cell.col, cell.row);
+      const cell = levelFiveWorldToCell(x + offsetX, z + offsetZ);
+      return isLevelFiveOpenCell(cell.col, cell.row);
     });
     if (!isInOpenCells) return false;
     return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
@@ -259,21 +265,23 @@ export function createLevelFourScene({ initialState = null } = {}) {
   function update(delta, elapsed, playerPosition) {
     let lightTotal = 0;
     fixtures.forEach((fixture, index) => {
-      const hum = 0.88 + Math.sin(elapsed * 1.05 + fixture.phase) * 0.035;
-      const staleTube = index % 5 === 0 && Math.sin(elapsed * fixture.speed + fixture.phase) > 0.94 ? 0.55 : 1;
-      const pulse = Math.max(0.42, hum * staleTube - fixture.weak);
-      fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.4;
-      updateFixturePointLight(fixture, pulse, 0.96);
+      const hum = 0.76 + Math.sin(elapsed * fixture.speed + fixture.phase) * 0.055;
+      const boilerBrownout = index % 4 === 0 && Math.sin(elapsed * 1.7 + fixture.phase) > 0.9 ? 0.52 : 1;
+      const pulse = Math.max(0.2, hum * boilerBrownout - fixture.weak);
+      fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.35;
+      updateFixturePointLight(fixture, pulse, 1.0);
       lightTotal += pulse;
     });
-    const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.82;
+
+    const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.5;
     const exitDistance = Math.hypot(
       playerPosition.x - targetPosition.x,
       playerPosition.z - targetPosition.z,
     );
-    if (exitDistance < LEVEL_ONE_EXIT_TRIGGER_RADIUS) objectiveReached = true;
-    scene.fog.density = 0.0086 + (1 - flicker) * 0.006;
+    if (exitDistance < LEVEL_FIVE_EXIT_TRIGGER_RADIUS) objectiveReached = true;
+    scene.fog.density = 0.0135 + (1 - flicker) * 0.012 + (exitDistance < 24 ? 0.003 : 0);
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
+
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
     const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
@@ -301,20 +309,20 @@ export function createLevelFourScene({ initialState = null } = {}) {
       ),
       lightState: updateLightState(delta, flicker),
       statusText: objectiveReached
-        ? "STAIRWAY TO HOTEL"
-        : exitDistance < 8
-          ? "STAIR TRACE"
-          : "ABANDONED OFFICE",
+        ? "HOTEL ROUTE STABLE"
+        : exitDistance < 10
+          ? "BOILER TRACE"
+          : "TERROR HOTEL",
     };
   }
 
   return {
-    level: 4,
-    levelLabel: "LEVEL 4",
-    levelName: "ABANDONED OFFICE",
+    level: 5,
+    levelLabel: "LEVEL 5",
+    levelName: "TERROR HOTEL",
     viewModelName: getViewModelName(viewModel),
     colliderCount: propColliders.length,
-    nextLevel: 5,
+    nextLevel: null,
     scene,
     camera,
     spawn,
@@ -340,6 +348,3 @@ export function createLevelFourScene({ initialState = null } = {}) {
     },
   };
 }
-
-
-
