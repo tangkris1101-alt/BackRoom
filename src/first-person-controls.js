@@ -40,7 +40,7 @@ export class FirstPersonControls {
     this.spawn = spawn;
     this.eyeHeight = 1.62;
     this.moveSpeed = 3.05;
-    this.sprintMultiplier = 1.65;
+    this.sprintMultiplier = 1.85;
     this.lookSensitivity = 0.0028;
     this.touchSensitivity = 0.004;
     this.yaw = spawn.yaw;

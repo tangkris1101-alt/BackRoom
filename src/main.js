@@ -590,7 +590,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.18;
 
-const flashlightLight = new THREE.SpotLight(0xfff2c5, 0, 46, 0.5, 0.72, 1.68);
+const flashlightLight = new THREE.SpotLight(0xfff2c5, 0, 65, 0.5, 0.72, 1.68);
 flashlightLight.position.set(0.18, -0.12, -0.16);
 flashlightLight.name = "player-flashlight";
 const flashlightTarget = new THREE.Object3D();
