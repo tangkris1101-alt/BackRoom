@@ -11,7 +11,14 @@ import {
   circleIntersectsAabb,
 } from "../constants.js";
 import { createAlmondWaterLabelTexture } from "./labels.js";
-import { inspectForward, inspectToItem } from "./shared.js";
+import {
+  createItemHighlight,
+  createPickupState,
+  inspectForward,
+  inspectToItem,
+  markItemMeshes,
+  setItemHighlight,
+} from "./shared.js";
 
 export function createAlmondWaterModel(variant = "normal") {
   const isSuper = variant === "super";
@@ -106,9 +113,7 @@ export function createAlmondWaterModel(variant = "normal") {
   baseShadow.position.y = 0.012;
   group.add(baseShadow);
 
-  group.traverse((child) => {
-    if (child.isMesh) child.userData.itemId = isSuper ? "super-almond-water" : "almond-water";
-  });
+  markItemMeshes(group, isSuper ? "super-almond-water" : "almond-water");
   return group;
 }
 
@@ -151,20 +156,14 @@ export function createAlmondWaterPickup(
   const bottleModel = createAlmondWaterModel(variant);
   bottleModel.scale.setScalar(isSuper ? SUPER_ALMOND_WATER_MODEL_SCALE : ALMOND_WATER_MODEL_SCALE);
   group.add(bottleModel);
-
-  const marker = new THREE.Mesh(
-    new THREE.RingGeometry(isSuper ? 0.3 : 0.26, isSuper ? 0.46 : 0.38, 32),
-    new THREE.MeshBasicMaterial({
-      color: isSuper ? 0xffd863 : 0xeefbd3,
-      transparent: true,
-      opacity: isSuper ? 0.18 : 0.13,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  );
-  marker.rotation.x = -Math.PI / 2;
-  marker.position.y = 0.02;
-  group.add(marker);
+  const highlight = createItemHighlight({
+    color: isSuper ? 0xffdf6d : 0xdfffe9,
+    width: isSuper ? 0.42 : 0.38,
+    height: isSuper ? 0.72 : 0.68,
+    depth: isSuper ? 0.42 : 0.38,
+    y: isSuper ? 0.32 : 0.3,
+  });
+  group.add(highlight);
 
   scene.add(group);
 
@@ -174,6 +173,11 @@ export function createAlmondWaterPickup(
 
   function chooseCandidate() {
     return candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
+  }
+
+  function randomizePose() {
+    bottleModel.rotation.x = (Math.random() - 0.5) * (isSuper ? 0.16 : 0.12);
+    bottleModel.rotation.z = (Math.random() - 0.5) * (isSuper ? 0.24 : 0.18);
   }
 
   function scheduleRespawn() {
@@ -191,6 +195,7 @@ export function createAlmondWaterPickup(
     }
     group.position.set(candidate.x, 0, candidate.z);
     group.rotation.y = Math.random() * Math.PI * 2;
+    randomizePose();
     group.visible = true;
     active = true;
   }
@@ -203,11 +208,23 @@ export function createAlmondWaterPickup(
     placeAtRandomPosition();
   }
 
+  function getPickupState(playerPosition) {
+    return createPickupState({
+      id: itemId,
+      active,
+      group,
+      playerPosition,
+      pickupRadius: ALMOND_WATER_PICKUP_RADIUS,
+      respawnTimer,
+    });
+  }
+
   if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
     active = Boolean(initialState.active);
     respawnTimer = Math.max(0, Number(initialState.respawnTimer ?? 0));
     group.position.set(initialState.position.x, 0, initialState.position.z);
     group.rotation.y = Number.isFinite(initialState.rotation) ? initialState.rotation : 0;
+    randomizePose();
     group.visible = active;
   } else {
     trySpawn(initialSpawnChance);
@@ -222,6 +239,7 @@ export function createAlmondWaterPickup(
         rotation: group.rotation.y,
       };
     },
+    getPickupState,
     inspect(camera) {
       if (!active || !camera) return null;
       camera.getWorldDirection(inspectForward);
@@ -232,6 +250,7 @@ export function createAlmondWaterPickup(
       inspectToItem.normalize();
       const maxAngle = Math.min(0.13, Math.max(0.048, Math.atan2(0.42, distance)));
       if (inspectForward.dot(inspectToItem) < Math.cos(maxAngle)) return null;
+      setItemHighlight(highlight, true);
 
       return {
         id: itemId,
@@ -243,39 +262,24 @@ export function createAlmondWaterPickup(
     },
 
     update(delta, elapsed, playerPosition) {
+      setItemHighlight(highlight, false);
       if (!active) {
         respawnTimer -= delta;
         if (respawnTimer <= 0) trySpawn(respawnChance);
-        return {
-          id: itemId,
-          visible: false,
-          available: false,
-          distance: Infinity,
-          respawn: Math.max(0, respawnTimer),
-        };
+        return getPickupState(playerPosition);
       }
 
-      group.position.y = Math.sin(elapsed * (isSuper ? 2.8 : 2.4)) * (isSuper ? 0.045 : 0.035);
-      group.rotation.y += delta * (isSuper ? 0.62 : 0.45);
-      marker.material.opacity =
-        (isSuper ? 0.14 : 0.1) + Math.sin(elapsed * (isSuper ? 3.8 : 3.2)) * 0.045 + 0.045;
-      const distance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
-      return {
-        id: itemId,
-        visible: true,
-        available: distance <= ALMOND_WATER_PICKUP_RADIUS,
-        distance,
-        respawn: 0,
-      };
+      group.position.y = 0;
+      return getPickupState(playerPosition);
     },
 
     tryPickup(playerPosition) {
-      if (!active) return { pickedUp: false };
-      const distance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
-      if (distance > ALMOND_WATER_PICKUP_RADIUS) return { pickedUp: false };
+      const state = getPickupState(playerPosition);
+      if (!state.available) return { pickedUp: false };
       pickupCount += 1;
       active = false;
       group.visible = false;
+      setItemHighlight(highlight, false);
       respawnTimer = respawnMin + Math.random() * respawnVariance;
       return {
         pickedUp: true,

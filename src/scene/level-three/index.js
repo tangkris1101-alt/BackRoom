@@ -49,6 +49,7 @@ import {
   createAlmondWaterPickup,
   createFlashlightPickup,
   createDetectorPickup,
+  createCompassPickup,
 
 
 
@@ -60,6 +61,7 @@ import {
   chooseBacteriaSpawn,
   pickBacteriaSpawnPositions,
   createInteractionSpot,
+  getPickupTarget,
   tryPickupItems,
   getFocusedEntity,
   getFocusedInteraction,
@@ -227,6 +229,15 @@ addLevelThreeBreakerDoor(scene, targetPosition);
     blockedAabbs: propColliders,
     initialState: pickupInitial.detector ?? null,
   });
+  const compass = createCompassPickup(scene, {
+    cols: LEVEL_THREE_COLS,
+    rows: LEVEL_THREE_ROWS,
+    isCellOpen: isLevelThreeOpenCell,
+    getCellCenter: levelThreeCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    initialState: pickupInitial.compass ?? null,
+  });
   const interactions = [
     createInteractionSpot({
       id: "level-three-breaker",
@@ -352,6 +363,7 @@ addLevelThreeBreakerDoor(scene, targetPosition);
     const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
+    const compassState = compass.update(delta, elapsed, playerPosition);
     const bacteriaStates = bacteria.map((b) => b.update(delta, elapsed, playerPosition));
     const houndState = hound.update(delta, elapsed, playerPosition);
     const ambushHoundState = ambushHound ? ambushHound.update(delta, elapsed, playerPosition) : null;
@@ -359,6 +371,7 @@ addLevelThreeBreakerDoor(scene, targetPosition);
       ? [...bacteriaStates, houndState, ambushHoundState]
       : [...bacteriaStates, houndState];
     const entityContact = entities.some((state) => state.contact);
+    const pickups = [almondWaterState, superAlmondWaterState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -369,12 +382,15 @@ addLevelThreeBreakerDoor(scene, targetPosition);
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
+      compass: compassState,
+      pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
       focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
+        compass.inspect(camera),
         detector.inspect(camera),
         flashlight.inspect(camera),
       ),
@@ -397,16 +413,20 @@ addLevelThreeBreakerDoor(scene, targetPosition);
     scene,
     camera,
     spawn,
+    targetPosition,
     isWalkable,
     update,
+    getPickupTarget: (playerPosition) =>
+      getPickupTarget(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
+      tryPickupItems(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {
           flashlight: flashlight.getState(),
           detector: detector.getState(),
+          compass: compass.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },

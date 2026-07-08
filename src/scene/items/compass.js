@@ -1,10 +1,10 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import {
   CELL_SIZE,
-  DETECTOR_PICKUP_RADIUS,
-  DETECTOR_INSPECT_DISTANCE,
-  DETECTOR_RESPAWN_MIN,
-  DETECTOR_RESPAWN_VARIANCE,
+  COMPASS_PICKUP_RADIUS,
+  COMPASS_INSPECT_DISTANCE,
+  COMPASS_RESPAWN_MIN,
+  COMPASS_RESPAWN_VARIANCE,
   circleIntersectsAabb,
 } from "../constants.js";
 import {
@@ -16,73 +16,92 @@ import {
   setItemHighlight,
 } from "./shared.js";
 
-export function createDetectorModel() {
+export function createCompassModel() {
   const group = new THREE.Group();
-  group.name = "entity-detector-model";
+  group.name = "exit-compass-model";
 
-  const bodyMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2a2621,
-    emissive: 0x120806,
-    emissiveIntensity: 0.12,
-    roughness: 0.64,
-    metalness: 0.28,
+  const brassMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb28643,
+    emissive: 0x2a1706,
+    emissiveIntensity: 0.18,
+    roughness: 0.42,
+    metalness: 0.56,
   });
-  const screenMaterial = new THREE.MeshStandardMaterial({
-    color: 0x111b18,
-    emissive: 0xff654d,
-    emissiveIntensity: 0.28,
-    roughness: 0.38,
-    metalness: 0.08,
+  const faceMaterial = new THREE.MeshStandardMaterial({
+    color: 0xe8dfb8,
+    emissive: 0x51451f,
+    emissiveIntensity: 0.18,
+    roughness: 0.66,
   });
-  const accentMaterial = new THREE.MeshStandardMaterial({
-    color: 0xb85638,
-    emissive: 0x461006,
-    emissiveIntensity: 0.26,
-    roughness: 0.5,
-    metalness: 0.16,
+  const needleMaterial = new THREE.MeshBasicMaterial({ color: 0xff4c34 });
+  const backNeedleMaterial = new THREE.MeshBasicMaterial({ color: 0x232019 });
+  const glassMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0xd9f6ff,
+    transparent: true,
+    opacity: 0.22,
+    roughness: 0.04,
+    metalness: 0,
+    transmission: 0.2,
+    thickness: 0.04,
   });
   const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x090504,
+    color: 0x080604,
     transparent: true,
-    opacity: 0.24,
+    opacity: 0.22,
     depthWrite: false,
   });
 
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.2, 0.28), bodyMaterial);
-  body.position.y = 0.17;
-  group.add(body);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.28, 0.07, 40), brassMaterial);
+  base.position.y = 0.075;
+  group.add(base);
 
-  const screen = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.022, 0.16), screenMaterial);
-  screen.position.set(0.02, 0.286, 0);
-  group.add(screen);
+  const face = new THREE.Mesh(new THREE.CylinderGeometry(0.215, 0.215, 0.016, 40), faceMaterial);
+  face.position.y = 0.124;
+  group.add(face);
 
-  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.42, 8), accentMaterial);
-  antenna.position.set(-0.16, 0.46, -0.02);
-  antenna.rotation.z = -0.32;
-  group.add(antenna);
+  const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.012, 40), glassMaterial);
+  glass.position.y = 0.146;
+  group.add(glass);
 
-  const dish = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.009, 6, 24), accentMaterial);
-  dish.position.set(-0.22, 0.66, -0.03);
-  dish.rotation.x = Math.PI / 2;
-  group.add(dish);
+  const needle = new THREE.Mesh(new THREE.ConeGeometry(0.038, 0.23, 4), needleMaterial);
+  needle.position.set(0, 0.164, -0.048);
+  needle.rotation.x = Math.PI / 2;
+  group.add(needle);
 
-  for (let i = 0; i < 3; i += 1) {
-    const blip = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.012, 0.035), accentMaterial);
-    blip.position.set(-0.05 + i * 0.055, 0.304, -0.055 + i * 0.018);
-    group.add(blip);
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.18, 4), backNeedleMaterial);
+  tail.position.set(0, 0.162, 0.054);
+  tail.rotation.x = -Math.PI / 2;
+  group.add(tail);
+
+  for (let i = 0; i < 8; i += 1) {
+    const tick = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.01, i % 2 === 0 ? 0.055 : 0.034), backNeedleMaterial);
+    const angle = (i / 8) * Math.PI * 2;
+    tick.position.set(Math.sin(angle) * 0.165, 0.158, Math.cos(angle) * 0.165);
+    tick.rotation.y = angle;
+    group.add(tick);
   }
+
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.282, 0.018, 8, 36), brassMaterial);
+  ring.position.y = 0.12;
+  ring.rotation.x = Math.PI / 2;
+  group.add(ring);
+
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.018, 36), brassMaterial);
+  lid.position.set(0, 0.24, 0.26);
+  lid.rotation.x = -Math.PI * 0.64;
+  group.add(lid);
 
   const baseShadow = new THREE.Mesh(new THREE.CircleGeometry(0.38, 28), shadowMaterial);
   baseShadow.rotation.x = -Math.PI / 2;
-  baseShadow.scale.z = 0.55;
-  baseShadow.position.y = 0.011;
+  baseShadow.scale.z = 0.7;
+  baseShadow.position.y = 0.012;
   group.add(baseShadow);
 
-  markItemMeshes(group, "detector");
+  markItemMeshes(group, "compass");
   return group;
 }
 
-export function createDetectorPickup(
+export function createCompassPickup(
   scene,
   {
     cols,
@@ -100,25 +119,25 @@ export function createDetectorPickup(
       if (!isCellOpen(col, row)) continue;
       const center = getCellCenter(col, row);
       const isFarEnough = avoidPositions.every(
-        (position) => Math.hypot(center.x - position.x, center.z - position.z) > CELL_SIZE * 4.5,
+        (position) => Math.hypot(center.x - position.x, center.z - position.z) > CELL_SIZE * 3.8,
       );
       const isClearOfProps = blockedAabbs.every(
-        (bounds) => !circleIntersectsAabb(center.x, center.z, DETECTOR_PICKUP_RADIUS, bounds),
+        (bounds) => !circleIntersectsAabb(center.x, center.z, COMPASS_PICKUP_RADIUS, bounds),
       );
       if (isFarEnough && isClearOfProps) candidates.push({ col, row, x: center.x, z: center.z });
     }
   }
 
   const group = new THREE.Group();
-  group.name = "entity-detector-pickup";
-  const model = createDetectorModel();
+  group.name = "exit-compass-pickup";
+  const model = createCompassModel();
   group.add(model);
   const highlight = createItemHighlight({
-    color: 0xff9a73,
-    width: 0.62,
-    height: 0.78,
-    depth: 0.5,
-    y: 0.34,
+    color: 0xffd97b,
+    width: 0.66,
+    height: 0.52,
+    depth: 0.78,
+    y: 0.24,
   });
   group.add(highlight);
   scene.add(group);
@@ -127,13 +146,13 @@ export function createDetectorPickup(
   let respawnTimer = 0;
   let pickupCount = 0;
 
-  function chooseCandidate() {
-    return candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
+  function randomizePose() {
+    model.rotation.x = (Math.random() - 0.5) * 0.18;
+    model.rotation.z = (Math.random() - 0.5) * 0.18;
   }
 
-  function randomizePose() {
-    model.rotation.x = (Math.random() - 0.5) * 0.12;
-    model.rotation.z = (Math.random() - 0.5) * 0.18;
+  function chooseCandidate() {
+    return candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
   }
 
   function placeAtRandomPosition() {
@@ -152,11 +171,11 @@ export function createDetectorPickup(
 
   function getPickupState(playerPosition) {
     return createPickupState({
-      id: "detector",
+      id: "compass",
       active,
       group,
       playerPosition,
-      pickupRadius: DETECTOR_PICKUP_RADIUS,
+      pickupRadius: COMPASS_PICKUP_RADIUS,
       respawnTimer,
     });
   }
@@ -185,24 +204,23 @@ export function createDetectorPickup(
     inspect(camera) {
       if (!active || !camera) return null;
       camera.getWorldDirection(inspectForward);
-      inspectToItem.set(group.position.x, group.position.y + 0.26, group.position.z).sub(camera.position);
+      inspectToItem.set(group.position.x, group.position.y + 0.25, group.position.z).sub(camera.position);
       const distance = inspectToItem.length();
-      if (distance > DETECTOR_INSPECT_DISTANCE) return null;
+      if (distance > COMPASS_INSPECT_DISTANCE) return null;
 
       inspectToItem.normalize();
-      const maxAngle = Math.min(0.15, Math.max(0.055, Math.atan2(0.5, distance)));
+      const maxAngle = Math.min(0.16, Math.max(0.06, Math.atan2(0.48, distance)));
       if (inspectForward.dot(inspectToItem) < Math.cos(maxAngle)) return null;
       setItemHighlight(highlight, true);
 
       return {
-        id: "detector",
-        name: "ENTITY DETECTOR",
-        effect: "WIDE ENTITY PING / 5s SCAN",
+        id: "compass",
+        name: "EXIT COMPASS",
+        effect: "POINTS TOWARD THE EXIT",
         action: "F / BUTTON PICK UP",
         distance,
       };
     },
-
     update(delta, elapsed, playerPosition) {
       setItemHighlight(highlight, false);
       if (!active) {
@@ -214,7 +232,6 @@ export function createDetectorPickup(
       group.position.y = 0;
       return getPickupState(playerPosition);
     },
-
     tryPickup(playerPosition) {
       const state = getPickupState(playerPosition);
       if (!state.available) return { pickedUp: false };
@@ -222,13 +239,12 @@ export function createDetectorPickup(
       active = false;
       group.visible = false;
       setItemHighlight(highlight, false);
-      respawnTimer = DETECTOR_RESPAWN_MIN + Math.random() * DETECTOR_RESPAWN_VARIANCE;
+      respawnTimer = COMPASS_RESPAWN_MIN + Math.random() * COMPASS_RESPAWN_VARIANCE;
       return {
         pickedUp: true,
-        itemId: "detector",
+        itemId: "compass",
         count: pickupCount,
       };
     },
   };
 }
-

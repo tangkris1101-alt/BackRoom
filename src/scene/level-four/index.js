@@ -27,16 +27,14 @@ import { createLevelFourCarpetTexture, createLevelFourWallTexture, createLevelFo
 import { addLevelFourStairDoor, addLevelFourOfficeDetails } from "./props.js";
 import {
   createAlmondWaterPickup,
+  createCompassPickup,
   createFlashlightPickup,
   createDetectorPickup,
-
-
-
-
 } from "../items/index.js";
 import {
   createHoundEntity,
   chooseBacteriaSpawn,
+  getPickupTarget,
   tryPickupItems,
   getFocusedEntity,
   getFocusedInteraction,
@@ -213,6 +211,15 @@ export function createLevelFourScene({ initialState = null } = {}) {
     blockedAabbs: propColliders,
     initialState: pickupInitial.detector ?? null,
   });
+  const compass = createCompassPickup(scene, {
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    initialState: pickupInitial.compass ?? null,
+  });
   const hound = createHoundEntity(scene, {
     spawnPosition:
       chooseBacteriaSpawn({
@@ -278,8 +285,10 @@ export function createLevelFourScene({ initialState = null } = {}) {
     const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
+    const compassState = compass.update(delta, elapsed, playerPosition);
     const houndState = hound.update(delta, elapsed, playerPosition);
     const entities = [houndState];
+    const pickups = [almondWaterState, superAlmondWaterState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -290,12 +299,15 @@ export function createLevelFourScene({ initialState = null } = {}) {
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
+      compass: compassState,
+      pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
       focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
+        compass.inspect(camera),
         detector.inspect(camera),
         flashlight.inspect(camera),
       ),
@@ -318,16 +330,20 @@ export function createLevelFourScene({ initialState = null } = {}) {
     scene,
     camera,
     spawn,
+    targetPosition,
     isWalkable,
     update,
+    getPickupTarget: (playerPosition) =>
+      getPickupTarget(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
+      tryPickupItems(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {
           flashlight: flashlight.getState(),
           detector: detector.getState(),
+          compass: compass.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },

@@ -27,8 +27,8 @@ import {
   COLS,
   ROWS,
 } from "./layout.js";
-import { createAlmondWaterPickup, createFlashlightPickup } from "../items/index.js";
-import { tryPickupItems, getFocusedItem } from "../entities/index.js";
+import { createAlmondWaterPickup, createFlashlightPickup, createCompassPickup } from "../items/index.js";
+import { getPickupTarget, tryPickupItems, getFocusedItem } from "../entities/index.js";
 
 export function createLevelZeroScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
@@ -164,6 +164,14 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     avoidPositions: [spawnCell, exitPosition],
     initialState: pickupInitial.flashlight ?? null,
   });
+  const compass = createCompassPickup(scene, {
+    cols: COLS,
+    rows: ROWS,
+    isCellOpen: isOpenCell,
+    getCellCenter: cellCenter,
+    avoidPositions: [spawnCell, exitPosition],
+    initialState: pickupInitial.compass ?? null,
+  });
   let exitReached = Boolean(objectiveInitial.reached);
 
   function isWalkable(x, z, radius = 0.36) {
@@ -210,6 +218,8 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
     const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
+    const compassState = compass.update(delta, elapsed, playerPosition);
+    const pickups = [almondWaterState, superAlmondWaterState, compassState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -219,11 +229,14 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
+        compass.inspect(camera),
         flashlight.inspect(camera),
       ),
       almondWater: almondWaterState,
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
+      compass: compassState,
+      pickups,
     };
   }
 
@@ -236,14 +249,18 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     scene,
     camera,
     spawn,
+    targetPosition: exitPosition,
     isWalkable,
     update,
-    tryPickup: (playerPosition) => tryPickupItems(playerPosition, superAlmondWater, flashlight, almondWater),
+    getPickupTarget: (playerPosition) =>
+      getPickupTarget(playerPosition, superAlmondWater, compass, flashlight, almondWater),
+    tryPickup: (playerPosition) => tryPickupItems(playerPosition, superAlmondWater, compass, flashlight, almondWater),
     getSnapshot() {
       return {
         pickups: {
           flashlight: flashlight.getState(),
           detector: null,
+          compass: compass.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },

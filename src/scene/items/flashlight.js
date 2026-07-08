@@ -7,7 +7,14 @@ import {
   FLASHLIGHT_RESPAWN_VARIANCE,
   circleIntersectsAabb,
 } from "../constants.js";
-import { inspectForward, inspectToItem } from "./shared.js";
+import {
+  createItemHighlight,
+  createPickupState,
+  inspectForward,
+  inspectToItem,
+  markItemMeshes,
+  setItemHighlight,
+} from "./shared.js";
 
 export function createFlashlightModel() {
   const group = new THREE.Group();
@@ -83,9 +90,7 @@ export function createFlashlightModel() {
   baseShadow.position.y = 0.011;
   group.add(baseShadow);
 
-  group.traverse((child) => {
-    if (child.isMesh) child.userData.itemId = "flashlight";
-  });
+  markItemMeshes(group, "flashlight");
   return group;
 }
 
@@ -118,21 +123,16 @@ export function createFlashlightPickup(
 
   const group = new THREE.Group();
   group.name = "flashlight-pickup";
-  group.add(createFlashlightModel());
-
-  const marker = new THREE.Mesh(
-    new THREE.RingGeometry(0.42, 0.58, 32),
-    new THREE.MeshBasicMaterial({
-      color: 0xb7e4ff,
-      transparent: true,
-      opacity: 0.12,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  );
-  marker.rotation.x = -Math.PI / 2;
-  marker.position.y = 0.018;
-  group.add(marker);
+  const model = createFlashlightModel();
+  group.add(model);
+  const highlight = createItemHighlight({
+    color: 0xbfeeff,
+    width: 1.16,
+    height: 0.48,
+    depth: 0.5,
+    y: 0.22,
+  });
+  group.add(highlight);
   scene.add(group);
 
   let active = false;
@@ -141,6 +141,11 @@ export function createFlashlightPickup(
 
   function chooseCandidate() {
     return candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
+  }
+
+  function randomizePose() {
+    model.rotation.x = (Math.random() - 0.5) * 0.16;
+    model.rotation.z = (Math.random() - 0.5) * 0.24;
   }
 
   function placeAtRandomPosition() {
@@ -152,15 +157,28 @@ export function createFlashlightPickup(
     }
     group.position.set(candidate.x, 0, candidate.z);
     group.rotation.y = Math.random() * Math.PI * 2;
+    randomizePose();
     group.visible = true;
     active = true;
   }
 
-if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
+  function getPickupState(playerPosition) {
+    return createPickupState({
+      id: "flashlight",
+      active,
+      group,
+      playerPosition,
+      pickupRadius: FLASHLIGHT_PICKUP_RADIUS,
+      respawnTimer,
+    });
+  }
+
+  if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
     active = Boolean(initialState.active);
     respawnTimer = Math.max(0, Number(initialState.respawnTimer ?? 0));
     group.position.set(initialState.position.x, 0, initialState.position.z);
     group.rotation.y = Number.isFinite(initialState.rotation) ? initialState.rotation : 0;
+    randomizePose();
     group.visible = active;
   } else {
     placeAtRandomPosition();
@@ -175,6 +193,7 @@ if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite
         rotation: group.rotation.y,
       };
     },
+    getPickupState,
     inspect(camera) {
       if (!active || !camera) return null;
       camera.getWorldDirection(inspectForward);
@@ -185,6 +204,7 @@ if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite
       inspectToItem.normalize();
       const maxAngle = Math.min(0.15, Math.max(0.055, Math.atan2(0.5, distance)));
       if (inspectForward.dot(inspectToItem) < Math.cos(maxAngle)) return null;
+      setItemHighlight(highlight, true);
 
       return {
         id: "flashlight",
@@ -196,37 +216,24 @@ if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite
     },
 
     update(delta, elapsed, playerPosition) {
+      setItemHighlight(highlight, false);
       if (!active) {
         respawnTimer -= delta;
         if (respawnTimer <= 0) placeAtRandomPosition();
-        return {
-          id: "flashlight",
-          visible: false,
-          available: false,
-          distance: Infinity,
-          respawn: Math.max(0, respawnTimer),
-        };
+        return getPickupState(playerPosition);
       }
 
-      group.position.y = Math.sin(elapsed * 1.9 + 1.6) * 0.018;
-      marker.material.opacity = 0.08 + Math.sin(elapsed * 2.8) * 0.034 + 0.034;
-      const distance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
-      return {
-        id: "flashlight",
-        visible: true,
-        available: distance <= FLASHLIGHT_PICKUP_RADIUS,
-        distance,
-        respawn: 0,
-      };
+      group.position.y = 0;
+      return getPickupState(playerPosition);
     },
 
     tryPickup(playerPosition) {
-      if (!active) return { pickedUp: false };
-      const distance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
-      if (distance > FLASHLIGHT_PICKUP_RADIUS) return { pickedUp: false };
+      const state = getPickupState(playerPosition);
+      if (!state.available) return { pickedUp: false };
       pickupCount += 1;
       active = false;
       group.visible = false;
+      setItemHighlight(highlight, false);
       respawnTimer = FLASHLIGHT_RESPAWN_MIN + Math.random() * FLASHLIGHT_RESPAWN_VARIANCE;
       return {
         pickedUp: true,

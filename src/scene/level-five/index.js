@@ -38,6 +38,7 @@ import {
 } from "./props.js";
 import {
   createAlmondWaterPickup,
+  createCompassPickup,
   createFlashlightPickup,
   createDetectorPickup,
 } from "../items/index.js";
@@ -45,6 +46,7 @@ import {
   createHoundEntity,
   chooseBacteriaSpawn,
   createInteractionSpot,
+  getPickupTarget,
   tryPickupItems,
   getFocusedEntity,
   getFocusedInteraction,
@@ -54,9 +56,9 @@ import {
 
 export function createLevelFiveScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
-  const FOG_COLOR = 0x2b1712;
+  const FOG_COLOR = 0x60301f;
   scene.background = new THREE.Color(FOG_COLOR);
-  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0112);
+  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0074);
 
   const cameraFar =
     Math.hypot(LEVEL_FIVE_COLS * CELL_SIZE, LEVEL_FIVE_ROWS * CELL_SIZE) + CELL_SIZE * 2;
@@ -84,22 +86,22 @@ export function createLevelFiveScene({ initialState = null } = {}) {
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: createLevelFiveCarpetTexture(),
     color: 0xffffff,
-    emissive: 0x130503,
-    emissiveIntensity: 0.32,
+    emissive: 0x3c170c,
+    emissiveIntensity: 0.58,
     roughness: 0.94,
   });
   const wallMaterial = new THREE.MeshStandardMaterial({
     map: createLevelFiveWallpaperTexture(),
     color: 0xffffff,
-    emissive: 0x1a0603,
-    emissiveIntensity: 0.30,
+    emissive: 0x45190d,
+    emissiveIntensity: 0.56,
     roughness: 0.88,
   });
   const ceilingMaterial = new THREE.MeshStandardMaterial({
     map: createLevelFiveCeilingTexture(),
     color: 0xffffff,
-    emissive: 0x241208,
-    emissiveIntensity: 0.38,
+    emissive: 0x4a2a14,
+    emissiveIntensity: 0.58,
     roughness: 0.84,
   });
   const wallCapMaterial = new THREE.MeshStandardMaterial({
@@ -146,11 +148,11 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     eastWest,
   );
 
-  scene.add(new THREE.HemisphereLight(0xffd9a3, 0x170705, 1.32));
-  const warmFill = new THREE.DirectionalLight(0xffb06a, 0.36);
+  scene.add(new THREE.HemisphereLight(0xffe0b2, 0x3a160c, 1.9));
+  const warmFill = new THREE.DirectionalLight(0xffb06a, 0.62);
   warmFill.position.set(-10, CEILING_Y - 0.4, 12);
   scene.add(warmFill);
-  const playerAmbient = new THREE.PointLight(0xffd9a8, 0.42, 8.5, 1.8);
+  const playerAmbient = new THREE.PointLight(0xffd9a8, 0.72, 12.5, 1.72);
   playerAmbient.position.set(0, CEILING_Y - 0.6, 0);
   camera.add(playerAmbient);
 
@@ -207,6 +209,15 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial.detector ?? null,
+  });
+  const compass = createCompassPickup(scene, {
+    cols: LEVEL_FIVE_COLS,
+    rows: LEVEL_FIVE_ROWS,
+    isCellOpen: isLevelFiveOpenCell,
+    getCellCenter: levelFiveCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    initialState: pickupInitial.compass ?? null,
   });
 
   const interactions = [
@@ -270,8 +281,8 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     fixtures.forEach((fixture, index) => {
       const hum = 0.76 + Math.sin(elapsed * fixture.speed + fixture.phase) * 0.055;
       const boilerBrownout = index % 4 === 0 && Math.sin(elapsed * 1.7 + fixture.phase) > 0.9 ? 0.52 : 1;
-      const pulse = Math.max(0.2, hum * boilerBrownout - fixture.weak);
-      fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.56;
+      const pulse = Math.max(0.28, hum * boilerBrownout - fixture.weak);
+      fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.82;
       updateFixturePointLight(fixture, pulse, 1.0);
       lightTotal += pulse;
     });
@@ -282,15 +293,17 @@ export function createLevelFiveScene({ initialState = null } = {}) {
       playerPosition.z - targetPosition.z,
     );
     if (exitDistance < LEVEL_FIVE_EXIT_TRIGGER_RADIUS) objectiveReached = true;
-    scene.fog.density = 0.0135 + (1 - flicker) * 0.012 + (exitDistance < 24 ? 0.003 : 0);
+    scene.fog.density = 0.0076 + (1 - flicker) * 0.0055 + (exitDistance < 24 ? 0.0014 : 0);
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
 
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
     const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
+    const compassState = compass.update(delta, elapsed, playerPosition);
     const houndState = hound.update(delta, elapsed, playerPosition);
     const entities = [houndState];
+    const pickups = [almondWaterState, superAlmondWaterState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -301,12 +314,15 @@ export function createLevelFiveScene({ initialState = null } = {}) {
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
+      compass: compassState,
+      pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
       focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
+        compass.inspect(camera),
         detector.inspect(camera),
         flashlight.inspect(camera),
       ),
@@ -325,20 +341,24 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     levelName: "TERROR HOTEL",
     viewModelName: getViewModelName(viewModel),
     colliderCount: propColliders.length,
-    nextLevel: null,
+    nextLevel: 6,
     scene,
     camera,
     spawn,
+    targetPosition,
     isWalkable,
     update,
+    getPickupTarget: (playerPosition) =>
+      getPickupTarget(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
+      tryPickupItems(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {
           flashlight: flashlight.getState(),
           detector: detector.getState(),
+          compass: compass.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },

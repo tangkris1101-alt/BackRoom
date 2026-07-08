@@ -10,6 +10,7 @@ import {
   clearSave,
   getInitialLevelFromSave,
 } from "./save.js";
+import { BACTERIA_CONTACT_RADIUS, HOUND_CONTACT_RADIUS } from "./scene/constants.js";
 
 const canvas = document.querySelector("#scene");
 const appRoot = canvas?.closest("#app") ?? document.body;
@@ -40,6 +41,9 @@ const flashlightReadout = document.querySelector("#flashlight-readout");
 const detectorMeter = document.querySelector("#detector-meter");
 const detectorFill = document.querySelector("#detector-fill");
 const detectorReadout = document.querySelector("#detector-readout");
+const compassMeter = document.querySelector("#compass-meter");
+const compassArrow = document.querySelector("#compass-arrow");
+const compassReadout = document.querySelector("#compass-readout");
 const drinkingMeter = document.querySelector("#drinking-meter");
 const drinkingFill = document.querySelector("#drinking-fill");
 const drinkingReadout = document.querySelector("#drinking-readout");
@@ -136,6 +140,7 @@ const HEALTH_MAX = 100;
 const BACTERIA_DAMAGE = 50;
 const SUPER_BACTERIA_DAMAGE = 60;
 const HOUND_DAMAGE = 30;
+const LEVEL_SEVEN_THING_DAMAGE = 68;
 const HOUND_SLOW_DURATION = 3.0;
 const DAMAGE_COOLDOWN_S = 1.0;
 const ALMOND_WATER_HEAL = 30;
@@ -164,6 +169,11 @@ const ITEM_TEXT = {
       effect: "标记大范围实体 / 5秒扫描",
       action: "F / 按钮拾取 · 拾取后按 R 扫描",
     },
+    compass: {
+      name: "出口指南针",
+      effect: "装备后指向当前层级出口",
+      action: "F / 按钮拾取 · 选中后查看方向",
+    },
   },
   en: {
     "almond-water": {
@@ -185,6 +195,11 @@ const ITEM_TEXT = {
       name: "ENTITY DETECTOR",
       effect: "WIDE ENTITY PING / 5s SCAN",
       action: "F / BUTTON PICK UP · R TO SCAN AFTER PICKUP",
+    },
+    compass: {
+      name: "EXIT COMPASS",
+      effect: "POINTS TOWARD THE CURRENT LEVEL EXIT",
+      action: "F / BUTTON PICK UP · EQUIP TO READ",
     },
   },
 };
@@ -212,6 +227,13 @@ const ENTITY_TEXT = {
       action: "\u907f\u5f00\u76f4\u7ebf\u8ddd\u79bb",
       failSubtitle: "\u88ab\u730e\u72ac\u5b9e\u4f53\u6355\u83b7",
     },
+    "level-seven-thing": {
+      name: "\u6df1\u6c34\u5f02\u5f62",
+      marker: "\u6df1\u6c34\u5f02\u5f62",
+      effect: "\u4f34\u968f\u6c34\u9762\u79fb\u52a8\uff1b\u63a5\u89e6\u4f1a\u9020\u6210\u81f4\u547d\u4f24\u5bb3",
+      action: "\u8fdc\u79bb\u6df1\u8272\u6c34\u57df",
+      failSubtitle: "\u88ab\u6df1\u6c34\u5f02\u5f62\u62d6\u5165\u6c34\u4e0b",
+    },
   },
   en: {
     bacteria: {
@@ -234,6 +256,13 @@ const ENTITY_TEXT = {
       effect: "Quadruped pursuer; faster than Bacteria.",
       action: "BREAK LINE OF SIGHT",
       failSubtitle: "HOUND CONTACT",
+    },
+    "level-seven-thing": {
+      name: "THE THING ON LEVEL 7",
+      marker: "THE THING",
+      effect: "Moves with the water surface; contact is lethal.",
+      action: "AVOID DARK WATER",
+      failSubtitle: "DRAGGED UNDERWATER",
     },
   },
 };
@@ -348,6 +377,48 @@ const INTERACTION_TEXT = {
       action: "F / \u6309\u94ae\u68c0\u67e5",
       response: "\u8def\u5f84\u88ab\u6807\u8bb0\uff0c\u4f46\u4e0d\u5efa\u8bae\u7ee7\u7eed\u6df1\u5165",
     },
+    "level-six-scratch": {
+      name: "\u5899\u9762\u6293\u75d5",
+      effect: "\u75d5\u8ff9\u88ab\u51b7\u6c14\u51dd\u5728\u5899\u9762",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u75d5\u8ff9\u4e0b\u9762\u5199\u7740\uff1a\u522b\u6570\u79d2",
+    },
+    "level-six-cold-wall": {
+      name: "\u51b0\u51b7\u5899\u9762",
+      effect: "\u5899\u4f53\u50cf\u5438\u6536\u4e86\u6240\u6709\u58f0\u97f3",
+      action: "F / \u6309\u94ae\u89e6\u78b0",
+      response: "\u624b\u5957\u4e0a\u51fa\u73b0\u4e00\u5c42\u8584\u971c",
+    },
+    "level-six-exit": {
+      name: "NO LIGHT",
+      effect: "\u51fa\u53e3\u6807\u8bb0\u51e0\u4e4e\u4e0d\u53d1\u5149",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u9ed1\u6697\u5728\u95e8\u540e\u9762\u53d8\u5f97\u66f4\u6df1",
+    },
+    "level-seven-room": {
+      name: "\u5165\u53e3\u623f\u95f4",
+      effect: "\u5730\u9762\u4e0b\u65b9\u5168\u662f\u51b0\u51b7\u7684\u6c34",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u6c34\u9762\u7684\u53cd\u5149\u6bd4\u5929\u82b1\u677f\u66f4\u9ed1",
+    },
+    "level-seven-waterline": {
+      name: "\u6c34\u7ebf",
+      effect: "\u6c34\u6df1\u770b\u4e0d\u89c1\u5e95",
+      action: "F / \u6309\u94ae\u89c2\u5bdf",
+      response: "\u6d9f\u6f2a\u5411\u4f60\u8fd9\u8fb9\u9760\u8fd1\uff0c\u7136\u540e\u6d88\u5931",
+    },
+    "level-seven-buoy": {
+      name: "\u6f02\u6d6e\u6d6e\u6807",
+      effect: "\u88ab\u6d77\u6c34\u6ce1\u5f97\u5f88\u91cd",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u7ef3\u5b50\u4e00\u76f4\u5ef6\u4f38\u5230\u770b\u4e0d\u89c1\u7684\u4e0b\u65b9",
+    },
+    "level-seven-exit": {
+      name: "SURFACE",
+      effect: "\u8fdc\u5904\u7684\u6d6e\u8231\u4f20\u6765\u5f31\u4fe1\u53f7",
+      action: "F / \u6309\u94ae\u68c0\u67e5",
+      response: "\u51fa\u53e3\u4fe1\u53f7\u6d6e\u5728\u6c34\u9762\u4e0a",
+    },
   },
   en: {
     "level-one-elevator-panel": {
@@ -458,6 +529,48 @@ const INTERACTION_TEXT = {
       action: "F / BUTTON INSPECT",
       response: "Route marked. Proceeding deeper is not advised.",
     },
+    "level-six-scratch": {
+      name: "WALL SCRATCHES",
+      effect: "Frozen into the wall by the cold air.",
+      action: "F / BUTTON INSPECT",
+      response: "Under the marks: DO NOT COUNT SECONDS.",
+    },
+    "level-six-cold-wall": {
+      name: "COLD WALL",
+      effect: "The wall seems to swallow sound.",
+      action: "F / BUTTON TOUCH",
+      response: "A thin frost blooms across your glove.",
+    },
+    "level-six-exit": {
+      name: "NO LIGHT",
+      effect: "The exit marker barely emits light.",
+      action: "F / BUTTON INSPECT",
+      response: "The dark behind the door looks deeper.",
+    },
+    "level-seven-room": {
+      name: "THE ROOM",
+      effect: "Cold water waits below the floor line.",
+      action: "F / BUTTON INSPECT",
+      response: "The water reflects less light than the ceiling.",
+    },
+    "level-seven-waterline": {
+      name: "WATERLINE",
+      effect: "No bottom is visible.",
+      action: "F / BUTTON OBSERVE",
+      response: "Ripples approach you, then vanish.",
+    },
+    "level-seven-buoy": {
+      name: "FLOATING BUOY",
+      effect: "Waterlogged and heavier than it should be.",
+      action: "F / BUTTON INSPECT",
+      response: "The rope continues into unseen depth.",
+    },
+    "level-seven-exit": {
+      name: "SURFACE",
+      effect: "A weak signal floats near the hatch.",
+      action: "F / BUTTON INSPECT",
+      response: "The exit signal sits on top of the water.",
+    },
   },
 };
 
@@ -490,11 +603,14 @@ const STATUS_TEXT = {
     "super-almond-water": "超级杏仁水",
     flashlight: "手电筒",
     detector: "探测仪",
+    compass: "指南针",
     flashlightAcquired: "已获得手电筒",
     flashlightRestocked: "手电筒 +1",
     flashlightFull: "手电筒已达上限",
     flashlightRefilled: "手电筒电量已满",
     detectorAcquired: "探测仪已激活",
+    compassAcquired: "已获得指南针",
+    compassReady: "指南针正在指向出口",
     detectorReady: "就绪",
     detectorReadyHint: "按 E 使用",
     detectorScan: "扫描 {seconds}秒",
@@ -534,10 +650,13 @@ const STATUS_TEXT = {
     "super-almond-water": "SUPER ALMOND WATER",
     flashlight: "FLASHLIGHT",
     detector: "DETECTOR",
+    compass: "COMPASS",
     flashlightAcquired: "FLASHLIGHT ACQUIRED",
     flashlightRestocked: "FLASHLIGHT +1",
     flashlightFull: "FLASHLIGHT STACK FULL",
     detectorAcquired: "DETECTOR ONLINE",
+    compassAcquired: "COMPASS ACQUIRED",
+    compassReady: "COMPASS POINTING TO EXIT",
     detectorReady: "READY",
     detectorReadyHint: "PRESS E TO USE",
     detectorScan: "SCAN {seconds}s",
@@ -590,7 +709,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.18;
 
-const flashlightLight = new THREE.SpotLight(0xfff2c5, 0, 65, 0.5, 0.72, 1.68);
+const flashlightLight = new THREE.SpotLight(0xfff2c5, 0, 86, 0.56, 0.74, 1.42);
 flashlightLight.position.set(0.18, -0.12, -0.16);
 flashlightLight.name = "player-flashlight";
 const flashlightTarget = new THREE.Object3D();
@@ -648,7 +767,10 @@ let detectorActiveTimer = 0;
 let detectorCooldownTimer = 0;
 let currentLanguage = "zh-CN";
 const detectorProjection = new THREE.Vector3();
+const compassForward = new THREE.Vector3();
 let lastMetrics = null;
+
+const INVENTORY_ORDER = ["flashlight", "detector", "compass", "almond-water", "super-almond-water"];
 
 const INVENTORY_DEFS = {
   flashlight: {
@@ -659,6 +781,7 @@ const INVENTORY_DEFS = {
     maxStack: FLASHLIGHT_MAX_STACK,
   },
   detector: { id: "detector", type: "scan", unique: true, stackable: false },
+  compass: { id: "compass", type: "passive", unique: true, stackable: false },
   "almond-water": { id: "almond-water", type: "consumable", unique: false, stackable: true },
   "super-almond-water": {
     id: "super-almond-water",
@@ -763,6 +886,20 @@ const ITEM_ICON_SVG = {
     <circle cx="78" cy="27" r="2" fill="#80ff60"/>
     <circle cx="78" cy="27" r="4" fill="#80ff60" opacity="0.35"/>
     <rect x="14" y="84" width="72" height="4" rx="2" fill="#1a1410"/>`,
+
+  compass: `
+    <circle cx="50" cy="50" r="34" fill="#b2873f" stroke="#3a2410" stroke-width="2"/>
+    <circle cx="50" cy="50" r="27" fill="#efe2b5" stroke="#5d3a16" stroke-width="1.2"/>
+    <circle cx="50" cy="50" r="21" fill="none" stroke="#9b7335" stroke-width="0.8" opacity="0.75"/>
+    <path d="M50 17 L54 29 L50 25 L46 29 Z" fill="#332719"/>
+    <path d="M50 83 L46 71 L50 75 L54 71 Z" fill="#332719" opacity="0.7"/>
+    <path d="M17 50 L29 46 L25 50 L29 54 Z" fill="#332719" opacity="0.7"/>
+    <path d="M83 50 L71 54 L75 50 L71 46 Z" fill="#332719" opacity="0.7"/>
+    <path d="M50 24 L57 51 L50 47 L43 51 Z" fill="#ff4b35" stroke="#5b1008" stroke-width="0.7"/>
+    <path d="M50 76 L43 49 L50 53 L57 49 Z" fill="#202020" stroke="#0a0806" stroke-width="0.7"/>
+    <circle cx="50" cy="50" r="4.5" fill="#392414"/>
+    <path d="M30 18 Q50 7 70 18" fill="none" stroke="#f5c86e" stroke-width="2" opacity="0.55"/>
+    <path d="M36 38 Q50 28 64 38" fill="none" stroke="#fff6cf" stroke-width="1.4" opacity="0.32"/>`,
 };
 
 let iconIdCounter = 0;
@@ -816,7 +953,7 @@ function loadIntegerSet(key) {
     if (!raw) return new Set();
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((n) => Number.isInteger(n) && n >= 0 && n <= 5));
+    return new Set(parsed.filter((n) => Number.isInteger(n) && n >= 0 && n <= 7));
   } catch {
     return new Set();
   }
@@ -867,6 +1004,11 @@ function getLocalizedText(collection, id) {
   return collection[currentLanguage]?.[id] ?? collection.en?.[id] ?? collection["zh-CN"]?.[id] ?? {};
 }
 
+function isTypingTarget(target) {
+  const tagName = target?.tagName;
+  return Boolean(target?.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA");
+}
+
 function findInventoryIndex(id) {
   return inventory.findIndex((entry) => entry.id === id);
 }
@@ -874,6 +1016,18 @@ function findInventoryIndex(id) {
 function getInventoryCount(id) {
   const entry = inventory[findInventoryIndex(id)];
   return entry ? entry.count : 0;
+}
+
+function sortInventory(preferredId = null) {
+  const equippedId = preferredId ?? getEquipped()?.id ?? null;
+  inventory.sort((a, b) => {
+    const aOrder = INVENTORY_ORDER.indexOf(a.id);
+    const bOrder = INVENTORY_ORDER.indexOf(b.id);
+    return (aOrder === -1 ? 99 : aOrder) - (bOrder === -1 ? 99 : bOrder);
+  });
+  equippedIndex = equippedId ? findInventoryIndex(equippedId) : Math.min(equippedIndex, inventory.length - 1);
+  if (inventory.length === 0) equippedIndex = -1;
+  if (equippedIndex < 0 && inventory.length > 0) equippedIndex = 0;
 }
 
 function addInventory(id, { silent = false } = {}) {
@@ -885,11 +1039,12 @@ function addInventory(id, { silent = false } = {}) {
       if (def.maxStack && existing.count >= def.maxStack) return false;
       existing.count += 1;
     }
+    sortInventory(id);
     markDirty();
     return true;
   }
   inventory.push({ id, count: def.unique ? 1 : 1, type: def.type });
-  equippedIndex = inventory.length - 1;
+  sortInventory(id);
   markDirty();
   return true;
 }
@@ -1014,17 +1169,11 @@ function buildLevelInitialState(level, save) {
 function applySaveToRuntime(save) {
   if (!save) return;
   inventory.length = 0;
+  const equippedId = save.inventory?.[save.equippedIndex]?.id ?? null;
   for (const entry of save.inventory) {
     inventory.push({ id: entry.id, count: entry.count, type: entry.type });
   }
-  if (inventory.length === 0) {
-    equippedIndex = -1;
-  } else {
-    const safeIdx = save.equippedIndex >= 0 && save.equippedIndex < inventory.length
-      ? save.equippedIndex
-      : 0;
-    equippedIndex = safeIdx;
-  }
+  sortInventory(equippedId);
   flashlightOwned = Boolean(save.flashlight?.owned);
   flashlightOn = Boolean(save.flashlight?.on) && flashlightOwned;
   flashlightBattery = Number.isFinite(save.flashlight?.battery) ? save.flashlight.battery : 0;
@@ -1228,6 +1377,7 @@ function updateLevelTransition(delta) {
 levelSelect?.addEventListener("change", () => {
   if (!world) return;
   const nextLevel = Number(levelSelect.value);
+  levelSelect.blur();
   if (nextLevel === world.level) return;
   if (!reachedLevels.has(nextLevel)) {
     if (levelSelect) levelSelect.value = String(world.level);
@@ -1247,6 +1397,7 @@ levelSelect?.addEventListener("change", () => {
 
 languageSelect?.addEventListener("change", () => {
   const nextLanguage = languageSelect.value === "en" ? "en" : "zh-CN";
+  languageSelect.blur();
   currentLanguage = nextLanguage;
   document.documentElement.lang = nextLanguage;
   canvas.dataset.language = nextLanguage;
@@ -1462,8 +1613,14 @@ function updateFlashlight(delta) {
   }
 
   const ratio = FLASHLIGHT_BATTERY_MAX > 0 ? flashlightBattery / FLASHLIGHT_BATTERY_MAX : 0;
-  flashlightLight.intensity = flashlightOwned && flashlightOn && flashlightBattery > 0 ? 22.8 * Math.max(0.46, ratio) : 0;
-  flashlightLight.distance = 28 + ratio * 24;
+  const levelEffectiveness = Number.isFinite(world?.flashlightEffectiveness)
+    ? Math.max(0.42, world.flashlightEffectiveness)
+    : 1;
+  flashlightLight.intensity =
+    flashlightOwned && flashlightOn && flashlightBattery > 0
+      ? 34 * Math.max(0.5, ratio) * levelEffectiveness
+      : 0;
+  flashlightLight.distance = (38 + ratio * 36) * Math.min(1.45, levelEffectiveness);
   updateFlashlightHud();
 }
 
@@ -1518,6 +1675,35 @@ function updateDetectorHud() {
   canvas.dataset.detectorCooldown = detectorCooldownTimer.toFixed(1);
 }
 
+function normalizeAngle(angle) {
+  let next = angle;
+  while (next > Math.PI) next -= Math.PI * 2;
+  while (next < -Math.PI) next += Math.PI * 2;
+  return next;
+}
+
+function updateCompassHud(metrics) {
+  const isEquipped = getEquipped()?.id === "compass";
+  const owned = getInventoryCount("compass") > 0;
+  if (compassMeter) compassMeter.hidden = !owned || !isEquipped;
+  canvas.dataset.compassOwned = String(owned);
+  if (!owned || !isEquipped || !world?.targetPosition || !world?.camera) {
+    canvas.dataset.compassBearing = "";
+    if (compassReadout) compassReadout.textContent = "--";
+    return;
+  }
+
+  const dx = world.targetPosition.x - world.camera.position.x;
+  const dz = world.targetPosition.z - world.camera.position.z;
+  const targetAngle = Math.atan2(dx, dz);
+  world.camera.getWorldDirection(compassForward);
+  const forwardAngle = Math.atan2(compassForward.x, compassForward.z);
+  const relative = normalizeAngle(targetAngle - forwardAngle);
+  if (compassArrow) compassArrow.style.transform = `rotate(${relative.toFixed(4)}rad)`;
+  if (compassReadout) compassReadout.textContent = `${Math.round(metrics?.exitDistance ?? Math.hypot(dx, dz))}m`;
+  canvas.dataset.compassBearing = String(Math.round((relative * 180) / Math.PI));
+}
+
 function clearEntityMarkers() {
   entityMarkers?.replaceChildren();
 }
@@ -1555,6 +1741,7 @@ function updateEntityMarkers(metrics) {
         marker.className = "entity-marker";
         if (entity.id === "super-bacteria") marker.classList.add("entity-marker--super");
         if (entity.id === "hound") marker.classList.add("entity-marker--hound");
+        if (entity.id === "level-seven-thing") marker.classList.add("entity-marker--thing");
         const name = document.createElement("strong");
         name.textContent = getLocalizedText(ENTITY_TEXT, entity.id)?.marker ?? entity.id.toUpperCase();
         const distance = document.createElement("span");
@@ -1672,7 +1859,7 @@ function scrollEquippedIntoView(container, equippedIndex) {
 function updateActionButtonState() {
   if (!actionButton) return;
   const equipped = getEquipped();
-  const hasUsable = Boolean(equipped);
+  const hasUsable = Boolean(equipped && equipped.id !== "compass");
   actionButton.classList.toggle("is-visible", hasUsable);
   actionButton.disabled = !hasUsable;
 }
@@ -1899,17 +2086,28 @@ function acquireDetector(count) {
   markDirty();
 }
 
+function acquireCompass(count) {
+  addInventory("compass");
+  pickupFlashText = formatLocalizedStatus("compassAcquired");
+  pickupFlashUntil = clock.elapsedTime + 1.7;
+  canvas.dataset.compassPickups = String(count ?? 1);
+  renderInventoryBar();
+  markDirty();
+}
+
 function updatePickupHud(metrics) {
   const almondWater = metrics.almondWater;
   const superAlmondWater = metrics.superAlmondWater;
   const flashlight = metrics.flashlight;
   const detector = metrics.detector;
+  const compass = metrics.compass;
   const canDrink = Boolean(almondWater?.available);
   const canDrinkSuper = Boolean(superAlmondWater?.available);
   const canTakeFlashlight = Boolean(flashlight?.available);
   const canTakeDetector = Boolean(detector?.available);
+  const canTakeCompass = Boolean(compass?.available);
   const canInteract = Boolean(metrics.focusInteraction?.available);
-  const canUse = canDrink || canDrinkSuper || canTakeFlashlight || canTakeDetector || canInteract;
+  const canUse = canDrink || canDrinkSuper || canTakeFlashlight || canTakeDetector || canTakeCompass || canInteract;
   useButton?.classList.toggle("is-visible", canUse);
   if (useButton) useButton.disabled = !canUse;
   canvas.dataset.almondWaterVisible = String(Boolean(almondWater?.visible));
@@ -1932,20 +2130,36 @@ function updatePickupHud(metrics) {
   canvas.dataset.detectorDistance = Number.isFinite(detector?.distance)
     ? String(Math.round(detector.distance))
     : "";
+  canvas.dataset.compassVisible = String(Boolean(compass?.visible));
+  canvas.dataset.compassAvailable = String(canTakeCompass);
+  canvas.dataset.compassDistance = Number.isFinite(compass?.distance)
+    ? String(Math.round(compass.distance))
+    : "";
   canvas.dataset.focusInteraction = metrics.focusInteraction?.id ?? "";
   canvas.dataset.focusInteractionAvailable = String(canInteract);
 }
 
 function findNearestPickupable(metrics) {
-  const candidates = [
-    metrics.almondWater,
-    metrics.superAlmondWater,
-    metrics.flashlight,
-    metrics.detector,
-  ].filter((item) => item && Number.isFinite(item.distance) && item.available);
+  const candidates = getPickupStates(metrics).filter((item) => Number.isFinite(item.distance) && item.available);
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => a.distance - b.distance);
   return candidates[0];
+}
+
+function getPickupStates(metrics) {
+  if (Array.isArray(metrics?.pickups)) return metrics.pickups.filter(Boolean);
+  return [
+    metrics?.almondWater,
+    metrics?.superAlmondWater,
+    metrics?.flashlight,
+    metrics?.detector,
+    metrics?.compass,
+  ].filter(Boolean);
+}
+
+function findPickupableById(metrics, id) {
+  if (!id) return null;
+  return getPickupStates(metrics).find((item) => item.id === id && item.available) ?? null;
 }
 
 function getPickupItemInfo(candidate) {
@@ -1963,13 +2177,28 @@ function getPickupItemInfo(candidate) {
 }
 
 function updateItemInfo(metrics) {
-  const aimItem = metrics.focusItem ?? metrics.focusInteraction ?? metrics.focusEntity;
   const pickupable = findNearestPickupable(metrics);
-  const inRangeItem = pickupable ? getPickupItemInfo(pickupable) : null;
-  const item = aimItem ?? inRangeItem;
-  const canInteract = Boolean(metrics.focusInteraction?.available);
+  const focusItem = metrics.focusItem;
+  const focusInteraction = metrics.focusInteraction;
+  const focusEntity = metrics.focusEntity;
+  let item = null;
+  let canPickup = false;
+  let canInteract = false;
+
+  if (focusItem) {
+    item = focusItem;
+    canPickup = Boolean(findPickupableById(metrics, focusItem.id));
+  } else if (focusInteraction) {
+    item = focusInteraction;
+    canInteract = Boolean(focusInteraction.available);
+  } else if (focusEntity) {
+    item = focusEntity;
+  } else if (pickupable) {
+    item = getPickupItemInfo(pickupable);
+    canPickup = Boolean(item);
+  }
+
   const hasFocus = Boolean(item);
-  const canPickup = Boolean(pickupable);
   if (itemInfo) {
     if (hasFocus) itemInfo.hidden = false;
     itemInfo.classList.toggle("is-visible", hasFocus);
@@ -1985,13 +2214,14 @@ function updateItemInfo(metrics) {
     if (itemInfoEffect) itemInfoEffect.textContent = localized.effect ?? item.effect;
     if (itemInfoAction) itemInfoAction.textContent = localized.action ?? item.action;
   }
-  canvas.dataset.focusItem = aimItem?.id ?? inRangeItem?.id ?? "";
+  canvas.dataset.focusItem = item?.type === "item" ? item.id : "";
   canvas.dataset.focusEntity = metrics.focusEntity?.id ?? "";
   canvas.dataset.focusInfoType = item?.type ?? "";
   canvas.dataset.focusItemDistance = Number.isFinite(item?.distance)
     ? String(Math.round(item.distance * 10) / 10)
     : "";
   canvas.dataset.pickupAvailable = String(canPickup);
+  return { canPickup, canInteract };
 }
 
 function showItemInfoPickupKey(show) {
@@ -2015,9 +2245,11 @@ function flashPickupHint(textKey, durationMs = 1100) {
 
 function usePickup() {
   if (!world || exitComplete || levelTransition || isPaused) return;
-  const nearest = findNearestPickupable(lastMetrics);
+  const liveTarget = world.getPickupTarget
+    ? world.getPickupTarget(world.camera.position)
+    : findNearestPickupable(lastMetrics);
   if (
-    nearest?.id === "flashlight" &&
+    liveTarget?.id === "flashlight" &&
     getInventoryCount("flashlight") >= FLASHLIGHT_MAX_STACK
   ) {
     pickupFlashText = formatLocalizedStatus("flashlightFull");
@@ -2049,6 +2281,8 @@ function usePickup() {
     acquireFlashlight(pickup.count);
   } else if (pickup.itemId === "detector") {
     acquireDetector(pickup.count);
+  } else if (pickup.itemId === "compass") {
+    acquireCompass(pickup.count);
   } else if (pickup.itemId === "super-almond-water") {
     addInventory("super-almond-water");
     pickupFlashText = formatLocalizedStatus("superAlmondWaterUsed", {
@@ -2176,8 +2410,10 @@ function updateHud(metrics, controlState, elapsed) {
       ? pickupFlashText
       : metrics.superAlmondWater?.available
         ? formatLocalizedStatus("super-almond-water")
-        : metrics.detector?.available
+      : metrics.detector?.available
         ? formatLocalizedStatus("detector")
+        : metrics.compass?.available
+        ? formatLocalizedStatus("compass")
         : metrics.flashlight?.available
         ? formatLocalizedStatus("flashlight")
         : metrics.almondWater?.available
@@ -2189,14 +2425,12 @@ function updateHud(metrics, controlState, elapsed) {
               ? "SIGNAL FOUND"
               : "NO SIGNAL");
   updatePickupHud(metrics);
-  updateItemInfo(metrics);
-  showItemInfoPickupKey(
-    Boolean(findNearestPickupable(metrics)) ||
-      Boolean(metrics.focusInteraction?.available),
-  );
+  const itemInfoState = updateItemInfo(metrics);
+  showItemInfoPickupKey(itemInfoState.canPickup || itemInfoState.canInteract);
   updateStaminaHud(controlState);
   updateHealthHud(controlState);
   updateBuffCards(controlState);
+  updateCompassHud(metrics);
 }
 
 let playerHealthCooldown = 0;
@@ -2214,13 +2448,14 @@ function applyEntityContactDamage(delta, metrics) {
     if (!entity?.active) return false;
     if (!Number.isFinite(entity.distance)) return false;
     const id = entity.id ?? "";
-    const radius = id.includes("hound") ? 0.86 : 0.74;
-    return entity.distance <= radius;
+    const radius = id.includes("hound") ? HOUND_CONTACT_RADIUS : BACTERIA_CONTACT_RADIUS;
+    return entity.contact === true || entity.distance <= radius;
   });
   if (!hit) return;
   const id = hit.id ?? "";
   let damage;
-  if (id === "super-bacteria") damage = SUPER_BACTERIA_DAMAGE;
+  if (id === "level-seven-thing") damage = LEVEL_SEVEN_THING_DAMAGE;
+  else if (id === "super-bacteria") damage = SUPER_BACTERIA_DAMAGE;
   else if (id.includes("hound")) damage = HOUND_DAMAGE;
   else damage = BACTERIA_DAMAGE;
   const killed = controls.applyDamage(damage);
@@ -2329,8 +2564,7 @@ function onUseKeyDown(event) {
     }
     return;
   }
-  const tagName = event.target?.tagName;
-  if (tagName === "INPUT" || tagName === "SELECT" || tagName === "TEXTAREA") return;
+  if (isTypingTarget(event.target)) return;
   if (event.code === "KeyF") {
     event.preventDefault();
     usePickup();
@@ -2416,8 +2650,7 @@ function onCanvasTapPointerUp(event) {
 
 function onWheelCycleInventory(event) {
   if (isPaused) return;
-  const tagName = event.target?.tagName;
-  if (tagName === "INPUT" || tagName === "SELECT" || tagName === "TEXTAREA") return;
+  if (isTypingTarget(event.target) || event.target?.tagName === "SELECT") return;
   if (inventory.length === 0) return;
   const direction = event.deltaY > 0 ? 1 : -1;
   if (event.deltaY === 0) return;
@@ -2745,7 +2978,7 @@ function showSavePromptLevels() {
 function populateSavePromptLevels() {
   if (!savePromptLevelsList) return;
   savePromptLevelsList.replaceChildren();
-  for (let lv = 0; lv <= 5; lv += 1) {
+  for (let lv = 0; lv <= 7; lv += 1) {
     const info = getBackroomsLevelInfo(lv);
     const reached = reachedLevels.has(lv);
     const li = document.createElement("li");

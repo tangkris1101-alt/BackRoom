@@ -8,5 +8,6 @@ export {
   getFocusedInteraction,
   tryInteractWithSpots,
   getFocusedItem,
+  getPickupTarget,
   tryPickupItems,
 } from "./interactions.js";

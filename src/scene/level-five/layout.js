@@ -6,7 +6,7 @@ export const LEVEL_FIVE_ROWS = 27;
 export const LEVEL_FIVE_START_CELL = { col: 3, row: 14, yaw: -Math.PI / 2 };
 export const LEVEL_FIVE_TARGET_CELL = { col: 40, row: 24 };
 export const LEVEL_FIVE_EXIT_TRIGGER_RADIUS = CELL_SIZE * 0.76;
-export const LEVEL_FIVE_MAX_POINT_LIGHTS = 12;
+export const LEVEL_FIVE_MAX_POINT_LIGHTS = 14;
 export const LEVEL_FIVE_MIN_FIXTURE_DISTANCE = CELL_SIZE * 3.6;
 
 export const CELL_WALL = "#";

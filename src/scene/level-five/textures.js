@@ -5,7 +5,7 @@ export function createLevelFiveCarpetTexture() {
   return makeTexture(
     512,
     (context, size) => {
-      context.fillStyle = "#45180f";
+      context.fillStyle = "#5b2115";
       context.fillRect(0, 0, size, size);
 
       for (let y = 0; y < size; y += 74) {
@@ -36,7 +36,7 @@ export function createLevelFiveCarpetTexture() {
         const y = random() * size;
         const radius = 28 + random() * 82;
         const stain = context.createRadialGradient(x, y, 0, x, y, radius);
-        stain.addColorStop(0, "rgba(8,3,2,0.14)");
+        stain.addColorStop(0, "rgba(8,3,2,0.09)");
         stain.addColorStop(1, "rgba(8,3,2,0)");
         context.fillStyle = stain;
         context.beginPath();
@@ -56,7 +56,7 @@ export function createLevelFiveWallpaperTexture() {
   return makeTexture(
     512,
     (context, size) => {
-      context.fillStyle = "#552016";
+      context.fillStyle = "#67291d";
       context.fillRect(0, 0, size, size);
 
       for (let x = 0; x < size; x += 72) {
@@ -86,7 +86,7 @@ export function createLevelFiveWallpaperTexture() {
         const y = random() * size;
         const radius = 20 + random() * 62;
         const stain = context.createRadialGradient(x, y, 0, x, y, radius);
-        stain.addColorStop(0, "rgba(20,5,2,0.12)");
+        stain.addColorStop(0, "rgba(20,5,2,0.08)");
         stain.addColorStop(1, "rgba(20,5,2,0)");
         context.fillStyle = stain;
         context.beginPath();

@@ -24,10 +24,15 @@ export const DETECTOR_PICKUP_RADIUS = 3.0;
 export const DETECTOR_INSPECT_DISTANCE = 8.0;
 export const DETECTOR_RESPAWN_MIN = 84;
 export const DETECTOR_RESPAWN_VARIANCE = 42;
+export const COMPASS_PICKUP_RADIUS = 3.0;
+export const COMPASS_INSPECT_DISTANCE = 8.0;
+export const COMPASS_RESPAWN_MIN = 72;
+export const COMPASS_RESPAWN_VARIANCE = 36;
 export const BACTERIA_CONTACT_RADIUS = 0.74;
 export const BACTERIA_SPAWN_MIN_FROM_PLAYER = CELL_SIZE * 7;
 export const BACTERIA_SPAWN_MAX_FROM_EXIT = CELL_SIZE * 6.4;
-export const HOUND_CONTACT_RADIUS = 0.86;
+export const HOUND_CONTACT_RADIUS = 1.18;
+export const ENTITY_SPEED_MULTIPLIER = 2;
 export const ENTITY_INSPECT_DISTANCE = 10.5;
 export const INTERACTION_RADIUS = 3.0;
 export const INTERACTION_INSPECT_DISTANCE = 8.0;
@@ -42,6 +47,8 @@ const LEVEL_INFOS = new Map([
   [3, { level: 3, levelLabel: "LEVEL 3", levelName: "ELECTRICAL STATION" }],
   [4, { level: 4, levelLabel: "LEVEL 4", levelName: "ABANDONED OFFICE" }],
   [5, { level: 5, levelLabel: "LEVEL 5", levelName: "TERROR HOTEL" }],
+  [6, { level: 6, levelLabel: "LEVEL 6", levelName: "LIGHTS OUT" }],
+  [7, { level: 7, levelLabel: "LEVEL 7", levelName: "THALASSOPHOBIA" }],
 ]);
 
 export function getBackroomsLevelInfo(level = 0) {

@@ -110,9 +110,9 @@ export function collectLevelFiveTransforms() {
           rotation: eastWestOpen ? 0 : Math.PI / 2,
           phase: col * 0.47 + row * 0.93,
           speed: 1.8 + ((col + row) % 5) * 0.28,
-          weak: isBoiler ? 0.34 : isDark ? 0.42 : 0.12,
-          range: isStart || isTarget ? 15.5 : isBallroomCenter ? 14.2 : isBoiler ? 10.5 : isDarkFixture ? 7.2 : 11.8,
-          baseIntensity: isStart || isTarget ? 1.65 : isBallroomCenter ? 1.45 : isBoiler ? 1.0 : isDarkFixture ? 0.48 : 1.18,
+          weak: isBoiler ? 0.28 : isDark ? 0.34 : 0.1,
+          range: isStart || isTarget ? 20.5 : isBallroomCenter ? 18.4 : isBoiler ? 13.8 : isDarkFixture ? 9.4 : 15.6,
+          baseIntensity: isStart || isTarget ? 2.08 : isBallroomCenter ? 1.84 : isBoiler ? 1.32 : isDarkFixture ? 0.66 : 1.5,
           color: isBoiler ? 0xff7a36 : 0xffd38a,
           priority: isStart || isTarget ? 9 : isBallroomCenter ? 6 : isBoiler ? 4 : isDarkFixture ? 0 : 2,
         });
@@ -171,9 +171,9 @@ export function createLevelFiveLights(scene, fixturePositions) {
     let light = null;
     if (pointLightIndexes.has(index)) {
       light = createFixturePointLight(fixture, CEILING_Y - 0.42, {
-        rangeScale: 1.72,
-        intensityScale: 1.34,
-        decay: 2.1,
+        rangeScale: 2.08,
+        intensityScale: 1.68,
+        decay: 1.88,
       });
       scene.add(light);
     }

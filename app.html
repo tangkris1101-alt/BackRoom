@@ -26,6 +26,8 @@
               <option value="3">LEVEL 3</option>
               <option value="4">LEVEL 4</option>
               <option value="5">LEVEL 5</option>
+              <option value="6">LEVEL 6</option>
+              <option value="7">LEVEL 7</option>
             </select>
             <span id="status-text">NO SIGNAL</span>
             <select id="language-select" class="language-select" aria-label="Language">
@@ -67,6 +69,13 @@
               <div id="detector-fill" class="detector-meter__fill"></div>
             </div>
             <span id="detector-readout">--</span>
+          </div>
+          <div id="compass-meter" class="compass-meter" aria-label="Exit compass" hidden>
+            <span class="compass-meter__label">EXIT</span>
+            <div class="compass-meter__dial">
+              <span id="compass-arrow" class="compass-meter__arrow">▲</span>
+            </div>
+            <span id="compass-readout">--</span>
           </div>
           <div id="drinking-meter" class="drinking-meter" aria-label="Drinking" hidden>
             <span class="drinking-meter__label">DRINK</span>

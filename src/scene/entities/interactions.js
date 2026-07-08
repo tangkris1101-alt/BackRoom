@@ -27,7 +27,7 @@ export function getFocusedEntity(camera, entities = []) {
         {
           distanceLimit: ENTITY_INSPECT_DISTANCE,
           height: entity.y ?? 1.2,
-          radius: entity.id === "hound" ? 0.8 : 0.58,
+          radius: entity.id === "hound" ? 0.8 : entity.id === "level-seven-thing" ? 1.05 : 0.58,
         },
       );
       return distance === null
@@ -107,11 +107,36 @@ export function tryInteractWithSpots(playerPosition, ...interactions) {
 }
 
 export function getFocusedItem(...items) {
-  return items.filter(Boolean).sort((a, b) => a.distance - b.distance)[0] ?? null;
+  return items
+    .filter(Boolean)
+    .map((item) => ({ ...item, type: "item" }))
+    .sort((a, b) => a.distance - b.distance)[0] ?? null;
+}
+
+function rankPickups(playerPosition, pickups) {
+  return pickups
+    .map((pickup, index) => {
+      const state = pickup?.getPickupState?.(playerPosition);
+      return { pickup, index, state };
+    })
+    .filter(({ pickup }) => Boolean(pickup))
+    .sort((a, b) => {
+      const aAvailable = Boolean(a.state?.available);
+      const bAvailable = Boolean(b.state?.available);
+      if (aAvailable !== bAvailable) return aAvailable ? -1 : 1;
+      const aDistance = Number.isFinite(a.state?.distance) ? a.state.distance : Infinity;
+      const bDistance = Number.isFinite(b.state?.distance) ? b.state.distance : Infinity;
+      if (aDistance !== bDistance) return aDistance - bDistance;
+      return a.index - b.index;
+    });
+}
+
+export function getPickupTarget(playerPosition, ...pickups) {
+  return rankPickups(playerPosition, pickups).find(({ state }) => state?.available)?.state ?? null;
 }
 
 export function tryPickupItems(playerPosition, ...pickups) {
-  for (const pickup of pickups) {
+  for (const { pickup } of rankPickups(playerPosition, pickups)) {
     const result = pickup.tryPickup(playerPosition);
     if (result?.pickedUp) return result;
   }

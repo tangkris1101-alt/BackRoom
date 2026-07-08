@@ -63,12 +63,14 @@ import {
   createAlmondWaterPickup,
   createFlashlightPickup,
   createDetectorPickup,
+  createCompassPickup,
 } from "../items/index.js";
 import {
   createBacteriaEntity,
   createHoundEntity,
   chooseBacteriaSpawn,
   createInteractionSpot,
+  getPickupTarget,
   tryPickupItems,
   getFocusedEntity,
   getFocusedInteraction,
@@ -662,6 +664,15 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     blockedAabbs: propColliders,
     initialState: pickupInitial.detector ?? null,
   });
+  const compass = createCompassPickup(scene, {
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    getCellCenter: levelTwoCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    initialState: pickupInitial.compass ?? null,
+  });
 
   const interactions = [
     createInteractionSpot({
@@ -789,9 +800,11 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
+    const compassState = compass.update(delta, elapsed, playerPosition);
     const bacteriaState = bacteria.update(delta, elapsed, playerPosition);
     const houndState = hound.update(delta, elapsed, playerPosition);
     const entities = [bacteriaState, houndState];
+    const pickups = [almondWaterState, superAlmondWaterState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -802,12 +815,15 @@ export function createLevelTwoScene({ initialState = null } = {}) {
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
+      compass: compassState,
+      pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
       focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
+        compass.inspect(camera),
         detector.inspect(camera),
         flashlight.inspect(camera),
       ),
@@ -830,16 +846,20 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     scene,
     camera,
     spawn,
+    targetPosition,
     isWalkable,
     update,
+    getPickupTarget: (playerPosition) =>
+      getPickupTarget(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, superAlmondWater, flashlight, almondWater),
+      tryPickupItems(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {
           flashlight: flashlight.getState(),
           detector: detector.getState(),
+          compass: compass.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },
