@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import { createWideSignTexture } from "../common/textures.js";
 import { createInteractionSpot } from "../entities/interactions.js";
 import { levelOneCellCenter, getLevelOneTargetMount } from "../level-one/layout.js";

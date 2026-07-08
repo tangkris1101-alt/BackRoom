@@ -1,4 +1,4 @@
-﻿import { CELL_SIZE, WALL_THICKNESS } from "../constants.js";
+import { CELL_SIZE, WALL_THICKNESS } from "../constants.js";
 
 export const LEVEL_TWO_COLS = 50;
 export const LEVEL_TWO_ROWS = 28;

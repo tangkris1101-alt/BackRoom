@@ -1,4 +1,4 @@
-﻿import { createSeededRandom, makeTexture, drawSpeckles } from "../common/texture-utils.js";
+import { createSeededRandom, makeTexture, drawSpeckles } from "../common/texture-utils.js";
 
 export function createLevelFourCarpetTexture() {
   const random = createSeededRandom(0x4f4f04);

@@ -1,4 +1,4 @@
-﻿import { CELL_SIZE, LAYOUT_COLS, LAYOUT_ROWS } from "../constants.js";
+import { CELL_SIZE, LAYOUT_COLS, LAYOUT_ROWS } from "../constants.js";
 
 export function createLayout() {
   const grid = Array.from({ length: LAYOUT_ROWS }, () =>

@@ -1,4 +1,4 @@
-﻿import { CELL_SIZE, WALL_THICKNESS } from "../constants.js";
+import { CELL_SIZE, WALL_THICKNESS } from "../constants.js";
 import { isInRect } from "../common/layout.js";
 
 export const LEVEL_ONE_COLS = 35;

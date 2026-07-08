@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -64,6 +64,7 @@ import {
   createFlashlightPickup,
   createDetectorPickup,
   createCompassPickup,
+  createSilenceLiquidPickup,
 } from "../items/index.js";
 import {
   createBacteriaEntity,
@@ -523,52 +524,54 @@ export function createLevelTwoScene({ initialState = null } = {}) {
   const objectiveInitial = initialState?.objectives ?? {};
   const entityInitial = Array.isArray(initialState?.entities) ? initialState.entities : [];
 
+  // Keep the pipe-room surfaces dimmer than the ceiling fixtures so the player
+  // flashlight has visible lighting headroom on nearby floors and walls.
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: createLevelTwoFloorTexture(),
-    color: 0xb8a485,
-    emissive: 0x4a3422,
-    emissiveIntensity: 0.62,
-    roughness: 0.85,
-    metalness: 0.06,
+    color: 0xa58d6c,
+    emissive: 0x24150b,
+    emissiveIntensity: 0.12,
+    roughness: 0.91,
+    metalness: 0.02,
   });
   const wallMaterial = new THREE.MeshStandardMaterial({
     map: createLevelTwoWallTexture(),
-    color: 0xc4b298,
-    emissive: 0x3c2c1a,
-    emissiveIntensity: 0.5,
-    roughness: 0.86,
-    metalness: 0.04,
+    color: 0xae997b,
+    emissive: 0x1d1108,
+    emissiveIntensity: 0.08,
+    roughness: 0.91,
+    metalness: 0.02,
     side: THREE.DoubleSide,
   });
   const ceilingMaterial = new THREE.MeshStandardMaterial({
     map: createLevelTwoCeilingTexture(),
-    color: 0x9a8e74,
-    emissive: 0x2a1d12,
-    emissiveIntensity: 0.46,
-    roughness: 0.88,
-    metalness: 0.08,
+    color: 0x8d8068,
+    emissive: 0x21160c,
+    emissiveIntensity: 0.18,
+    roughness: 0.9,
+    metalness: 0.05,
   });
   const wallCapMaterial = new THREE.MeshStandardMaterial({
-    color: 0x4a3e30,
-    emissive: 0x140b06,
-    emissiveIntensity: 0.18,
-    roughness: 0.92,
-    metalness: 0.08,
+    color: 0x443729,
+    emissive: 0x0e0704,
+    emissiveIntensity: 0.05,
+    roughness: 0.94,
+    metalness: 0.04,
   });
   const diagWallMaterial = new THREE.MeshStandardMaterial({
-    color: 0x6a5b48,
-    emissive: 0x261a0e,
-    emissiveIntensity: 0.32,
-    roughness: 0.88,
-    metalness: 0.12,
+    color: 0x5f503d,
+    emissive: 0x170c05,
+    emissiveIntensity: 0.08,
+    roughness: 0.91,
+    metalness: 0.06,
     side: THREE.DoubleSide,
   });
   const fillMaterial = new THREE.MeshStandardMaterial({
-    color: 0x564b3c,
-    emissive: 0x1a120a,
-    emissiveIntensity: 0.22,
-    roughness: 0.9,
-    metalness: 0.06,
+    color: 0x4d4133,
+    emissive: 0x100905,
+    emissiveIntensity: 0.06,
+    roughness: 0.92,
+    metalness: 0.04,
     side: THREE.DoubleSide,
   });
 
@@ -596,11 +599,11 @@ export function createLevelTwoScene({ initialState = null } = {}) {
   const fillMesh = new THREE.Mesh(merged.fill, fillMaterial);
   scene.add(fillMesh);
 
-  scene.add(new THREE.HemisphereLight(0xffb778, 0x3a2818, 1.6));
-  const heatFill = new THREE.DirectionalLight(0xff9a55, 0.55);
+  scene.add(new THREE.HemisphereLight(0xffb778, 0x3a2818, 0.86));
+  const heatFill = new THREE.DirectionalLight(0xff9a55, 0.22);
   heatFill.position.set(-12, CEILING_Y - 0.4, 22);
   scene.add(heatFill);
-  const playerAmbient = new THREE.PointLight(0xffd9a8, 0.65, 9.5, 1.6);
+  const playerAmbient = new THREE.PointLight(0xffd9a8, 0.1, 6.4, 1.9);
   playerAmbient.position.set(0, CEILING_Y - 0.6, 0);
   scene.add(playerAmbient);
 
@@ -672,6 +675,15 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial.compass ?? null,
+  });
+  const silenceLiquid = createSilenceLiquidPickup(scene, {
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    getCellCenter: levelTwoCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    initialState: pickupInitial["silence-liquid"] ?? null,
   });
 
   const interactions = [
@@ -764,7 +776,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     return col >= 0 && col < LEVEL_TWO_COLS && row >= 0 && row < LEVEL_TWO_ROWS;
   }
 
-  function update(delta, elapsed, playerPosition) {
+  function update(delta, elapsed, playerPosition, effects = {}) {
     let lightTotal = 0;
     fixtures.forEach((fixture) => {
       const hum = 0.78 + Math.sin(elapsed * 1.7 + fixture.phase) * 0.07;
@@ -801,10 +813,11 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const compassState = compass.update(delta, elapsed, playerPosition);
-    const bacteriaState = bacteria.update(delta, elapsed, playerPosition);
-    const houndState = hound.update(delta, elapsed, playerPosition);
+    const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
+    const bacteriaState = bacteria.update(delta, elapsed, playerPosition, effects);
+    const houndState = hound.update(delta, elapsed, playerPosition, effects);
     const entities = [bacteriaState, houndState];
-    const pickups = [almondWaterState, superAlmondWaterState, compassState, detectorState, flashlightState];
+    const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -815,6 +828,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
+      silenceLiquid: silenceLiquidState,
       compass: compassState,
       pickups,
       entities,
@@ -823,6 +837,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
+        silenceLiquid.inspect(camera),
         compass.inspect(camera),
         detector.inspect(camera),
         flashlight.inspect(camera),
@@ -848,11 +863,12 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     spawn,
     targetPosition,
     isWalkable,
+    flashlightEffectiveness: 1.82,
     update,
     getPickupTarget: (playerPosition) =>
-      getPickupTarget(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
+      getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
+      tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
@@ -860,6 +876,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
           flashlight: flashlight.getState(),
           detector: detector.getState(),
           compass: compass.getState(),
+          "silence-liquid": silenceLiquid.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },

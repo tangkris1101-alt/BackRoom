@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -30,6 +30,7 @@ import {
   createCompassPickup,
   createFlashlightPickup,
   createDetectorPickup,
+  createSilenceLiquidPickup,
 } from "../items/index.js";
 import {
   createHoundEntity,
@@ -220,6 +221,15 @@ export function createLevelFourScene({ initialState = null } = {}) {
     blockedAabbs: propColliders,
     initialState: pickupInitial.compass ?? null,
   });
+  const silenceLiquid = createSilenceLiquidPickup(scene, {
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    initialState: pickupInitial["silence-liquid"] ?? null,
+  });
   const hound = createHoundEntity(scene, {
     spawnPosition:
       chooseBacteriaSpawn({
@@ -263,7 +273,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
     return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
   }
 
-  function update(delta, elapsed, playerPosition) {
+  function update(delta, elapsed, playerPosition, effects = {}) {
     let lightTotal = 0;
     fixtures.forEach((fixture, index) => {
       const hum = 0.88 + Math.sin(elapsed * 1.05 + fixture.phase) * 0.035;
@@ -286,9 +296,10 @@ export function createLevelFourScene({ initialState = null } = {}) {
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const compassState = compass.update(delta, elapsed, playerPosition);
-    const houndState = hound.update(delta, elapsed, playerPosition);
+    const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
+    const houndState = hound.update(delta, elapsed, playerPosition, effects);
     const entities = [houndState];
-    const pickups = [almondWaterState, superAlmondWaterState, compassState, detectorState, flashlightState];
+    const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -299,6 +310,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
+      silenceLiquid: silenceLiquidState,
       compass: compassState,
       pickups,
       entities,
@@ -307,6 +319,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
+        silenceLiquid.inspect(camera),
         compass.inspect(camera),
         detector.inspect(camera),
         flashlight.inspect(camera),
@@ -334,9 +347,9 @@ export function createLevelFourScene({ initialState = null } = {}) {
     isWalkable,
     update,
     getPickupTarget: (playerPosition) =>
-      getPickupTarget(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
+      getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
+      tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
@@ -344,6 +357,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
           flashlight: flashlight.getState(),
           detector: detector.getState(),
           compass: compass.getState(),
+          "silence-liquid": silenceLiquid.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },

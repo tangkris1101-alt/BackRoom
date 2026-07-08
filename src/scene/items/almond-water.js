@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import {
   CELL_SIZE,
   ALMOND_WATER_RESPAWN_MIN,
@@ -255,7 +255,9 @@ export function createAlmondWaterPickup(
       return {
         id: itemId,
         name: isSuper ? "SUPER ALMOND WATER" : "ALMOND WATER",
-        effect: isSuper ? "250 STAMINA CAP / RECOVERY x2" : "+50 STAMINA CAPACITY / 45s",
+        effect: isSuper
+          ? "250 STAMINA CAP / STRONG HEALTH REGEN"
+          : "+50 STAMINA CAP / HEALTH REGEN",
         action: "F / BUTTON PICK UP",
         distance,
       };

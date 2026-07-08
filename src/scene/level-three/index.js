@@ -50,6 +50,7 @@ import {
   createFlashlightPickup,
   createDetectorPickup,
   createCompassPickup,
+  createSilenceLiquidPickup,
 
 
 
@@ -238,6 +239,15 @@ addLevelThreeBreakerDoor(scene, targetPosition);
     blockedAabbs: propColliders,
     initialState: pickupInitial.compass ?? null,
   });
+  const silenceLiquid = createSilenceLiquidPickup(scene, {
+    cols: LEVEL_THREE_COLS,
+    rows: LEVEL_THREE_ROWS,
+    isCellOpen: isLevelThreeOpenCell,
+    getCellCenter: levelThreeCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    initialState: pickupInitial["silence-liquid"] ?? null,
+  });
   const interactions = [
     createInteractionSpot({
       id: "level-three-breaker",
@@ -339,7 +349,7 @@ addLevelThreeBreakerDoor(scene, targetPosition);
     return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
   }
 
-  function update(delta, elapsed, playerPosition) {
+  function update(delta, elapsed, playerPosition, effects = {}) {
     let lightTotal = 0;
     fixtures.forEach((fixture, index) => {
       const hum = 0.74 + Math.sin(elapsed * 1.42 + fixture.phase) * 0.08;
@@ -364,14 +374,15 @@ addLevelThreeBreakerDoor(scene, targetPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const compassState = compass.update(delta, elapsed, playerPosition);
-    const bacteriaStates = bacteria.map((b) => b.update(delta, elapsed, playerPosition));
-    const houndState = hound.update(delta, elapsed, playerPosition);
-    const ambushHoundState = ambushHound ? ambushHound.update(delta, elapsed, playerPosition) : null;
+    const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
+    const bacteriaStates = bacteria.map((b) => b.update(delta, elapsed, playerPosition, effects));
+    const houndState = hound.update(delta, elapsed, playerPosition, effects);
+    const ambushHoundState = ambushHound ? ambushHound.update(delta, elapsed, playerPosition, effects) : null;
     const entities = ambushHoundState
       ? [...bacteriaStates, houndState, ambushHoundState]
       : [...bacteriaStates, houndState];
     const entityContact = entities.some((state) => state.contact);
-    const pickups = [almondWaterState, superAlmondWaterState, compassState, detectorState, flashlightState];
+    const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -382,6 +393,7 @@ addLevelThreeBreakerDoor(scene, targetPosition);
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
+      silenceLiquid: silenceLiquidState,
       compass: compassState,
       pickups,
       entities,
@@ -390,6 +402,7 @@ addLevelThreeBreakerDoor(scene, targetPosition);
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
+        silenceLiquid.inspect(camera),
         compass.inspect(camera),
         detector.inspect(camera),
         flashlight.inspect(camera),
@@ -417,9 +430,9 @@ addLevelThreeBreakerDoor(scene, targetPosition);
     isWalkable,
     update,
     getPickupTarget: (playerPosition) =>
-      getPickupTarget(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
+      getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
+      tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
@@ -427,6 +440,7 @@ addLevelThreeBreakerDoor(scene, targetPosition);
           flashlight: flashlight.getState(),
           detector: detector.getState(),
           compass: compass.getState(),
+          "silence-liquid": silenceLiquid.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },

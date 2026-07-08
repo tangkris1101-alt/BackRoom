@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import { SHOW_FIRST_PERSON_VIEW_MODEL } from "../constants.js";
 export function applyViewModelMaterialSettings(material) {
   material.depthTest = false;

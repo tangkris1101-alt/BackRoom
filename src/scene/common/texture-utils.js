@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 export function makeTexture(size, draw, repeatX, repeatY) {
   const canvas = document.createElement("canvas");
   canvas.width = size;

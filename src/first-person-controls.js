@@ -20,6 +20,9 @@ const DRINK_MOVE_MULTIPLIER = 0.5;
 const DRINK_ON_COMPLETE_EVENT = "backrooms:drink-complete";
 const HEALTH_MAX = 100;
 const HOUND_SLOW_MOVE_MULTIPLIER = 0.7;
+const DAMAGE_SLOW_CLEANSE_DURATION = 3;
+const DEFAULT_HEALTH_REGEN_DURATION = 5;
+const SILENCE_LIQUID_DURATION = 12;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -67,6 +70,11 @@ export class FirstPersonControls {
     this.healthMax = HEALTH_MAX;
     this.health = HEALTH_MAX;
     this.houndSlowTimer = 0;
+    this.damageSlowCleanseTimer = 0;
+    this.healthRegenTimer = 0;
+    this.healthRegenRemaining = 0;
+    this.healthRegenRate = 0;
+    this.silenceLiquidTimer = 0;
     this.isSprinting = false;
     this.isDrinking = false;
     this.drinkTimer = 0;
@@ -137,6 +145,11 @@ export class FirstPersonControls {
     this.staminaRecoveryDelay = 0;
     this.health = this.healthMax;
     this.houndSlowTimer = 0;
+    this.damageSlowCleanseTimer = 0;
+    this.healthRegenTimer = 0;
+    this.healthRegenRemaining = 0;
+    this.healthRegenRate = 0;
+    this.silenceLiquidTimer = 0;
     this.isSprinting = false;
     this.isDrinking = false;
     this.drinkTimer = 0;
@@ -179,6 +192,23 @@ export class FirstPersonControls {
     this.houndSlowTimer = Number.isFinite(state.houndSlowTimer)
       ? Math.max(0, state.houndSlowTimer)
       : 0;
+    this.damageSlowCleanseTimer = Number.isFinite(state.damageSlowCleanseTimer)
+      ? Math.max(0, state.damageSlowCleanseTimer)
+      : 0;
+    this.healthRegenTimer = Number.isFinite(state.healthRegenTimer)
+      ? Math.max(0, state.healthRegenTimer)
+      : 0;
+    this.healthRegenRemaining = Number.isFinite(state.healthRegenRemaining)
+      ? Math.max(0, state.healthRegenRemaining)
+      : 0;
+    this.healthRegenRate = Number.isFinite(state.healthRegenRate) && state.healthRegenRate > 0
+      ? state.healthRegenRate
+      : this.healthRegenTimer > 0
+        ? this.healthRegenRemaining / this.healthRegenTimer
+        : 0;
+    this.silenceLiquidTimer = Number.isFinite(state.silenceLiquidTimer)
+      ? Math.max(0, state.silenceLiquidTimer)
+      : 0;
     this.isSprinting = false;
     this.isDrinking = Boolean(state.isDrinking);
     this.drinkTimer = Number.isFinite(state.drinkTimer) ? Math.max(0, state.drinkTimer) : 0;
@@ -216,6 +246,11 @@ export class FirstPersonControls {
       health: this.health,
       healthMax: this.healthMax,
       houndSlowTimer: this.houndSlowTimer,
+      damageSlowCleanseTimer: this.damageSlowCleanseTimer,
+      healthRegenTimer: this.healthRegenTimer,
+      healthRegenRemaining: this.healthRegenRemaining,
+      healthRegenRate: this.healthRegenRate,
+      silenceLiquidTimer: this.silenceLiquidTimer,
       isSprinting: this.isSprinting,
       isDrinking: this.isDrinking,
       drinkTimer: this.drinkTimer,
@@ -275,6 +310,12 @@ export class FirstPersonControls {
     this.canvas.dataset.healthMax = this.healthMax.toFixed(0);
     this.canvas.dataset.houndSlow = this.houndSlowTimer > 0 ? "1" : "0";
     this.canvas.dataset.houndSlowRemaining = this.houndSlowTimer.toFixed(1);
+    this.canvas.dataset.damageSlowCleanse = this.damageSlowCleanseTimer > 0 ? "1" : "0";
+    this.canvas.dataset.damageSlowCleanseRemaining = this.damageSlowCleanseTimer.toFixed(1);
+    this.canvas.dataset.healthRegenerating = this.healthRegenTimer > 0 ? "1" : "0";
+    this.canvas.dataset.healthRegenRemaining = this.healthRegenTimer.toFixed(1);
+    this.canvas.dataset.silenceLiquidActive = this.silenceLiquidTimer > 0 ? "1" : "0";
+    this.canvas.dataset.silenceLiquidRemaining = this.silenceLiquidTimer.toFixed(1);
     this.canvas.dataset.moving = String(this.isMoving);
     this.canvas.dataset.movementSpeed = this.movementSpeed.toFixed(3);
     this.canvas.dataset.headBob = this.headBobY.toFixed(3);
@@ -535,6 +576,29 @@ export class FirstPersonControls {
     if (this.staminaMax < previousMax) this.stamina = Math.min(this.stamina, this.staminaMax);
   }
 
+  updateHealthEffects(delta) {
+    if (this.damageSlowCleanseTimer > 0) {
+      this.damageSlowCleanseTimer = Math.max(0, this.damageSlowCleanseTimer - delta);
+      this.houndSlowTimer = 0;
+    }
+
+    if (this.healthRegenTimer > 0 && this.healthRegenRemaining > 0) {
+      const healBudget = Math.min(this.healthRegenRemaining, this.healthRegenRate * delta);
+      this.health = Math.min(this.healthMax, this.health + healBudget);
+      this.healthRegenRemaining = Math.max(0, this.healthRegenRemaining - healBudget);
+      this.healthRegenTimer = Math.max(0, this.healthRegenTimer - delta);
+      if (this.healthRegenTimer === 0 || this.healthRegenRemaining === 0) {
+        this.healthRegenTimer = 0;
+        this.healthRegenRemaining = 0;
+        this.healthRegenRate = 0;
+      }
+    }
+
+    if (this.silenceLiquidTimer > 0) {
+      this.silenceLiquidTimer = Math.max(0, this.silenceLiquidTimer - delta);
+    }
+  }
+
   updateHeadBob(delta, horizontalDistance, hasMovementInput) {
     const moving = hasMovementInput && horizontalDistance > 0.0001 && this.isGrounded;
     this.isMoving = moving;
@@ -559,6 +623,7 @@ export class FirstPersonControls {
 
   update(delta) {
     this.updateStaminaEffects(delta);
+    this.updateHealthEffects(delta);
     if (this.houndSlowTimer > 0) {
       this.houndSlowTimer = Math.max(0, this.houndSlowTimer - delta);
     }
@@ -656,6 +721,13 @@ export class FirstPersonControls {
       health: this.health,
       healthMax: this.healthMax,
       houndSlowRemaining: this.houndSlowTimer,
+      damageSlowCleanseRemaining: this.damageSlowCleanseTimer,
+      healthRegenRemaining: this.healthRegenTimer,
+      healthRegenAmountRemaining: this.healthRegenRemaining,
+      healthRegenerating: this.healthRegenTimer > 0 && this.healthRegenRemaining > 0,
+      silenceLiquidActive: this.silenceLiquidTimer > 0,
+      silenceLiquidRemaining: this.silenceLiquidTimer,
+      silenceLiquidDuration: SILENCE_LIQUID_DURATION,
       isDrinking: this.isDrinking,
       drinkItemId: this.drinkItemId,
       drinkProgress: this.isDrinking
@@ -666,8 +738,10 @@ export class FirstPersonControls {
   }
 
   getActiveBuffs() {
+    const buffs = [];
+
     if (this.superAlmondWaterTimer > 0) {
-      return [
+      buffs.push(
         {
           id: "super-almond-water",
           remaining: this.superAlmondWaterTimer,
@@ -676,11 +750,9 @@ export class FirstPersonControls {
           recoveryMultiplier: SUPER_ALMOND_WATER_RECOVERY_MULTIPLIER,
           speedMultiplier: SUPER_ALMOND_WATER_SPEED_MULTIPLIER,
         },
-      ];
-    }
-
-    if (this.almondWaterTimer > 0) {
-      return [
+      );
+    } else if (this.almondWaterTimer > 0) {
+      buffs.push(
         {
           id: "almond-water",
           remaining: this.almondWaterTimer,
@@ -688,10 +760,34 @@ export class FirstPersonControls {
           staminaMax: ALMOND_WATER_MAX_STAMINA,
           recoveryMultiplier: 1,
         },
-      ];
+      );
     }
 
-    return [];
+    if (this.damageSlowCleanseTimer > 0) {
+      buffs.push({
+        id: "damage-slow-cleanse",
+        remaining: this.damageSlowCleanseTimer,
+        duration: DAMAGE_SLOW_CLEANSE_DURATION,
+      });
+    }
+
+    if (this.healthRegenTimer > 0 && this.healthRegenRemaining > 0) {
+      buffs.push({
+        id: "health-regen",
+        remaining: this.healthRegenTimer,
+        duration: Math.max(this.healthRegenTimer, this.healthRegenRemaining / Math.max(this.healthRegenRate, 0.001)),
+      });
+    }
+
+    if (this.silenceLiquidTimer > 0) {
+      buffs.push({
+        id: "silence-liquid",
+        remaining: this.silenceLiquidTimer,
+        duration: SILENCE_LIQUID_DURATION,
+      });
+    }
+
+    return buffs;
   }
 
   startDrink(itemId, { staminaBonus = ALMOND_WATER_STAMINA_BONUS } = {}) {
@@ -755,6 +851,34 @@ export class FirstPersonControls {
     this.isSprinting = false;
     this.syncCameraState();
     return this.getState();
+  }
+
+  startDrinkRecovery(amount, {
+    duration = DEFAULT_HEALTH_REGEN_DURATION,
+    cleanseDuration = DAMAGE_SLOW_CLEANSE_DURATION,
+  } = {}) {
+    if (!Number.isFinite(amount) || amount <= 0 || this.health <= 0) return false;
+    const safeDuration = Math.max(0.2, Number.isFinite(duration) ? duration : DEFAULT_HEALTH_REGEN_DURATION);
+    this.healthRegenRemaining = Math.max(0, this.healthRegenRemaining) + amount;
+    this.healthRegenTimer = Math.max(this.healthRegenTimer, safeDuration);
+    this.healthRegenRate = this.healthRegenRemaining / this.healthRegenTimer;
+    this.damageSlowCleanseTimer = Math.max(
+      this.damageSlowCleanseTimer,
+      Number.isFinite(cleanseDuration) ? cleanseDuration : DAMAGE_SLOW_CLEANSE_DURATION,
+    );
+    this.houndSlowTimer = 0;
+    this.syncCameraState();
+    return true;
+  }
+
+  activateSilenceLiquid(duration = SILENCE_LIQUID_DURATION) {
+    this.silenceLiquidTimer = Math.max(
+      this.silenceLiquidTimer,
+      Number.isFinite(duration) ? duration : SILENCE_LIQUID_DURATION,
+    );
+    this.houndSlowTimer = 0;
+    this.syncCameraState();
+    return true;
   }
 
   applyDamage(amount) {

@@ -54,6 +54,9 @@ const exitOverlay = document.querySelector("#exit-overlay");
 const exitOverlayTitle = exitOverlay?.querySelector("strong");
 const exitOverlaySubtitle = exitOverlay?.querySelector("span");
 const exitOverlayTime = document.querySelector("#exit-overlay-time");
+const exitOverlayRestart = document.querySelector("#exit-overlay-restart");
+const exitOverlayRestartLabel = document.querySelector("#exit-overlay-restart-label");
+const exitOverlayRestartHint = document.querySelector("#exit-overlay-restart-hint");
 const loadingLevelLabel = loadingOverlay?.querySelector(".loading-overlay__panel span");
 const timerReadout = document.querySelector("#timer-readout");
 const timerReadoutValue = timerReadout?.querySelector(".timer-readout__value");
@@ -119,7 +122,11 @@ const FPS_SAMPLE_INTERVAL = 0.75;
 const FPS_LOW_THRESHOLD = 48;
 const FPS_HIGH_THRESHOLD = 58;
 const OVERLAY_FADE_MS = 460;
-const LEVEL_TRANSITION_MS = 1250;
+const LEVEL_TRANSITION_FADE_IN_MS = 720;
+const LEVEL_TRANSITION_HOLD_MS = 360;
+const LEVEL_TRANSITION_FADE_OUT_MS = 760;
+const LEVEL_TRANSITION_LOAD_AT_MS = LEVEL_TRANSITION_FADE_IN_MS + LEVEL_TRANSITION_HOLD_MS;
+const LEVEL_TRANSITION_MS = LEVEL_TRANSITION_LOAD_AT_MS + LEVEL_TRANSITION_FADE_OUT_MS;
 const FLASHLIGHT_BATTERY_MAX = 100;
 const FLASHLIGHT_DRAIN_RATE = 4.2;
 const FLASHLIGHT_MAX_STACK = 3;
@@ -146,17 +153,25 @@ const DAMAGE_COOLDOWN_S = 1.0;
 const ALMOND_WATER_HEAL = 30;
 const SUPER_ALMOND_WATER_HEAL = 80;
 const DAMAGE_FLASH_MS = 600;
+const EXIT_DOOR_INTERACT_RADIUS = 4.2;
+const EXIT_ELEVATOR_ENTER_RADIUS = 1.65;
+const ALMOND_WATER_HEAL_DURATION = 5;
+const SUPER_ALMOND_WATER_HEAL_DURATION = 6;
+const DRINK_SLOW_CLEANSE_DURATION = 3;
+const SILENCE_LIQUID_DURATION = 12;
+const SILENCE_LIQUID_REPEL_RADIUS = 18;
+const SILENCE_LIQUID_REPEL_SPEED_MULTIPLIER = 1.55;
 
 const ITEM_TEXT = {
   "zh-CN": {
     "almond-water": {
       name: "杏仁水",
-      effect: "+50 疾跑上限 / 45秒",
+      effect: "+50 体力上限 / 持续回血 / 3秒解除实体减速",
       action: "F / 按钮拾取并饮用",
     },
     "super-almond-water": {
       name: "超级杏仁水",
-      effect: "上限 250 / 恢复 x2 / 移速 x1.5 / 25秒",
+      effect: "上限 250 / 恢复 x2 / 移速 x1.5 / 强力持续回血",
       action: "F / 按钮拾取并饮用",
     },
     flashlight: {
@@ -169,21 +184,26 @@ const ITEM_TEXT = {
       effect: "标记大范围实体 / 5秒扫描",
       action: "F / 按钮拾取 · 拾取后按 R 扫描",
     },
+    "silence-liquid": {
+      name: "寂静液体",
+      effect: "驱散实体，使其 12 秒内不敢靠近",
+      action: "F / 按钮拾取 · 选中后按 E 使用",
+    },
     compass: {
       name: "出口指南针",
-      effect: "装备后指向当前层级出口",
+      effect: "只在当前层级有效，抵达出口后会消失",
       action: "F / 按钮拾取 · 选中后查看方向",
     },
   },
   en: {
     "almond-water": {
       name: "ALMOND WATER",
-      effect: "+50 STAMINA CAPACITY / 45s",
+      effect: "+50 STAMINA CAP / HEALTH REGEN / 3s SLOW CLEANSE",
       action: "F / BUTTON PICK UP",
     },
     "super-almond-water": {
       name: "SUPER ALMOND WATER",
-      effect: "250 CAP / RECOVERY x2 / SPEED x1.5 / 25s",
+      effect: "250 CAP / RECOVERY x2 / SPEED x1.5 / STRONG HEALTH REGEN",
       action: "F / BUTTON DRINK",
     },
     flashlight: {
@@ -196,9 +216,14 @@ const ITEM_TEXT = {
       effect: "WIDE ENTITY PING / 5s SCAN",
       action: "F / BUTTON PICK UP · R TO SCAN AFTER PICKUP",
     },
+    "silence-liquid": {
+      name: "SILENCE LIQUID",
+      effect: "REPELS ENTITIES FOR 12s",
+      action: "F / BUTTON PICK UP · E TO USE",
+    },
     compass: {
       name: "EXIT COMPASS",
-      effect: "POINTS TOWARD THE CURRENT LEVEL EXIT",
+      effect: "CURRENT LEVEL ONLY; VANISHES AT THE EXIT",
       action: "F / BUTTON PICK UP · EQUIP TO READ",
     },
   },
@@ -269,6 +294,18 @@ const ENTITY_TEXT = {
 
 const INTERACTION_TEXT = {
   "zh-CN": {
+    "exit-elevator-door": {
+      name: "\u51fa\u53e3\u7535\u68af\u95e8",
+      effect: "\u95e8\u540e\u7684\u7a7a\u95f4\u4fe1\u53f7\u4ecd\u5728\u7a33\u5b9a",
+      action: "F / \u6309\u94ae\u6253\u5f00",
+      response: "\u7535\u68af\u95e8\u6253\u5f00\uff0c\u6307\u5357\u9488\u5931\u53bb\u54cd\u5e94",
+    },
+    "exit-elevator-door-open": {
+      name: "\u51fa\u53e3\u7535\u68af",
+      effect: "\u95e8\u5df2\u6253\u5f00\uff0c\u8d70\u5165\u7535\u68af\u533a\u57df\u8fdb\u5165\u4e0b\u4e00\u5c42",
+      action: "\u5411\u524d\u8d70\u5165",
+      response: "\u7535\u68af\u4fdd\u6301\u6253\u5f00",
+    },
     "level-one-elevator-panel": {
       name: "\u7535\u68af\u9762\u677f",
       effect: "\u663e\u793a\u51fa\u53e3\u540c\u6b65\u72b6\u6001",
@@ -421,6 +458,18 @@ const INTERACTION_TEXT = {
     },
   },
   en: {
+    "exit-elevator-door": {
+      name: "EXIT ELEVATOR DOOR",
+      effect: "The space behind it is still stabilizing.",
+      action: "F / BUTTON OPEN",
+      response: "Elevator door opened; the compass goes quiet.",
+    },
+    "exit-elevator-door-open": {
+      name: "EXIT ELEVATOR",
+      effect: "Door open. Step into the elevator zone to enter the next level.",
+      action: "WALK INSIDE",
+      response: "The elevator remains open.",
+    },
     "level-one-elevator-panel": {
       name: "ELEVATOR PANEL",
       effect: "Shows unstable exit synchronization.",
@@ -584,6 +633,18 @@ const BUFF_TEXT = {
       name: "超级杏仁水",
       detail: "体力上限 250 · 恢复 x2",
     },
+    "damage-slow-cleanse": {
+      name: "减速净化",
+      detail: "解除实体造成的减速",
+    },
+    "health-regen": {
+      name: "生命恢复",
+      detail: "血量持续恢复中",
+    },
+    "silence-liquid": {
+      name: "寂静液体",
+      detail: "实体短时间内不敢靠近",
+    },
   },
   en: {
     "almond-water": {
@@ -594,6 +655,18 @@ const BUFF_TEXT = {
       name: "SUPER ALMOND WATER",
       detail: "250 STAMINA CAP · RECOVERY x2",
     },
+    "damage-slow-cleanse": {
+      name: "SLOW CLEANSE",
+      detail: "REMOVES ENTITY SLOWDOWN",
+    },
+    "health-regen": {
+      name: "HEALTH REGEN",
+      detail: "RECOVERING HEALTH OVER TIME",
+    },
+    "silence-liquid": {
+      name: "SILENCE LIQUID",
+      detail: "ENTITIES KEEP THEIR DISTANCE",
+    },
   },
 };
 
@@ -603,12 +676,15 @@ const STATUS_TEXT = {
     "super-almond-water": "超级杏仁水",
     flashlight: "手电筒",
     detector: "探测仪",
+    "silence-liquid": "寂静液体",
     compass: "指南针",
     flashlightAcquired: "已获得手电筒",
     flashlightRestocked: "手电筒 +1",
     flashlightFull: "手电筒已达上限",
     flashlightRefilled: "手电筒电量已满",
     detectorAcquired: "探测仪已激活",
+    silenceLiquidAcquired: "已获得寂静液体",
+    silenceLiquidUsed: "寂静液体扩散 {seconds}秒",
     compassAcquired: "已获得指南针",
     compassReady: "指南针正在指向出口",
     detectorReady: "就绪",
@@ -635,7 +711,15 @@ const STATUS_TEXT = {
     inventoryHint: "← → / 滚轮 切换 · 点击 切换 / E 使用",
     inventoryEmpty: "背包为空",
     pickupEmpty: "无物品可拾取",
+    exitDoorOpened: "\u7535\u68af\u95e8\u5df2\u6253\u5f00",
+    exitDoorReady: "\u8d70\u5165\u7535\u68af",
+    exitDoorNearby: "\u6309 F \u6253\u5f00\u7535\u68af\u95e8",
+    compassExpired: "\u6307\u5357\u9488\u5df2\u5728\u672c\u5c42\u51fa\u53e3\u5931\u6548",
+    failureRestartLabel: "\u91cd\u65b0\u5f00\u59cb",
+    failureRestartHint: "\u6e05\u7a7a\u8fdb\u5ea6\u5e76\u56de\u5230 Level 0",
     exitTotalTime: "总用时 {time}",
+    levelTransitionHint: "\u6b63\u5728\u8fdb\u5165\u4e0b\u4e00\u5c42",
+    levelTransitionReady: "\u7a7a\u95f4\u7a33\u5b9a\u5b8c\u6210",
     levelLocked: "未解锁",
     levelLockedHint: "该层级尚未解锁",
     levelCleared: "已通关",
@@ -650,11 +734,14 @@ const STATUS_TEXT = {
     "super-almond-water": "SUPER ALMOND WATER",
     flashlight: "FLASHLIGHT",
     detector: "DETECTOR",
+    "silence-liquid": "SILENCE LIQUID",
     compass: "COMPASS",
     flashlightAcquired: "FLASHLIGHT ACQUIRED",
     flashlightRestocked: "FLASHLIGHT +1",
     flashlightFull: "FLASHLIGHT STACK FULL",
     detectorAcquired: "DETECTOR ONLINE",
+    silenceLiquidAcquired: "SILENCE LIQUID ACQUIRED",
+    silenceLiquidUsed: "SILENCE LIQUID {seconds}s",
     compassAcquired: "COMPASS ACQUIRED",
     compassReady: "COMPASS POINTING TO EXIT",
     detectorReady: "READY",
@@ -681,7 +768,15 @@ const STATUS_TEXT = {
     inventoryHint: "← → / WHEEL · TAP TO SWITCH / E USE",
     inventoryEmpty: "INVENTORY EMPTY",
     pickupEmpty: "NO ITEM IN RANGE",
+    exitDoorOpened: "ELEVATOR DOOR OPEN",
+    exitDoorReady: "ENTER THE ELEVATOR",
+    exitDoorNearby: "PRESS F TO OPEN ELEVATOR DOOR",
+    compassExpired: "COMPASS EXPIRED AT THIS LEVEL EXIT",
+    failureRestartLabel: "RESTART",
+    failureRestartHint: "CLEAR PROGRESS AND RETURN TO LEVEL 0",
     exitTotalTime: "TOTAL TIME {time}",
+    levelTransitionHint: "ENTERING NEXT LEVEL",
+    levelTransitionReady: "SPACE STABILIZED",
     levelLocked: "LOCKED",
     levelLockedHint: "LEVEL NOT YET UNLOCKED",
     levelCleared: "CLEARED",
@@ -739,12 +834,18 @@ function handleDrinkComplete(itemId) {
   if (itemId === "almond-water") {
     removeInventory(itemId);
     renderInventoryBar();
-    if (controls) controls.applyHeal(ALMOND_WATER_HEAL);
+    controls?.startDrinkRecovery(ALMOND_WATER_HEAL, {
+      duration: ALMOND_WATER_HEAL_DURATION,
+      cleanseDuration: DRINK_SLOW_CLEANSE_DURATION,
+    });
     markDirty();
   } else if (itemId === "super-almond-water") {
     removeInventory(itemId);
     renderInventoryBar();
-    if (controls) controls.applyHeal(SUPER_ALMOND_WATER_HEAL);
+    controls?.startDrinkRecovery(SUPER_ALMOND_WATER_HEAL, {
+      duration: SUPER_ALMOND_WATER_HEAL_DURATION,
+      cleanseDuration: DRINK_SLOW_CLEANSE_DURATION,
+    });
     markDirty();
   }
 }
@@ -756,6 +857,8 @@ let loadingComplete = false;
 let exitComplete = false;
 let gameFailed = false;
 let levelTransition = null;
+let exitDoorOpen = false;
+let exitOverlayHideTimer = 0;
 let runTime = 0;
 let pickupFlashUntil = 0;
 let pickupFlashText = "";
@@ -767,10 +870,17 @@ let detectorActiveTimer = 0;
 let detectorCooldownTimer = 0;
 let currentLanguage = "zh-CN";
 const detectorProjection = new THREE.Vector3();
-const compassForward = new THREE.Vector3();
+const compassToExit = new THREE.Vector3();
 let lastMetrics = null;
 
-const INVENTORY_ORDER = ["flashlight", "detector", "compass", "almond-water", "super-almond-water"];
+const INVENTORY_ORDER = [
+  "flashlight",
+  "detector",
+  "silence-liquid",
+  "compass",
+  "almond-water",
+  "super-almond-water",
+];
 
 const INVENTORY_DEFS = {
   flashlight: {
@@ -781,6 +891,7 @@ const INVENTORY_DEFS = {
     maxStack: FLASHLIGHT_MAX_STACK,
   },
   detector: { id: "detector", type: "scan", unique: true, stackable: false },
+  "silence-liquid": { id: "silence-liquid", type: "consumable", unique: false, stackable: true },
   compass: { id: "compass", type: "passive", unique: true, stackable: false },
   "almond-water": { id: "almond-water", type: "consumable", unique: false, stackable: true },
   "super-almond-water": {
@@ -887,6 +998,27 @@ const ITEM_ICON_SVG = {
     <circle cx="78" cy="27" r="4" fill="#80ff60" opacity="0.35"/>
     <rect x="14" y="84" width="72" height="4" rx="2" fill="#1a1410"/>`,
 
+  "silence-liquid": `<defs>
+      <linearGradient id="sl-body" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#d8e7ff"/><stop offset="0.45" stop-color="#8274ff"/>
+        <stop offset="1" stop-color="#2b205f"/>
+      </linearGradient>
+      <radialGradient id="sl-glow" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stop-color="#c9f6ff" stop-opacity="0.75"/>
+        <stop offset="1" stop-color="#7d6cff" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <ellipse cx="50" cy="54" rx="30" ry="30" fill="url(#sl-glow)" opacity="0.42"/>
+    <rect x="42" y="7" width="16" height="12" rx="2" fill="#171426" stroke="#070611" stroke-width="0.8"/>
+    <rect x="40" y="17" width="20" height="9" rx="2" fill="#342d64" stroke="#16122c" stroke-width="0.7"/>
+    <path d="M 31 26 Q 50 18 69 26 L 64 88 Q 63 94 57 94 L 43 94 Q 37 94 36 88 Z" fill="url(#sl-body)" stroke="#18122e" stroke-width="1.2"/>
+    <path d="M 35 33 Q 50 27 65 33 L 61 78 Q 50 85 39 78 Z" fill="#6a5cff" opacity="0.56"/>
+    <rect x="35" y="46" width="30" height="20" rx="2" fill="#211a4f" stroke="#a99dff" stroke-width="0.7"/>
+    <line x1="41" y1="61" x2="59" y2="51" stroke="#e7e0ff" stroke-width="2.4" stroke-linecap="round"/>
+    <text x="50" y="43" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="5.2" font-weight="900" fill="#e6e0ff">SILENCE</text>
+    <rect x="39" y="30" width="3" height="54" fill="#fff" opacity="0.28"/>
+    <rect x="58" y="30" width="2" height="54" fill="#000" opacity="0.16"/>`,
+
   compass: `
     <circle cx="50" cy="50" r="34" fill="#b2873f" stroke="#3a2410" stroke-width="2"/>
     <circle cx="50" cy="50" r="27" fill="#efe2b5" stroke="#5d3a16" stroke-width="1.2"/>
@@ -913,8 +1045,8 @@ function createItemIcon(type) {
   let content = ITEM_ICON_SVG[type];
   if (content) {
     content = content
-      .replace(/id="(fl-body|fl-lens|aw-body|saw-body|det-body|det-screen|det-glow)"/g, `id="$1-${slotId}"`)
-      .replace(/url\(#(fl-body|fl-lens|aw-body|saw-body|det-body|det-screen|det-glow)\)/g, `url(#$1-${slotId})`);
+      .replace(/id="(fl-body|fl-lens|aw-body|saw-body|det-body|det-screen|det-glow|sl-body|sl-glow)"/g, `id="$1-${slotId}"`)
+      .replace(/url\(#(fl-body|fl-lens|aw-body|saw-body|det-body|det-screen|det-glow|sl-body|sl-glow)\)/g, `url(#$1-${slotId})`);
     svg.innerHTML = content;
   }
   return svg;
@@ -1096,6 +1228,90 @@ function formatDuration(totalSeconds) {
     : `${pad(minutes)}:${pad(seconds)}`;
 }
 
+function resetExitDoorState() {
+  exitDoorOpen = false;
+  canvas.dataset.exitDoorOpen = "false";
+  canvas.dataset.exitDoorReady = "false";
+}
+
+function getCurrentExitDistance(metrics = lastMetrics) {
+  if (world?.targetPosition && world?.camera?.position) {
+    return Math.hypot(
+      world.camera.position.x - world.targetPosition.x,
+      world.camera.position.z - world.targetPosition.z,
+    );
+  }
+  return Number.isFinite(metrics?.exitDistance) ? metrics.exitDistance : Infinity;
+}
+
+function getExitDoorInteraction(metrics = lastMetrics) {
+  if (!world?.targetPosition || exitComplete || gameFailed || levelTransition) return null;
+  const distance = getCurrentExitDistance(metrics);
+  if (!Number.isFinite(distance)) return null;
+  const promptRadius = exitDoorOpen ? EXIT_DOOR_INTERACT_RADIUS * 1.35 : EXIT_DOOR_INTERACT_RADIUS;
+  const withinPrompt = distance <= promptRadius;
+  if (!withinPrompt) return null;
+  return {
+    id: exitDoorOpen ? "exit-elevator-door-open" : "exit-elevator-door",
+    type: "interaction",
+    distance,
+    available: !exitDoorOpen && distance <= EXIT_DOOR_INTERACT_RADIUS,
+    exitDoor: true,
+  };
+}
+
+function shouldEnterExit(metrics = lastMetrics) {
+  return exitDoorOpen && getCurrentExitDistance(metrics) <= EXIT_ELEVATOR_ENTER_RADIUS;
+}
+
+function withExitDoorMetrics(metrics) {
+  if (!metrics) return metrics;
+  const exitInteraction = getExitDoorInteraction(metrics);
+  const readyToEnter = shouldEnterExit(metrics);
+  canvas.dataset.exitDoorOpen = String(exitDoorOpen);
+  canvas.dataset.exitDoorReady = String(readyToEnter);
+  if (!exitInteraction) {
+    return { ...metrics, rawExitReached: metrics.exitReached, exitReached: readyToEnter };
+  }
+  return {
+    ...metrics,
+    rawExitReached: metrics.exitReached,
+    exitReached: readyToEnter,
+    focusInteraction: exitInteraction,
+    exitDoorOpen,
+    exitInteraction,
+  };
+}
+
+function expireCompassAtExit({ silent = true } = {}) {
+  if (getInventoryCount("compass") <= 0) return false;
+  while (removeInventory("compass")) {
+    // Compass is single-use for the current level; remove all saved copies defensively.
+  }
+  renderInventoryBar();
+  updateCompassHud(lastMetrics);
+  if (!silent) {
+    pickupFlashText = formatLocalizedStatus("compassExpired");
+    pickupFlashUntil = clock.elapsedTime + 1.5;
+  }
+  return true;
+}
+
+function openExitDoor() {
+  const interaction = getExitDoorInteraction(lastMetrics);
+  if (!interaction?.available) return false;
+  exitDoorOpen = true;
+  canvas.dataset.exitDoorOpen = "true";
+  canvas.dataset.lastInteraction = interaction.id;
+  canvas.dataset.lastInteractionCount = "1";
+  expireCompassAtExit();
+  pickupFlashText = formatLocalizedStatus("exitDoorOpened");
+  pickupFlashUntil = clock.elapsedTime + 1.9;
+  useButton?.classList.add("is-active");
+  window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
+  return true;
+}
+
 function syncLevelHud() {
   if (levelSelect) {
     const options = levelSelect.querySelectorAll("option");
@@ -1204,6 +1420,11 @@ function writeSaveSnapshot() {
     health: playerState.health,
     healthMax: playerState.healthMax,
     houndSlowTimer: playerState.houndSlowTimer,
+    damageSlowCleanseTimer: playerState.damageSlowCleanseTimer,
+    healthRegenTimer: playerState.healthRegenTimer,
+    healthRegenRemaining: playerState.healthRegenRemaining,
+    healthRegenRate: playerState.healthRegenRate,
+    silenceLiquidTimer: playerState.silenceLiquidTimer,
     isSprinting: playerState.isSprinting,
     isDrinking: playerState.isDrinking,
     drinkTimer: playerState.drinkTimer,
@@ -1267,6 +1488,7 @@ function loadLevel(level, { updateUrl = false } = {}) {
   exitComplete = false;
   gameFailed = false;
   playerHealthCooldown = 0;
+  resetExitDoorState();
   canvas.dataset.exitReached = "false";
   canvas.dataset.gameFailed = "false";
   entityMarkers?.replaceChildren();
@@ -1298,6 +1520,7 @@ function bootstrapWorld(level, save) {
   exitComplete = false;
   gameFailed = false;
   playerHealthCooldown = 0;
+  resetExitDoorState();
   canvas.dataset.exitReached = "false";
   canvas.dataset.gameFailed = "false";
   entityMarkers?.replaceChildren();
@@ -1317,10 +1540,14 @@ function setExitOverlayText(title, subtitle) {
   if (exitOverlaySubtitle) exitOverlaySubtitle.textContent = subtitle;
 }
 
-function setExitOverlayTime() {
+function setExitOverlayDetail(text) {
   if (!exitOverlayTime) return;
-  exitOverlayTime.textContent = formatLocalizedStatus("exitTotalTime", { time: formatDuration(runTime) });
+  exitOverlayTime.textContent = text;
   exitOverlayTime.removeAttribute("hidden");
+}
+
+function setExitOverlayTime() {
+  setExitOverlayDetail(formatLocalizedStatus("exitTotalTime", { time: formatDuration(runTime) }));
 }
 
 function hideExitOverlayTime() {
@@ -1328,50 +1555,121 @@ function hideExitOverlayTime() {
   exitOverlayTime.setAttribute("hidden", "");
 }
 
+function updateFailureRestartButton() {
+  if (exitOverlayRestartLabel) {
+    exitOverlayRestartLabel.textContent = formatLocalizedStatus("failureRestartLabel");
+  }
+  if (exitOverlayRestartHint) {
+    exitOverlayRestartHint.textContent = formatLocalizedStatus("failureRestartHint");
+  }
+}
+
+function setExitOverlayFailureState(failed) {
+  exitOverlay?.classList.toggle("is-failed", failed);
+  if (failed) {
+    updateFailureRestartButton();
+    exitOverlayRestart?.removeAttribute("hidden");
+    if (document.pointerLockElement === canvas && document.exitPointerLock) {
+      try {
+        document.exitPointerLock();
+      } catch {
+        // ignore pointer lock cleanup failures
+      }
+    }
+  } else {
+    exitOverlayRestart?.setAttribute("hidden", "");
+  }
+}
+
 function updateTimerReadout() {
   if (!timerReadoutValue) return;
   timerReadoutValue.textContent = formatDuration(runTime);
 }
 
-function showExitOverlay(title, subtitle) {
+function showExitOverlay(title, subtitle, { showTime = true, variantClass = "", failed = false } = {}) {
   setExitOverlayText(title, subtitle);
-  setExitOverlayTime();
+  if (showTime) {
+    setExitOverlayTime();
+  } else {
+    hideExitOverlayTime();
+  }
+  if (exitOverlayHideTimer) {
+    window.clearTimeout(exitOverlayHideTimer);
+    exitOverlayHideTimer = 0;
+  }
+  exitOverlay?.classList.remove("is-level-transition", "is-level-loaded", "is-failed");
+  if (variantClass) exitOverlay?.classList.add(variantClass);
+  setExitOverlayFailureState(failed);
   exitOverlay?.removeAttribute("hidden");
-  exitOverlay?.classList.add("is-visible");
+  window.requestAnimationFrame(() => exitOverlay?.classList.add("is-visible"));
 }
 
 function hideExitOverlay() {
+  const hideDelay = exitOverlay?.classList.contains("is-level-transition")
+    ? LEVEL_TRANSITION_FADE_OUT_MS
+    : OVERLAY_FADE_MS;
   exitOverlay?.classList.remove("is-visible");
-  hideExitOverlayTime();
-  window.setTimeout(() => exitOverlay?.setAttribute("hidden", ""), OVERLAY_FADE_MS);
+  setExitOverlayFailureState(false);
+  if (exitOverlayHideTimer) window.clearTimeout(exitOverlayHideTimer);
+  exitOverlayHideTimer = window.setTimeout(() => {
+    exitOverlay?.setAttribute("hidden", "");
+    exitOverlay?.classList.remove("is-level-transition", "is-level-loaded", "is-failed");
+    hideExitOverlayTime();
+    exitOverlayHideTimer = 0;
+  }, hideDelay);
+}
+
+function updateLevelTransitionOverlayText(transition = levelTransition) {
+  if (!transition?.nextLevelInfo) return;
+  setExitOverlayText(transition.nextLevelInfo.levelLabel, transition.nextLevelInfo.levelName);
+  setExitOverlayDetail(
+    formatLocalizedStatus(transition.loaded ? "levelTransitionReady" : "levelTransitionHint"),
+  );
 }
 
 function beginLevelTransition(nextLevel) {
   const nextLevelInfo = getBackroomsLevelInfo(nextLevel);
+  expireCompassAtExit();
   completedLevels.add(world.level);
   reachedLevels.add(nextLevelInfo.level);
   saveIntegerSet(COMPLETED_KEY, completedLevels);
   saveIntegerSet(REACHED_KEY, reachedLevels);
   levelTransition = {
     nextLevel: nextLevelInfo.level,
+    nextLevelInfo,
     elapsed: 0,
+    loaded: false,
   };
   canvas.dataset.transitioning = "true";
+  canvas.dataset.transitionPhase = "fade-in";
   canvas.dataset.exitReached = "true";
-  showExitOverlay(nextLevelInfo.levelLabel, nextLevelInfo.levelName);
+  showExitOverlay(nextLevelInfo.levelLabel, nextLevelInfo.levelName, {
+    showTime: false,
+    variantClass: "is-level-transition",
+  });
+  updateLevelTransitionOverlayText();
 }
 
 function updateLevelTransition(delta) {
   if (!levelTransition) return;
   levelTransition.elapsed += delta * 1000;
+
+  if (!levelTransition.loaded && levelTransition.elapsed >= LEVEL_TRANSITION_LOAD_AT_MS) {
+    const nextLevel = levelTransition.nextLevel;
+    levelTransition.loaded = true;
+    canvas.dataset.transitionPhase = "fade-out";
+    loadLevel(nextLevel, { updateUrl: true });
+    exitOverlay?.classList.add("is-level-loaded");
+    updateLevelTransitionOverlayText();
+    hideExitOverlay();
+  }
+
   if (levelTransition.elapsed < LEVEL_TRANSITION_MS) return;
 
-  const nextLevel = levelTransition.nextLevel;
   levelTransition = null;
-  loadLevel(nextLevel, { updateUrl: true });
   canvas.dataset.transitioning = "false";
+  canvas.dataset.transitionPhase = "";
   canvas.dataset.exitReached = "false";
-  hideExitOverlay();
 }
 
 levelSelect?.addEventListener("change", () => {
@@ -1384,10 +1682,12 @@ levelSelect?.addEventListener("change", () => {
     flashPickupHint("levelLockedHint", 1400);
     return;
   }
+  expireCompassAtExit({ silent: true });
   levelTransition = null;
   exitComplete = false;
   gameFailed = false;
   playerHealthCooldown = 0;
+  resetExitDoorState();
   canvas.dataset.transitioning = "false";
   canvas.dataset.exitReached = "false";
   canvas.dataset.gameFailed = "false";
@@ -1408,7 +1708,12 @@ languageSelect?.addEventListener("change", () => {
   syncLevelHud();
   if (lastMetrics) updateItemInfo(lastMetrics);
   if (exitOverlay && !exitOverlay.hasAttribute("hidden")) {
-    setExitOverlayTime();
+    if (gameFailed) updateFailureRestartButton();
+    if (levelTransition) {
+      updateLevelTransitionOverlayText();
+    } else {
+      setExitOverlayTime();
+    }
   }
   if (isPaused) {
     if (pauseTitle) pauseTitle.textContent = formatLocalizedStatus("pauseTitle");
@@ -1515,13 +1820,20 @@ function updateHealthHud(controlState) {
   }
   if (healthMeter) {
     const slow = (controlState.houndSlowRemaining ?? 0) > 0;
-    healthMeter.dataset.state = ratio <= 0.24 ? "low" : slow ? "slowed" : "ready";
+    const regenerating = Boolean(controlState.healthRegenerating);
+    healthMeter.dataset.state = ratio <= 0.24 ? "low" : regenerating ? "regenerating" : slow ? "slowed" : "ready";
   }
   canvas.dataset.health = String(Math.round(health));
   canvas.dataset.healthMax = String(Math.round(healthMax));
   canvas.dataset.healthRatio = ratio.toFixed(3);
   canvas.dataset.houndSlow = String((controlState.houndSlowRemaining ?? 0) > 0);
   canvas.dataset.houndSlowRemaining = (controlState.houndSlowRemaining ?? 0).toFixed(1);
+  canvas.dataset.damageSlowCleanse = String((controlState.damageSlowCleanseRemaining ?? 0) > 0);
+  canvas.dataset.damageSlowCleanseRemaining = (controlState.damageSlowCleanseRemaining ?? 0).toFixed(1);
+  canvas.dataset.healthRegenerating = String(Boolean(controlState.healthRegenerating));
+  canvas.dataset.healthRegenRemaining = (controlState.healthRegenRemaining ?? 0).toFixed(1);
+  canvas.dataset.silenceLiquidActive = String(Boolean(controlState.silenceLiquidActive));
+  canvas.dataset.silenceLiquidRemaining = (controlState.silenceLiquidRemaining ?? 0).toFixed(1);
 }
 
 function triggerDamageFlash() {
@@ -1682,6 +1994,14 @@ function normalizeAngle(angle) {
   return next;
 }
 
+function formatCompassDirection(angle) {
+  const directions = currentLanguage === "en"
+    ? ["AHEAD", "FR", "RIGHT", "BR", "BACK", "BL", "LEFT", "FL"]
+    : ["\u524d", "\u53f3\u524d", "\u53f3", "\u53f3\u540e", "\u540e", "\u5de6\u540e", "\u5de6", "\u5de6\u524d"];
+  const index = Math.round(normalizeAngle(angle) / (Math.PI / 4));
+  return directions[((index % directions.length) + directions.length) % directions.length];
+}
+
 function updateCompassHud(metrics) {
   const isEquipped = getEquipped()?.id === "compass";
   const owned = getInventoryCount("compass") > 0;
@@ -1689,19 +2009,26 @@ function updateCompassHud(metrics) {
   canvas.dataset.compassOwned = String(owned);
   if (!owned || !isEquipped || !world?.targetPosition || !world?.camera) {
     canvas.dataset.compassBearing = "";
+    canvas.dataset.compassWorldBearing = "";
+    canvas.dataset.compassDirection = "";
+    if (compassArrow) compassArrow.style.transform = "rotate(0rad)";
     if (compassReadout) compassReadout.textContent = "--";
     return;
   }
 
-  const dx = world.targetPosition.x - world.camera.position.x;
-  const dz = world.targetPosition.z - world.camera.position.z;
-  const targetAngle = Math.atan2(dx, dz);
-  world.camera.getWorldDirection(compassForward);
-  const forwardAngle = Math.atan2(compassForward.x, compassForward.z);
-  const relative = normalizeAngle(targetAngle - forwardAngle);
+  compassToExit.subVectors(world.targetPosition, world.camera.position);
+  compassToExit.y = 0;
+  const targetYaw = Math.atan2(-compassToExit.x, -compassToExit.z);
+  const playerState = controls?.getPlayerState?.();
+  const currentYaw = Number.isFinite(playerState?.yaw) ? playerState.yaw : world.camera.rotation.y;
+  const relative = normalizeAngle(currentYaw - targetYaw);
+  const direction = formatCompassDirection(relative);
+
   if (compassArrow) compassArrow.style.transform = `rotate(${relative.toFixed(4)}rad)`;
-  if (compassReadout) compassReadout.textContent = `${Math.round(metrics?.exitDistance ?? Math.hypot(dx, dz))}m`;
+  if (compassReadout) compassReadout.textContent = direction;
   canvas.dataset.compassBearing = String(Math.round((relative * 180) / Math.PI));
+  canvas.dataset.compassWorldBearing = String(Math.round((targetYaw * 180) / Math.PI));
+  canvas.dataset.compassDirection = direction;
 }
 
 function clearEntityMarkers() {
@@ -2095,19 +2422,51 @@ function acquireCompass(count) {
   markDirty();
 }
 
+function acquireSilenceLiquid(count) {
+  addInventory("silence-liquid");
+  pickupFlashText = formatLocalizedStatus("silenceLiquidAcquired");
+  pickupFlashUntil = clock.elapsedTime + 1.7;
+  canvas.dataset.silenceLiquidPickups = String(count ?? 1);
+  renderInventoryBar();
+  markDirty();
+}
+
+function activateSilenceLiquid() {
+  if (!controls || getInventoryCount("silence-liquid") <= 0) return false;
+  controls.activateSilenceLiquid(SILENCE_LIQUID_DURATION);
+  removeInventory("silence-liquid");
+  pickupFlashText = formatLocalizedStatus("silenceLiquidUsed", {
+    seconds: SILENCE_LIQUID_DURATION,
+  });
+  pickupFlashUntil = clock.elapsedTime + 1.8;
+  canvas.dataset.silenceLiquidUses = String(Number(canvas.dataset.silenceLiquidUses ?? 0) + 1);
+  renderInventoryBar();
+  markDirty();
+  return true;
+}
+
 function updatePickupHud(metrics) {
   const almondWater = metrics.almondWater;
   const superAlmondWater = metrics.superAlmondWater;
   const flashlight = metrics.flashlight;
   const detector = metrics.detector;
+  const silenceLiquid = metrics.silenceLiquid;
   const compass = metrics.compass;
   const canDrink = Boolean(almondWater?.available);
   const canDrinkSuper = Boolean(superAlmondWater?.available);
   const canTakeFlashlight = Boolean(flashlight?.available);
   const canTakeDetector = Boolean(detector?.available);
+  const canTakeSilenceLiquid = Boolean(silenceLiquid?.available);
   const canTakeCompass = Boolean(compass?.available);
   const canInteract = Boolean(metrics.focusInteraction?.available);
-  const canUse = canDrink || canDrinkSuper || canTakeFlashlight || canTakeDetector || canTakeCompass || canInteract;
+  const canUse =
+    canDrink ||
+    canDrinkSuper ||
+    canTakeFlashlight ||
+    canTakeDetector ||
+    canTakeSilenceLiquid ||
+    canTakeCompass ||
+    canInteract;
   useButton?.classList.toggle("is-visible", canUse);
   if (useButton) useButton.disabled = !canUse;
   canvas.dataset.almondWaterVisible = String(Boolean(almondWater?.visible));
@@ -2129,6 +2488,11 @@ function updatePickupHud(metrics) {
   canvas.dataset.detectorAvailable = String(canTakeDetector);
   canvas.dataset.detectorDistance = Number.isFinite(detector?.distance)
     ? String(Math.round(detector.distance))
+    : "";
+  canvas.dataset.silenceLiquidVisible = String(Boolean(silenceLiquid?.visible));
+  canvas.dataset.silenceLiquidAvailable = String(canTakeSilenceLiquid);
+  canvas.dataset.silenceLiquidDistance = Number.isFinite(silenceLiquid?.distance)
+    ? String(Math.round(silenceLiquid.distance))
     : "";
   canvas.dataset.compassVisible = String(Boolean(compass?.visible));
   canvas.dataset.compassAvailable = String(canTakeCompass);
@@ -2153,6 +2517,7 @@ function getPickupStates(metrics) {
     metrics?.superAlmondWater,
     metrics?.flashlight,
     metrics?.detector,
+    metrics?.silenceLiquid,
     metrics?.compass,
   ].filter(Boolean);
 }
@@ -2244,7 +2609,7 @@ function flashPickupHint(textKey, durationMs = 1100) {
 }
 
 function usePickup() {
-  if (!world || exitComplete || levelTransition || isPaused) return;
+  if (!world || exitComplete || gameFailed || levelTransition || isPaused) return;
   const liveTarget = world.getPickupTarget
     ? world.getPickupTarget(world.camera.position)
     : findNearestPickupable(lastMetrics);
@@ -2260,6 +2625,7 @@ function usePickup() {
   }
   const pickup = world.tryPickup?.(world.camera.position);
   if (!pickup?.pickedUp) {
+    if (openExitDoor()) return;
     if (lastMetrics?.focusInteraction?.available) {
       const interaction = world.interact?.(world.camera.position);
       if (interaction?.interacted) {
@@ -2283,6 +2649,8 @@ function usePickup() {
     acquireDetector(pickup.count);
   } else if (pickup.itemId === "compass") {
     acquireCompass(pickup.count);
+  } else if (pickup.itemId === "silence-liquid") {
+    acquireSilenceLiquid(pickup.count);
   } else if (pickup.itemId === "super-almond-water") {
     addInventory("super-almond-water");
     pickupFlashText = formatLocalizedStatus("superAlmondWaterUsed", {
@@ -2310,7 +2678,7 @@ function usePickup() {
 }
 
 function useEquippedShortPress() {
-  if (!controls || exitComplete || levelTransition || isPaused) return;
+  if (!controls || exitComplete || gameFailed || levelTransition || isPaused) return;
   const equipped = getEquipped();
   if (!equipped) return;
   if (equipped.id === "flashlight") {
@@ -2321,11 +2689,16 @@ function useEquippedShortPress() {
     startDetectorScan();
     actionButton?.classList.add("is-active");
     window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
+  } else if (equipped.id === "silence-liquid") {
+    if (activateSilenceLiquid()) {
+      actionButton?.classList.add("is-active");
+      window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
+    }
   }
 }
 
 function startEquippedDrink() {
-  if (!controls || exitComplete || levelTransition || isPaused) return;
+  if (!controls || exitComplete || gameFailed || levelTransition || isPaused) return;
   const equipped = getEquipped();
   if (!equipped) return;
   if (equipped.id === "almond-water") {
@@ -2348,7 +2721,7 @@ function isWaterItem(id) {
 }
 
 function beginEPress() {
-  if (exitComplete || levelTransition || isPaused) return;
+  if (exitComplete || gameFailed || levelTransition || isPaused) return;
   if (ePressActive) return;
   ePressActive = true;
   ePressStartTime = performance.now();
@@ -2370,7 +2743,7 @@ function endEPress(event) {
     delete actionButton.dataset.longPress;
     actionButton.style.removeProperty("--long-press-progress");
   }
-  if (exitComplete || levelTransition || isPaused) {
+  if (exitComplete || gameFailed || levelTransition || isPaused) {
     if (controls.isDrinking) controls.cancelDrink(true);
     return;
   }
@@ -2403,15 +2776,23 @@ function tickLongPressProgress() {
 }
 
 function updateHud(metrics, controlState, elapsed) {
+  const hudMetrics = withExitDoorMetrics(metrics);
+  const exitDistance = getCurrentExitDistance(hudMetrics);
   distanceReadout.textContent = `${metrics.exitDistance}m`;
   lightReadout.textContent = metrics.lightState ?? (metrics.flicker < 0.62 ? "DIM" : "HUM");
   statusText.textContent =
     elapsed < pickupFlashUntil
       ? pickupFlashText
+      : exitDoorOpen && exitDistance <= EXIT_DOOR_INTERACT_RADIUS
+        ? formatLocalizedStatus("exitDoorReady")
+      : hudMetrics.focusInteraction?.id === "exit-elevator-door"
+        ? formatLocalizedStatus("exitDoorNearby")
       : metrics.superAlmondWater?.available
         ? formatLocalizedStatus("super-almond-water")
       : metrics.detector?.available
         ? formatLocalizedStatus("detector")
+      : metrics.silenceLiquid?.available
+        ? formatLocalizedStatus("silence-liquid")
         : metrics.compass?.available
         ? formatLocalizedStatus("compass")
         : metrics.flashlight?.available
@@ -2419,18 +2800,18 @@ function updateHud(metrics, controlState, elapsed) {
         : metrics.almondWater?.available
         ? formatLocalizedStatus("almond-water")
         : metrics.statusText ??
-          (metrics.exitReached
+          (hudMetrics.exitReached
             ? "EXIT STABILIZED"
             : metrics.exitDistance < 7
               ? "SIGNAL FOUND"
               : "NO SIGNAL");
-  updatePickupHud(metrics);
-  const itemInfoState = updateItemInfo(metrics);
+  updatePickupHud(hudMetrics);
+  const itemInfoState = updateItemInfo(hudMetrics);
   showItemInfoPickupKey(itemInfoState.canPickup || itemInfoState.canInteract);
   updateStaminaHud(controlState);
   updateHealthHud(controlState);
   updateBuffCards(controlState);
-  updateCompassHud(metrics);
+  updateCompassHud(hudMetrics);
 }
 
 let playerHealthCooldown = 0;
@@ -2459,7 +2840,8 @@ function applyEntityContactDamage(delta, metrics) {
   else if (id.includes("hound")) damage = HOUND_DAMAGE;
   else damage = BACTERIA_DAMAGE;
   const killed = controls.applyDamage(damage);
-  if (id.includes("hound")) {
+  const slowCleanseActive = (controls.getState?.().damageSlowCleanseRemaining ?? 0) > 0;
+  if (id.includes("hound") && !slowCleanseActive) {
     controls.houndSlowTimer = HOUND_SLOW_DURATION;
     controls.syncCameraState?.();
   }
@@ -2473,6 +2855,7 @@ function applyEntityContactDamage(delta, metrics) {
     showExitOverlay(
       formatLocalizedStatus("bacteriaFailTitle"),
       entityText.failSubtitle ?? formatLocalizedStatus("bacteriaFailSubtitle"),
+      { failed: true },
     );
   }
 }
@@ -2508,15 +2891,20 @@ function animate() {
     pickupFlashUntil = clock.elapsedTime + 1.2;
     lastDrinkCancelledUntil = clock.elapsedTime + 1.4;
   }
-  const metrics = world.update(delta, elapsed, world.camera.position);
+  const metrics = world.update(delta, elapsed, world.camera.position, {
+    entityRepelActive: Boolean(controlState.silenceLiquidActive),
+    repelRadius: SILENCE_LIQUID_REPEL_RADIUS,
+    repelSpeedMultiplier: SILENCE_LIQUID_REPEL_SPEED_MULTIPLIER,
+  });
   lastMetrics = metrics;
   updateFlashlight(delta);
   updateDetector(delta, metrics);
   applyEntityContactDamage(delta, metrics);
-  if (metrics.exitReached && !gameFailed && !exitComplete && !levelTransition) {
+  if (shouldEnterExit(metrics) && !gameFailed && !exitComplete && !levelTransition) {
     if (world.nextLevel !== null && world.nextLevel !== undefined) {
       beginLevelTransition(world.nextLevel);
     } else {
+      expireCompassAtExit();
       exitComplete = true;
       completedLevels.add(world.level);
       saveIntegerSet(COMPLETED_KEY, completedLevels);
@@ -2555,6 +2943,10 @@ function onUseKeyDown(event) {
         showSavePromptLevels();
       }
     }
+    return;
+  }
+  if (gameFailed) {
+    if (event.code === "Escape") event.preventDefault();
     return;
   }
   if (isPaused) {
@@ -2749,6 +3141,12 @@ pauseResetButton?.addEventListener("pointerdown", (event) => {
   } else {
     armPauseReset();
   }
+});
+exitOverlayRestart?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!gameFailed) return;
+  resetAllProgress();
 });
 flashlightButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();

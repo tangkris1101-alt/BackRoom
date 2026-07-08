@@ -1,4 +1,4 @@
-﻿export function isInRect(col, row, zone) {
+export function isInRect(col, row, zone) {
   return (
     col >= zone.col &&
     col < zone.col + zone.width &&

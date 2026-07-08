@@ -1,4 +1,4 @@
-﻿import { createSeededRandom, makeTexture, drawSpeckles, clampColor, tileNoise } from "../common/texture-utils.js";
+import { createSeededRandom, makeTexture, drawSpeckles, clampColor, tileNoise } from "../common/texture-utils.js";
 
 export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, contrast = 1) {
   const random = createSeededRandom(seed);

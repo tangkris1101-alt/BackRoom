@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -44,6 +44,7 @@ import {
   createFlashlightPickup,
   createDetectorPickup,
   createCompassPickup,
+  createSilenceLiquidPickup,
 
 
 
@@ -219,6 +220,15 @@ export function createLevelOneScene({ initialState = null } = {}) {
     blockedAabbs: propColliders,
     initialState: pickupInitial.compass ?? null,
   });
+  const silenceLiquid = createSilenceLiquidPickup(scene, {
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    initialState: pickupInitial["silence-liquid"] ?? null,
+  });
   const interactions = [
     createInteractionSpot({
       id: "level-one-elevator-panel",
@@ -268,7 +278,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
     return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
   }
 
-  function update(delta, elapsed, playerPosition) {
+  function update(delta, elapsed, playerPosition, effects = {}) {
     let lightTotal = 0;
     fixtures.forEach((fixture) => {
       const hum = 0.84 + Math.sin(elapsed * 1.18 + fixture.phase) * 0.055;
@@ -292,9 +302,10 @@ export function createLevelOneScene({ initialState = null } = {}) {
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const compassState = compass.update(delta, elapsed, playerPosition);
-    const bacteriaState = bacteria.update(delta, elapsed, playerPosition);
+    const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
+    const bacteriaState = bacteria.update(delta, elapsed, playerPosition, effects);
     const entities = [bacteriaState];
-    const pickups = [almondWaterState, superAlmondWaterState, compassState, detectorState, flashlightState];
+    const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -305,6 +316,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
+      silenceLiquid: silenceLiquidState,
       compass: compassState,
       pickups,
       entities,
@@ -313,6 +325,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
+        silenceLiquid.inspect(camera),
         compass.inspect(camera),
         detector.inspect(camera),
         flashlight.inspect(camera),
@@ -340,9 +353,9 @@ export function createLevelOneScene({ initialState = null } = {}) {
     isWalkable,
     update,
     getPickupTarget: (playerPosition) =>
-      getPickupTarget(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
+      getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
+      tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
@@ -350,6 +363,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
           flashlight: flashlight.getState(),
           detector: detector.getState(),
           compass: compass.getState(),
+          "silence-liquid": silenceLiquid.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },

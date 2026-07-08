@@ -1,4 +1,4 @@
-﻿import { CELL_SIZE, BACTERIA_SPAWN_MAX_FROM_EXIT, BACTERIA_SPAWN_MIN_FROM_PLAYER } from "../constants.js";
+import { CELL_SIZE, BACTERIA_SPAWN_MAX_FROM_EXIT, BACTERIA_SPAWN_MIN_FROM_PLAYER } from "../constants.js";
 
 export function chooseBacteriaSpawn({
   cols,

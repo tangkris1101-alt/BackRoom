@@ -73,7 +73,12 @@
           <div id="compass-meter" class="compass-meter" aria-label="Exit compass" hidden>
             <span class="compass-meter__label">EXIT</span>
             <div class="compass-meter__dial">
-              <span id="compass-arrow" class="compass-meter__arrow">▲</span>
+              <span id="compass-arrow" class="compass-meter__arrow" aria-hidden="true">
+                <svg class="compass-meter__arrow-svg" viewBox="0 0 24 24" focusable="false">
+                  <path class="compass-meter__arrow-head" d="M12 1.6 19.2 11.2 14.3 10.3 14.3 22.4 9.7 22.4 9.7 10.3 4.8 11.2 12 1.6Z"/>
+                  <path class="compass-meter__arrow-line" d="M12 5.2 12 19.4"/>
+                </svg>
+              </span>
             </div>
             <span id="compass-readout">--</span>
           </div>
@@ -108,6 +113,10 @@
         <strong>EXIT STABILIZED</strong>
         <span>LEVEL 0 SIGNAL LOST</span>
         <small id="exit-overlay-time" class="exit-overlay__time" hidden></small>
+        <button id="exit-overlay-restart" class="exit-overlay__restart" type="button" hidden>
+          <strong id="exit-overlay-restart-label">RESTART</strong>
+          <small id="exit-overlay-restart-hint">CLEAR SAVE AND RETURN TO LEVEL 0</small>
+        </button>
       </div>
 
       <div id="save-prompt" class="save-prompt" role="dialog" aria-modal="true" aria-labelledby="save-prompt-title" aria-describedby="save-prompt-desc" hidden>

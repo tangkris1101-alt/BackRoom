@@ -19,6 +19,7 @@ import {
   createCompassPickup,
   createDetectorPickup,
   createFlashlightPickup,
+  createSilenceLiquidPickup,
 } from "../items/index.js";
 import {
   LEVEL_SIX_COLS,
@@ -319,6 +320,15 @@ export function createLevelSixScene({ initialState = null } = {}) {
     blockedAabbs: propColliders,
     initialState: pickupInitial.compass ?? null,
   });
+  const silenceLiquid = createSilenceLiquidPickup(scene, {
+    cols: LEVEL_SIX_COLS,
+    rows: LEVEL_SIX_ROWS,
+    isCellOpen: isLevelSixOpenCell,
+    getCellCenter: levelSixCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    initialState: pickupInitial["silence-liquid"] ?? null,
+  });
 
   let objectiveReached = Boolean(objectiveInitial.reached);
 
@@ -356,8 +366,9 @@ export function createLevelSixScene({ initialState = null } = {}) {
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const compassState = compass.update(delta, elapsed, playerPosition);
+    const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
     const entities = [];
-    const pickups = [almondWaterState, superAlmondWaterState, compassState, detectorState, flashlightState];
+    const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -368,6 +379,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
+      silenceLiquid: silenceLiquidState,
       compass: compassState,
       pickups,
       entities,
@@ -376,6 +388,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
+        silenceLiquid.inspect(camera),
         compass.inspect(camera),
         detector.inspect(camera),
         flashlight.inspect(camera),
@@ -404,9 +417,9 @@ export function createLevelSixScene({ initialState = null } = {}) {
     flashlightEffectiveness: 1.24,
     update,
     getPickupTarget: (playerPosition) =>
-      getPickupTarget(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
+      getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, superAlmondWater, compass, flashlight, almondWater),
+      tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
@@ -414,6 +427,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
           flashlight: flashlight.getState(),
           detector: detector.getState(),
           compass: compass.getState(),
+          "silence-liquid": silenceLiquid.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },

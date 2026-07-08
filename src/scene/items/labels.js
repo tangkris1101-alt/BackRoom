@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import { clampColor } from "../common/texture-utils.js";
 
 export function createAlmondWaterLabelTexture(variant = "normal") {

@@ -1,4 +1,4 @@
-﻿import * as THREE from "three";
+import * as THREE from "three";
 import { ENTITY_SPEED_MULTIPLIER, HOUND_CONTACT_RADIUS } from "../constants.js";
 import { createLimbSegment } from "../common/view-model.js";
 import { resolveEntityStep } from "./spawn.js";
@@ -154,12 +154,22 @@ export function createHoundEntity(
         contact,
       };
     },
-    update(delta, elapsed, playerPosition) {
+    update(delta, elapsed, playerPosition, effects = {}) {
       const dx = playerPosition.x - group.position.x;
       const dz = playerPosition.z - group.position.z;
       const distance = Math.hypot(dx, dz);
+      const repelRadius = Number.isFinite(effects.repelRadius) ? effects.repelRadius : 0;
+      const repelActive = Boolean(effects.entityRepelActive && distance <= repelRadius);
 
-      if (!contact && navGrid) {
+      if (repelActive) {
+        contact = false;
+        path.waypoints = [];
+        path.index = 0;
+        recomputeTimer = RECOMPUTE_INTERVAL;
+        stuckTimer = 0;
+      }
+
+      if (!contact && !repelActive && navGrid) {
         const playerCell = worldToCell(playerPosition.x, playerPosition.z);
         const playerCellKey = `${playerCell.col},${playerCell.row}`;
         const playerMoved = playerCellKey !== lastPlayerCellKey;
@@ -181,7 +191,22 @@ export function createHoundEntity(
       let advanced = false;
       let reachedEnd = false;
 
-      if (!contact && path.waypoints.length > 0) {
+      if (!contact && repelActive && distance > 0.001) {
+        const repelMultiplier = Number.isFinite(effects.repelSpeedMultiplier)
+          ? Math.max(0.2, effects.repelSpeedMultiplier)
+          : 1.4;
+        const surge = 0.82 + Math.sin(elapsed * 1.9) * 0.12;
+        const step = movementSpeed * repelMultiplier * surge * delta;
+        const resolved = resolveEntityStep(
+          group.position,
+          (-dx / distance) * step,
+          (-dz / distance) * step,
+          isWalkable,
+        );
+        nextX = resolved.x;
+        nextZ = resolved.z;
+        advanced = nextX !== group.position.x || nextZ !== group.position.z;
+      } else if (!contact && path.waypoints.length > 0) {
         const followed = followPath({
           entityPos: group.position,
           waypoints: path.waypoints,
@@ -237,14 +262,14 @@ export function createHoundEntity(
       group.position.x = nextX;
       group.position.z = nextZ;
       if (distance > 0.001 && (advanced || reachedEnd)) {
-        group.rotation.y = Math.atan2(dx, dz);
+        group.rotation.y = repelActive ? Math.atan2(-dx, -dz) : Math.atan2(dx, dz);
       }
 
       const gait = Math.sin(elapsed * 7.2) * 0.035;
       group.position.y = Math.abs(Math.sin(elapsed * 5.4)) * 0.028;
       group.rotation.z = gait;
       const currentDistance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
-      contact = currentDistance <= HOUND_CONTACT_RADIUS;
+      contact = !repelActive && currentDistance <= HOUND_CONTACT_RADIUS;
 
       if (recomputeTimer > 0) recomputeTimer -= delta;
 

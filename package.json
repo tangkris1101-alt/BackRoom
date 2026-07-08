@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "vite build && node scripts/make-standalone.mjs",
+    "prebuild": "node scripts/check-encoding.mjs src app.html",
+    "build": "npm run prebuild && vite build && node scripts/make-standalone.mjs",
+    "check": "node scripts/check-encoding.mjs",
+    "write:utf8": "node scripts/write-utf8.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
