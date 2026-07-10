@@ -337,7 +337,9 @@ export function createLevelFourScene({ initialState = null } = {}) {
     level: 4,
     levelLabel: "LEVEL 4",
     levelName: "ABANDONED OFFICE",
-    viewModelName: getViewModelName(viewModel),
+    get viewModelName() {
+      return getViewModelName(viewModel);
+    },
     colliderCount: propColliders.length,
     nextLevel: 5,
     scene,

@@ -1,13 +1,11 @@
 import * as THREE from "three";
-import { ENTITY_SPEED_MULTIPLIER } from "../constants.js";
 import { createLimbSegment } from "../common/view-model.js";
-import { resolveEntityStep } from "../entities/spawn.js";
-import { createNavGrid, aStar, followPath, pathContainsCell } from "../entities/pathfinding.js";
+import { createEntityMover } from "../entities/behavior.js";
 
 const THING_CONTACT_RADIUS = 1.38;
-const RECOMPUTE_INTERVAL = 0.72;
-const STUCK_THRESHOLD = 1.1;
-const STUCK_MIN_PROGRESS = 0.22;
+const THING_RECOMPUTE_INTERVAL = 0.68;
+const THING_STUCK_THRESHOLD = 0.92;
+const THING_DIRECT_CHASE_DISTANCE = 7.8;
 
 function createLevelSevenThingModel() {
   const group = new THREE.Group();
@@ -91,26 +89,23 @@ export function createLevelSevenThingEntity(
     group.position.z = initialState.position.z;
   }
 
-  const navGrid =
-    cols && rows && isCellOpen && worldToCell && cellCenter
-      ? createNavGrid({ cols, rows, isCellOpen })
-      : null;
-  const path = { waypoints: [], index: 0 };
-  let recomputeTimer = 0;
-  let stuckTimer = 0;
-  let lastPlayerCellKey = "";
-  let lastPositionX = group.position.x;
-  let lastPositionZ = group.position.z;
-
-  function repathTo(playerPosition) {
-    if (!navGrid) return;
-    const start = worldToCell(group.position.x, group.position.z);
-    const goal = worldToCell(playerPosition.x, playerPosition.z);
-    const next = aStar(navGrid, start, goal);
-    path.waypoints = next ?? [];
-    path.index = 0;
-    recomputeTimer = RECOMPUTE_INTERVAL;
-  }
+  const hasNavGrid =
+    cols && rows && isCellOpen && worldToCell && cellCenter ? true : false;
+  const mover = createEntityMover({
+    group,
+    isWalkable,
+    speed,
+    contactRadius: THING_CONTACT_RADIUS,
+    cols: hasNavGrid ? cols : undefined,
+    rows: hasNavGrid ? rows : undefined,
+    isCellOpen: hasNavGrid ? isCellOpen : undefined,
+    worldToCell: hasNavGrid ? worldToCell : undefined,
+    cellCenter: hasNavGrid ? cellCenter : undefined,
+    recomputeInterval: THING_RECOMPUTE_INTERVAL,
+    stuckThreshold: THING_STUCK_THRESHOLD,
+    directChaseDistance: THING_DIRECT_CHASE_DISTANCE,
+    turnRate: 5.8,
+  });
 
   return {
     getState() {
@@ -122,103 +117,19 @@ export function createLevelSevenThingEntity(
       };
     },
     update(delta, elapsed, playerPosition, effects = {}) {
-      const dx = playerPosition.x - group.position.x;
-      const dz = playerPosition.z - group.position.z;
-      const distance = Math.hypot(dx, dz);
-      const repelRadius = Number.isFinite(effects.repelRadius) ? effects.repelRadius : 0;
-      const repelActive = Boolean(effects.entityRepelActive && distance <= repelRadius);
-
-      if (repelActive) {
-        contact = false;
-        path.waypoints = [];
-        path.index = 0;
-        recomputeTimer = RECOMPUTE_INTERVAL;
-        stuckTimer = 0;
-      }
-
-      if (!contact && !repelActive && navGrid) {
-        const playerCell = worldToCell(playerPosition.x, playerPosition.z);
-        const playerCellKey = `${playerCell.col},${playerCell.row}`;
-        const playerMoved = playerCellKey !== lastPlayerCellKey;
-        const playerOffPath = !pathContainsCell(path.waypoints, playerCell, path.index);
-        if (path.waypoints.length === 0 || recomputeTimer <= 0 || (playerMoved && playerOffPath) || stuckTimer > STUCK_THRESHOLD) {
-          repathTo(playerPosition);
-          lastPlayerCellKey = playerCellKey;
-        }
-      }
-
-      let nextX = group.position.x;
-      let nextZ = group.position.z;
-      let advanced = false;
-      let reachedEnd = false;
-      const huntSpeed = speed * ENTITY_SPEED_MULTIPLIER * (0.84 + Math.sin(elapsed * 0.77) * 0.08);
-
-      if (!contact && repelActive && distance > 0.001) {
-        const repelMultiplier = Number.isFinite(effects.repelSpeedMultiplier)
-          ? Math.max(0.2, effects.repelSpeedMultiplier)
-          : 1.35;
-        const step = huntSpeed * repelMultiplier * delta;
-        const resolved = resolveEntityStep(
-          group.position,
-          (-dx / distance) * step,
-          (-dz / distance) * step,
-          isWalkable,
-        );
-        nextX = resolved.x;
-        nextZ = resolved.z;
-        advanced = nextX !== group.position.x || nextZ !== group.position.z;
-      } else if (!contact && path.waypoints.length > 0) {
-        const followed = followPath({
-          entityPos: group.position,
-          waypoints: path.waypoints,
-          indexRef: path,
-          cellCenter,
-          speed: huntSpeed,
-          delta,
-          isWalkable,
-        });
-        nextX = followed.x;
-        nextZ = followed.z;
-        advanced = followed.advanced;
-        reachedEnd = followed.reachedEnd;
-      } else if (!contact && distance > 0.001) {
-        const step = Math.min(distance, huntSpeed * delta);
-        const resolved = resolveEntityStep(
-          group.position,
-          (dx / distance) * step,
-          (dz / distance) * step,
-          isWalkable,
-        );
-        nextX = resolved.x;
-        nextZ = resolved.z;
-        advanced = nextX !== group.position.x || nextZ !== group.position.z;
-      }
-
-      if (!contact) {
-        const movedNow = Math.hypot(nextX - lastPositionX, nextZ - lastPositionZ);
-        const expected = speed * ENTITY_SPEED_MULTIPLIER * delta * STUCK_MIN_PROGRESS;
-        stuckTimer = movedNow < expected ? stuckTimer + delta : 0;
-        lastPositionX = nextX;
-        lastPositionZ = nextZ;
-      }
-
-      group.position.x = nextX;
-      group.position.z = nextZ;
-      if (distance > 0.001 && (advanced || reachedEnd)) {
-        group.rotation.y = repelActive ? Math.atan2(-dx, -dz) : Math.atan2(dx, dz);
-      }
+      const pulse = 0.9 + Math.sin(elapsed * 0.77) * 0.08;
+      const moveState = mover.update(delta, elapsed, playerPosition, effects, {
+        speedScale: pulse,
+      });
       group.position.y = 0.01 + Math.sin(elapsed * 1.1) * 0.025;
       group.rotation.z = Math.sin(elapsed * 1.42) * 0.035;
-
-      const currentDistance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
-      contact = !repelActive && currentDistance <= THING_CONTACT_RADIUS;
-      if (recomputeTimer > 0) recomputeTimer -= delta;
+      contact = moveState.contact;
 
       return {
         id: "level-seven-thing",
         active: true,
         contact,
-        distance: currentDistance,
+        distance: moveState.distance,
         x: group.position.x,
         y: 0.58,
         z: group.position.z,

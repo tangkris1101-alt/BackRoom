@@ -2359,7 +2359,7 @@ body {
 
   .inventory-bar.is-visible {
     display: inline-flex;
-    bottom: max(168px, calc(env(safe-area-inset-bottom) + 160px));
+    bottom: max(22px, calc(env(safe-area-inset-bottom) + clamp(18px, 5svh, 54px)));
     padding: 7px 9px;
     gap: 6px;
   }

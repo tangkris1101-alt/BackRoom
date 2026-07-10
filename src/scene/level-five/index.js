@@ -352,7 +352,9 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     level: 5,
     levelLabel: "LEVEL 5",
     levelName: "TERROR HOTEL",
-    viewModelName: getViewModelName(viewModel),
+    get viewModelName() {
+      return getViewModelName(viewModel);
+    },
     colliderCount: propColliders.length,
     nextLevel: 6,
     scene,

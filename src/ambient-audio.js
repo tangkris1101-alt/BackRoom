@@ -303,7 +303,7 @@ export function createAmbientHum() {
         if (!nearestBacteria || entity.distance < nearestBacteria.distance) {
           nearestBacteria = entity;
         }
-      } else if (entity.id === "hound") {
+      } else if (entity.id?.includes("hound")) {
         if (!nearestHound || entity.distance < nearestHound.distance) {
           nearestHound = entity;
         }

@@ -1,8 +1,44 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
+import glovedHandModelBase64 from "../../assets/models/gloved-hand-j-toastie.glb.b64?raw";
 import { SHOW_FIRST_PERSON_VIEW_MODEL } from "../constants.js";
-export function applyViewModelMaterialSettings(material) {
+
+const handsLoader = new GLTFLoader();
+let handsModelPromise = null;
+const HAND_MODEL_SCALE = 0.24;
+const HAND_MODEL_NAME = "EXTERNAL GLOVED HANDS";
+const ARM_MESH_NAMES = new Set(["Arm", "HandModel001_2"]);
+const HAND_REST_TRANSFORMS = {
+  left: {
+    position: new THREE.Vector3(-0.37, -0.61, -0.69),
+    rotation: new THREE.Euler(
+      THREE.MathUtils.degToRad(-14),
+      THREE.MathUtils.degToRad(14),
+      THREE.MathUtils.degToRad(-44),
+    ),
+  },
+  right: {
+    position: new THREE.Vector3(0.37, -0.61, -0.69),
+    rotation: new THREE.Euler(
+      THREE.MathUtils.degToRad(-14),
+      THREE.MathUtils.degToRad(-14),
+      THREE.MathUtils.degToRad(44),
+    ),
+  },
+};
+
+function applyViewModelMaterialSettings(material) {
+  if (material.userData.viewModelPrepared) return material;
+  material.userData.viewModelPrepared = true;
   material.depthTest = false;
   material.depthWrite = false;
+  material.toneMapped = false;
+  if ("color" in material) material.color.setRGB(0.015, 0.016, 0.014);
+  if ("roughness" in material) material.roughness = Math.max(material.roughness ?? 0.65, 0.86);
+  if ("metalness" in material) material.metalness = 0.02;
+  if ("emissive" in material) material.emissive.setRGB(0.026, 0.025, 0.02);
+  if ("emissiveIntensity" in material) material.emissiveIntensity = Math.max(material.emissiveIntensity ?? 0, 0.32);
   return material;
 }
 
@@ -18,146 +54,115 @@ export function createLimbSegment(start, end, radiusTop, radiusBottom, material)
   return mesh;
 }
 
-export function addScaledMesh(parent, geometry, material, position, scale, rotation = [0, 0, 0]) {
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(...position);
-  mesh.scale.set(...scale);
-  mesh.rotation.set(...rotation);
-  parent.add(mesh);
-  return mesh;
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64.trim());
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
 }
 
-export function createFirstPersonHazmatViewModel() {
-  const group = new THREE.Group();
-  group.name = "first-person-yellow-hazmat";
-  group.position.set(0, 0, 0);
-
-  const suitMaterial = applyViewModelMaterialSettings(
-    new THREE.MeshStandardMaterial({
-      color: 0xd8bb32,
-      emissive: 0x5d4b0b,
-      emissiveIntensity: 0.38,
-      roughness: 0.72,
-      metalness: 0,
-    }),
-  );
-  const cuffMaterial = applyViewModelMaterialSettings(
-    new THREE.MeshStandardMaterial({
-      color: 0x4c3f17,
-      emissive: 0x171207,
-      emissiveIntensity: 0.24,
-      roughness: 0.82,
-    }),
-  );
-  const gloveMaterial = applyViewModelMaterialSettings(
-    new THREE.MeshStandardMaterial({
-      color: 0x111512,
-      emissive: 0x050605,
-      emissiveIntensity: 0.18,
-      roughness: 0.66,
-    }),
-  );
-
-  const sleeveConfigs = [
-    {
-      side: -1,
-      upperStart: [-0.52, -0.62, -0.82],
-      upperEnd: [-0.36, -0.49, -1.02],
-      wrist: [-0.28, -0.43, -1.18],
-      hand: [-0.24, -0.44, -1.3],
-      rot: [0.08, -0.22, -0.22],
-    },
-    {
-      side: 1,
-      upperStart: [0.52, -0.62, -0.82],
-      upperEnd: [0.36, -0.49, -1.02],
-      wrist: [0.28, -0.43, -1.18],
-      hand: [0.24, -0.44, -1.3],
-      rot: [0.08, 0.22, 0.22],
-    },
-  ];
-
-  sleeveConfigs.forEach((config) => {
-    const sleeve = createLimbSegment(
-      config.upperStart,
-      config.upperEnd,
-      0.052,
-      0.076,
-      suitMaterial,
-    );
-    group.add(sleeve);
-
-    const forearm = createLimbSegment(
-      config.upperEnd,
-      config.wrist,
-      0.04,
-      0.058,
-      suitMaterial,
-    );
-    group.add(forearm);
-
-    addScaledMesh(
-      group,
-      new THREE.TorusGeometry(0.052, 0.01, 8, 18),
-      cuffMaterial,
-      config.wrist,
-      [1, 0.62, 0.9],
-      [Math.PI / 2, 0.18 * config.side, 0],
-    );
-
-    addScaledMesh(
-      group,
-      new THREE.SphereGeometry(0.054, 16, 10),
-      gloveMaterial,
-      config.hand,
-      [1.22, 0.68, 1.55],
-      config.rot,
-    );
-
-    const thumbOffset = config.side * 0.065;
-    addScaledMesh(
-      group,
-      new THREE.CapsuleGeometry(0.012, 0.052, 4, 8),
-      gloveMaterial,
-      [config.hand[0] + thumbOffset, config.hand[1] - 0.006, config.hand[2] + 0.006],
-      [1, 1, 1],
-      [0.52, 0, 0.74 * config.side],
-    );
-
-    [-1, 0, 1].forEach((fingerOffset) => {
-      addScaledMesh(
-        group,
-        new THREE.CapsuleGeometry(0.008, 0.042, 4, 8),
-        gloveMaterial,
-        [
-          config.hand[0] + fingerOffset * 0.019,
-          config.hand[1] - 0.012,
-          config.hand[2] - 0.046,
-        ],
-        [1, 1, 1],
-        [Math.PI / 2 + 0.18, 0, 0.08 * fingerOffset],
-      );
+function loadGlovedHandModel() {
+  if (!handsModelPromise) {
+    handsModelPromise = new Promise((resolve, reject) => {
+      handsLoader.parse(base64ToArrayBuffer(glovedHandModelBase64), "", (gltf) => resolve(gltf.scene), reject);
     });
-  });
+  }
+  return handsModelPromise;
+}
 
-  group.traverse((object) => {
+function prepareHandsModel(model) {
+  model.name = "first-person-gloved-hands-model";
+  model.position.set(0, 0, 0);
+  model.rotation.set(0, 0, 0);
+  model.scale.set(1, 1, 1);
+  model.traverse((object) => {
     object.frustumCulled = false;
     object.renderOrder = 20;
+    if (object.isMesh) {
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      if (ARM_MESH_NAMES.has(object.name) || materials.some((material) => ARM_MESH_NAMES.has(material?.name))) {
+        object.visible = false;
+        return;
+      }
+      object.castShadow = false;
+      object.receiveShadow = false;
+      if (Array.isArray(object.material)) {
+        object.material.forEach(applyViewModelMaterialSettings);
+      } else if (object.material) {
+        applyViewModelMaterialSettings(object.material);
+      }
+    }
   });
+  return model;
+}
 
-  group.userData.basePosition = group.position.clone();
-  return group;
+function createHandInstance(sourceModel, side) {
+  const handAnchor = new THREE.Group();
+  handAnchor.name = `first-person-${side}-gloved-hand`;
+  const hand = SkeletonUtils.clone(sourceModel);
+  prepareHandsModel(hand);
+
+  const wrist = hand.getObjectByName("Wrist");
+  if (wrist) {
+    hand.updateWorldMatrix(true, true);
+    const wristPosition = wrist.getWorldPosition(new THREE.Vector3());
+    hand.position.sub(wristPosition);
+  } else {
+    const bounds = new THREE.Box3().setFromObject(hand);
+    const center = bounds.getCenter(new THREE.Vector3());
+    hand.position.sub(center);
+  }
+
+  const sideSign = side === "left" ? -1 : 1;
+  const restTransform = HAND_REST_TRANSFORMS[side];
+  handAnchor.add(hand);
+  handAnchor.scale.set(sideSign * HAND_MODEL_SCALE, HAND_MODEL_SCALE, HAND_MODEL_SCALE);
+  handAnchor.position.copy(restTransform.position);
+  handAnchor.rotation.copy(restTransform.rotation);
+  handAnchor.userData.side = side;
+  handAnchor.userData.restPosition = restTransform.position.clone();
+  handAnchor.userData.restRotation = restTransform.rotation.clone();
+  return handAnchor;
+}
+
+function createHandPair(sourceModel) {
+  const hands = new THREE.Group();
+  hands.name = "first-person-external-gloved-hands-model";
+  const leftHand = createHandInstance(sourceModel, "left");
+  const rightHand = createHandInstance(sourceModel, "right");
+  hands.add(leftHand);
+  hands.add(rightHand);
+  hands.userData.leftHand = leftHand;
+  hands.userData.rightHand = rightHand;
+  return hands;
 }
 
 export function attachFirstPersonViewModel(camera) {
   if (!SHOW_FIRST_PERSON_VIEW_MODEL) return null;
-  const viewModel = createFirstPersonHazmatViewModel();
+  const viewModel = new THREE.Group();
+  viewModel.name = "first-person-external-gloved-hands";
+  viewModel.userData.modelName = HAND_MODEL_NAME;
+  viewModel.userData.loaded = false;
   camera.add(viewModel);
+  loadGlovedHandModel()
+    .then((sourceModel) => {
+      if (!camera.children.includes(viewModel)) return;
+      const hands = createHandPair(sourceModel);
+      viewModel.add(hands);
+      viewModel.userData.hands = hands;
+      viewModel.userData.loaded = true;
+    })
+    .catch((error) => {
+      viewModel.userData.loadError = error?.message ?? "failed";
+    });
   return viewModel;
 }
 
 export function getViewModelName(viewModel) {
-  return viewModel ? "YELLOW HAZMAT" : "NONE";
+  if (!viewModel) return "NONE";
+  return viewModel.userData.loaded ? viewModel.userData.modelName : `${HAND_MODEL_NAME} LOADING`;
 }
 
 export function updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition) {
@@ -175,12 +180,37 @@ export function updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosit
 
   const walkAmount = Math.min(1, movement * 18);
   const breathe = Math.sin(elapsed * 1.8) * 0.006;
-  const bob = Math.sin(elapsed * 9.5) * 0.012 * walkAmount;
-  const sway = Math.sin(elapsed * 6.8) * 0.012 * walkAmount;
+  const bob = Math.sin(elapsed * 9.2) * 0.006 * walkAmount;
+  const sway = Math.sin(elapsed * 6.4) * 0.008 * walkAmount;
   viewModel.position.set(sway, breathe + bob, 0);
   viewModel.rotation.set(
-    Math.sin(elapsed * 5.2) * 0.012 * walkAmount,
-    Math.sin(elapsed * 4.4) * 0.012 * walkAmount,
-    -sway * 0.18,
+    Math.sin(elapsed * 5.2) * 0.006 * walkAmount,
+    Math.sin(elapsed * 4.4) * 0.006 * walkAmount,
+    -sway * 0.1,
   );
+
+  const hands = viewModel.userData.hands;
+  if (!hands) return;
+  const stridePhase = elapsed * (7.2 + walkAmount * 2.2);
+  const idleLift = Math.sin(elapsed * 1.6) * 0.006;
+  [hands.userData.leftHand, hands.userData.rightHand].forEach((handAnchor) => {
+    if (!handAnchor) return;
+    const sideSign = handAnchor.userData.side === "left" ? -1 : 1;
+    const restPosition = handAnchor.userData.restPosition;
+    const restRotation = handAnchor.userData.restRotation;
+    const handPhase = stridePhase + (sideSign < 0 ? 0 : Math.PI);
+    const lift = Math.sin(handPhase) * 0.038 * walkAmount;
+    const push = Math.cos(handPhase) * 0.026 * walkAmount;
+    const inwardSway = Math.sin(handPhase) * 0.014 * walkAmount;
+    handAnchor.position.set(
+      restPosition.x - sideSign * inwardSway,
+      restPosition.y + idleLift + lift,
+      restPosition.z + push,
+    );
+    handAnchor.rotation.set(
+      restRotation.x + Math.cos(handPhase) * 0.045 * walkAmount,
+      restRotation.y + sideSign * Math.sin(handPhase) * 0.04 * walkAmount,
+      restRotation.z + sideSign * Math.sin(handPhase) * 0.035 * walkAmount,
+    );
+  });
 }

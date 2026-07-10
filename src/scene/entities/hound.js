@@ -1,12 +1,11 @@
 import * as THREE from "three";
-import { ENTITY_SPEED_MULTIPLIER, HOUND_CONTACT_RADIUS } from "../constants.js";
+import { HOUND_CONTACT_RADIUS } from "../constants.js";
 import { createLimbSegment } from "../common/view-model.js";
-import { resolveEntityStep } from "./spawn.js";
-import { createNavGrid, aStar, followPath, pathContainsCell } from "./pathfinding.js";
+import { createEntityMover } from "./behavior.js";
 
-const RECOMPUTE_INTERVAL = 0.6;
-const STUCK_THRESHOLD = 0.8;
-const STUCK_MIN_PROGRESS = 0.25;
+const HOUND_RECOMPUTE_INTERVAL = 0.42;
+const HOUND_STUCK_THRESHOLD = 0.58;
+const HOUND_DIRECT_CHASE_DISTANCE = 10.5;
 
 export function createHoundModel() {
   const group = new THREE.Group();
@@ -100,6 +99,9 @@ export function createHoundEntity(
     isWalkable,
     speed = 1.45,
     id = "hound",
+    type = "hound",
+    dormant = false,
+    dormantArmRadius = 0,
     initialState = null,
     cols,
     rows,
@@ -114,173 +116,67 @@ export function createHoundEntity(
   scene.add(group);
 
   let contact = false;
+  let isDormant = Boolean(dormant);
   if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
     group.position.x = initialState.position.x;
     group.position.z = initialState.position.z;
   }
-  const navGrid =
-    cols && rows && isCellOpen && worldToCell && cellCenter
-      ? createNavGrid({ cols, rows, isCellOpen })
-      : null;
-  const path = { waypoints: [], index: 0 };
-  let recomputeTimer = 0;
-  let stuckTimer = 0;
-  let lastPlayerCellKey = "";
-  let lastPositionX = group.position.x;
-  let lastPositionZ = group.position.z;
-  const movementSpeed = speed * ENTITY_SPEED_MULTIPLIER;
-
-  function repathTo(playerPosition) {
-    if (!navGrid) return;
-    const start = worldToCell(group.position.x, group.position.z);
-    const goal = worldToCell(playerPosition.x, playerPosition.z);
-    const next = aStar(navGrid, start, goal);
-    if (next && next.length > 0) {
-      path.waypoints = next;
-      path.index = 0;
-    } else {
-      path.waypoints = [];
-      path.index = 0;
-    }
-    recomputeTimer = RECOMPUTE_INTERVAL;
-  }
+  if (initialState?.awakened === true) isDormant = false;
+  const mover = createEntityMover({
+    group,
+    isWalkable,
+    speed,
+    contactRadius: HOUND_CONTACT_RADIUS,
+    cols,
+    rows,
+    isCellOpen,
+    worldToCell,
+    cellCenter,
+    recomputeInterval: HOUND_RECOMPUTE_INTERVAL,
+    stuckThreshold: HOUND_STUCK_THRESHOLD,
+    directChaseDistance: HOUND_DIRECT_CHASE_DISTANCE,
+    turnRate: 10.5,
+  });
 
   return {
     getState() {
       return {
         id,
-        type: "hound",
+        type,
         position: { x: group.position.x, z: group.position.z },
         contact,
+        awakened: !isDormant,
       };
     },
     update(delta, elapsed, playerPosition, effects = {}) {
       const dx = playerPosition.x - group.position.x;
       const dz = playerPosition.z - group.position.z;
       const distance = Math.hypot(dx, dz);
-      const repelRadius = Number.isFinite(effects.repelRadius) ? effects.repelRadius : 0;
-      const repelActive = Boolean(effects.entityRepelActive && distance <= repelRadius);
-
-      if (repelActive) {
-        contact = false;
-        path.waypoints = [];
-        path.index = 0;
-        recomputeTimer = RECOMPUTE_INTERVAL;
-        stuckTimer = 0;
+      if (isDormant && dormantArmRadius > 0 && distance <= dormantArmRadius) {
+        isDormant = false;
+        mover.clearPath();
       }
-
-      if (!contact && !repelActive && navGrid) {
-        const playerCell = worldToCell(playerPosition.x, playerPosition.z);
-        const playerCellKey = `${playerCell.col},${playerCell.row}`;
-        const playerMoved = playerCellKey !== lastPlayerCellKey;
-        const playerOffPath = !pathContainsCell(path.waypoints, playerCell, path.index);
-        const stuck = stuckTimer > STUCK_THRESHOLD;
-        const needRepath =
-          path.waypoints.length === 0 ||
-          recomputeTimer <= 0 ||
-          (playerMoved && playerOffPath) ||
-          stuck;
-        if (needRepath) {
-          repathTo(playerPosition);
-          lastPlayerCellKey = playerCellKey;
-        }
-      }
-
-      let nextX = group.position.x;
-      let nextZ = group.position.z;
-      let advanced = false;
-      let reachedEnd = false;
-
-      if (!contact && repelActive && distance > 0.001) {
-        const repelMultiplier = Number.isFinite(effects.repelSpeedMultiplier)
-          ? Math.max(0.2, effects.repelSpeedMultiplier)
-          : 1.4;
-        const surge = 0.82 + Math.sin(elapsed * 1.9) * 0.12;
-        const step = movementSpeed * repelMultiplier * surge * delta;
-        const resolved = resolveEntityStep(
-          group.position,
-          (-dx / distance) * step,
-          (-dz / distance) * step,
-          isWalkable,
-        );
-        nextX = resolved.x;
-        nextZ = resolved.z;
-        advanced = nextX !== group.position.x || nextZ !== group.position.z;
-      } else if (!contact && path.waypoints.length > 0) {
-        const followed = followPath({
-          entityPos: group.position,
-          waypoints: path.waypoints,
-          indexRef: path,
-          cellCenter,
-          speed: movementSpeed,
-          delta,
-          isWalkable,
-        });
-        nextX = followed.x;
-        nextZ = followed.z;
-        advanced = followed.advanced;
-        reachedEnd = followed.reachedEnd;
-        if (reachedEnd && distance > 0.001) {
-          const surge = 0.78 + Math.sin(elapsed * 1.9) * 0.12;
-          const step = Math.min(distance, movementSpeed * surge * delta);
-          const resolved = resolveEntityStep(
-            group.position,
-            (dx / distance) * step,
-            (dz / distance) * step,
-            isWalkable,
-          );
-          nextX = resolved.x;
-          nextZ = resolved.z;
-          advanced = nextX !== group.position.x || nextZ !== group.position.z;
-        }
-      } else if (distance > 0.001 && !contact) {
-        const surge = 0.78 + Math.sin(elapsed * 1.9) * 0.12;
-        const step = Math.min(distance, movementSpeed * surge * delta);
-        const resolved = resolveEntityStep(
-          group.position,
-          (dx / distance) * step,
-          (dz / distance) * step,
-          isWalkable,
-        );
-        nextX = resolved.x;
-        nextZ = resolved.z;
-        advanced = nextX !== group.position.x || nextZ !== group.position.z;
-      }
-
-      if (!contact) {
-        const movedNow = Math.hypot(nextX - lastPositionX, nextZ - lastPositionZ);
-        const expected = movementSpeed * delta * STUCK_MIN_PROGRESS;
-        if (movedNow < expected) {
-          stuckTimer += delta;
-        } else {
-          stuckTimer = 0;
-        }
-        lastPositionX = nextX;
-        lastPositionZ = nextZ;
-      }
-
-      group.position.x = nextX;
-      group.position.z = nextZ;
-      if (distance > 0.001 && (advanced || reachedEnd)) {
-        group.rotation.y = repelActive ? Math.atan2(-dx, -dz) : Math.atan2(dx, dz);
-      }
+      const closeSurge = distance < 8 ? 1.12 : 1;
+      const stride = 0.96 + Math.sin(elapsed * 3.8) * 0.09;
+      const moveState = mover.update(delta, elapsed, playerPosition, effects, {
+        dormant: isDormant,
+        speedScale: closeSurge * stride,
+      });
+      contact = moveState.contact;
 
       const gait = Math.sin(elapsed * 7.2) * 0.035;
-      group.position.y = Math.abs(Math.sin(elapsed * 5.4)) * 0.028;
-      group.rotation.z = gait;
-      const currentDistance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
-      contact = !repelActive && currentDistance <= HOUND_CONTACT_RADIUS;
-
-      if (recomputeTimer > 0) recomputeTimer -= delta;
+      group.position.y = isDormant ? 0.01 : Math.abs(Math.sin(elapsed * 5.4)) * 0.032;
+      group.rotation.z = isDormant ? Math.sin(elapsed * 0.9) * 0.012 : gait;
 
       return {
         id,
         active: true,
         contact,
-        distance: currentDistance,
+        distance: moveState.distance,
         x: group.position.x,
         y: 0.9,
         z: group.position.z,
+        dormant: isDormant,
       };
     },
   };

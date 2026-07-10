@@ -8,6 +8,7 @@ const STAMINA_DRAIN_RATE = 30;
 const STAMINA_RECOVERY_RATE = 20;
 const STAMINA_RECOVERY_DELAY = 0.55;
 const MIN_SPRINT_STAMINA = 0;
+const SPRINT_EXHAUSTED_RESUME_RATIO = 0.2;
 const ALMOND_WATER_STAMINA_BONUS = 50;
 const ALMOND_WATER_EFFECT_DURATION = 45;
 const ALMOND_WATER_MAX_STAMINA = MAX_STAMINA + ALMOND_WATER_STAMINA_BONUS;
@@ -76,6 +77,7 @@ export class FirstPersonControls {
     this.healthRegenRate = 0;
     this.silenceLiquidTimer = 0;
     this.isSprinting = false;
+    this.sprintExhausted = false;
     this.isDrinking = false;
     this.drinkTimer = 0;
     this.drinkItemId = null;
@@ -151,6 +153,7 @@ export class FirstPersonControls {
     this.healthRegenRate = 0;
     this.silenceLiquidTimer = 0;
     this.isSprinting = false;
+    this.sprintExhausted = false;
     this.isDrinking = false;
     this.drinkTimer = 0;
     this.drinkItemId = null;
@@ -210,6 +213,7 @@ export class FirstPersonControls {
       ? Math.max(0, state.silenceLiquidTimer)
       : 0;
     this.isSprinting = false;
+    this.sprintExhausted = Boolean(state.sprintExhausted && this.stamina <= 0);
     this.isDrinking = Boolean(state.isDrinking);
     this.drinkTimer = Number.isFinite(state.drinkTimer) ? Math.max(0, state.drinkTimer) : 0;
     this.drinkItemId =
@@ -252,6 +256,7 @@ export class FirstPersonControls {
       healthRegenRate: this.healthRegenRate,
       silenceLiquidTimer: this.silenceLiquidTimer,
       isSprinting: this.isSprinting,
+      sprintExhausted: this.sprintExhausted,
       isDrinking: this.isDrinking,
       drinkTimer: this.drinkTimer,
       drinkItemId: this.drinkItemId,
@@ -306,6 +311,7 @@ export class FirstPersonControls {
     this.canvas.dataset.superAlmondWaterRemaining = this.superAlmondWaterTimer.toFixed(1);
     this.canvas.dataset.staminaRecoveryMultiplier = this.getStaminaRecoveryMultiplier().toFixed(1);
     this.canvas.dataset.sprinting = String(this.isSprinting);
+    this.canvas.dataset.sprintExhausted = String(this.sprintExhausted);
     this.canvas.dataset.health = this.health.toFixed(0);
     this.canvas.dataset.healthMax = this.healthMax.toFixed(0);
     this.canvas.dataset.houndSlow = this.houndSlowTimer > 0 ? "1" : "0";
@@ -658,11 +664,24 @@ export class FirstPersonControls {
       const wantsJoystickSprint =
         this.joystickPointerId !== null && this.joystickInput.y > 0.88;
       const wantsSprint = wantsKeyboardSprint || wantsJoystickSprint;
+      const sprintResumeStamina = this.staminaMax * SPRINT_EXHAUSTED_RESUME_RATIO;
+      if (!wantsSprint || this.stamina >= sprintResumeStamina) {
+        this.sprintExhausted = false;
+      }
+      if (wantsSprint && this.stamina <= MIN_SPRINT_STAMINA) {
+        this.sprintExhausted = true;
+      }
 
-      this.isSprinting = wantsSprint && this.stamina > MIN_SPRINT_STAMINA;
+      this.isSprinting =
+        wantsSprint &&
+        !this.sprintExhausted &&
+        this.stamina > MIN_SPRINT_STAMINA;
       if (this.isSprinting) {
         this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN_RATE * delta);
         this.staminaRecoveryDelay = STAMINA_RECOVERY_DELAY;
+        if (this.stamina <= MIN_SPRINT_STAMINA) {
+          this.sprintExhausted = true;
+        }
       }
 
       const drinkMultiplier = this.isDrinking ? DRINK_MOVE_MULTIPLIER : 1;
@@ -707,6 +726,7 @@ export class FirstPersonControls {
       staminaMax: this.staminaMax,
       staminaBaseMax: MAX_STAMINA,
       sprinting: this.isSprinting,
+      sprintExhausted: this.sprintExhausted,
       moving: this.isMoving,
       grounded: this.isGrounded,
       movementSpeed: this.movementSpeed,

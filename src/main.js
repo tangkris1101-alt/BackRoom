@@ -234,14 +234,14 @@ const ENTITY_TEXT = {
     bacteria: {
       name: "\u7ec6\u83cc\u5b9e\u4f53",
       marker: "\u7ec6\u83cc",
-      effect: "\u7626\u957f\u3001\u4f4e\u901f\u8ffd\u51fb\uff1b\u63a5\u89e6\u5373\u5931\u8d25",
+      effect: "\u9ad8\u7626\u9ed1\u5f71\uff1b\u4f1a\u7ed5\u969c\u8ffd\u51fb\uff0c\u63a5\u89e6\u5371\u9669",
       action: "\u4fdd\u6301\u8ddd\u79bb",
       failSubtitle: "\u63a5\u89e6\u7ec6\u83cc\u5b9e\u4f53",
     },
     "super-bacteria": {
       name: "\u8d85\u7ea7\u7ec6\u83cc",
       marker: "\u8d85\u7ea7\u7ec6\u83cc",
-      effect: "\u66f4\u5f3a\u7684\u7535\u7ad9\u5b9e\u4f53\uff1b\u63a5\u89e6\u5373\u5931\u8d25",
+      effect: "\u66f4\u9ad8\u7684\u7535\u7ad9\u9ed1\u5f71\uff1b\u8ffd\u51fb\u66f4\u7a33\uff0c\u63a5\u89e6\u5371\u9669",
       action: "\u4fdd\u6301\u8ddd\u79bb",
       failSubtitle: "\u63a5\u89e6\u8d85\u7ea7\u7ec6\u83cc\u5b9e\u4f53",
     },
@@ -251,6 +251,13 @@ const ENTITY_TEXT = {
       effect: "\u56db\u8db3\u8ffd\u51fb\uff1b\u901f\u5ea6\u6bd4\u7ec6\u83cc\u66f4\u5feb",
       action: "\u907f\u5f00\u76f4\u7ebf\u8ddd\u79bb",
       failSubtitle: "\u88ab\u730e\u72ac\u5b9e\u4f53\u6355\u83b7",
+    },
+    "ambush-hound": {
+      name: "\u4f0f\u51fb\u730e\u72ac",
+      marker: "\u4f0f\u51fb\u730e\u72ac",
+      effect: "\u9760\u8fd1\u540e\u82cf\u9192\u5e76\u9ad8\u901f\u8ffd\u51fb",
+      action: "\u62c9\u5f00\u8ddd\u79bb",
+      failSubtitle: "\u88ab\u4f0f\u51fb\u730e\u72ac\u6355\u83b7",
     },
     "level-seven-thing": {
       name: "\u6df1\u6c34\u5f02\u5f62",
@@ -264,14 +271,14 @@ const ENTITY_TEXT = {
     bacteria: {
       name: "BACTERIA ENTITY",
       marker: "BACTERIA",
-      effect: "Tall slow pursuer; contact is fatal.",
+      effect: "Tall black pursuer; routes around obstacles; contact is dangerous.",
       action: "KEEP DISTANCE",
       failSubtitle: "BACTERIA CONTACT",
     },
     "super-bacteria": {
       name: "SUPER BACTERIA",
       marker: "SUPER BACTERIA",
-      effect: "Stronger station entity; contact is fatal.",
+      effect: "Stronger station variant; steadier pursuit; contact is dangerous.",
       action: "KEEP DISTANCE",
       failSubtitle: "SUPER BACTERIA CONTACT",
     },
@@ -281,6 +288,13 @@ const ENTITY_TEXT = {
       effect: "Quadruped pursuer; faster than Bacteria.",
       action: "BREAK LINE OF SIGHT",
       failSubtitle: "HOUND CONTACT",
+    },
+    "ambush-hound": {
+      name: "AMBUSH HOUND",
+      marker: "AMBUSH HOUND",
+      effect: "Wakes at close range and sprints after you.",
+      action: "MAKE DISTANCE",
+      failSubtitle: "AMBUSH HOUND CONTACT",
     },
     "level-seven-thing": {
       name: "THE THING ON LEVEL 7",
@@ -1426,6 +1440,7 @@ function writeSaveSnapshot() {
     healthRegenRate: playerState.healthRegenRate,
     silenceLiquidTimer: playerState.silenceLiquidTimer,
     isSprinting: playerState.isSprinting,
+    sprintExhausted: playerState.sprintExhausted,
     isDrinking: playerState.isDrinking,
     drinkTimer: playerState.drinkTimer,
     drinkItemId: playerState.drinkItemId,
@@ -2067,7 +2082,7 @@ function updateEntityMarkers(metrics) {
         const marker = document.createElement("div");
         marker.className = "entity-marker";
         if (entity.id === "super-bacteria") marker.classList.add("entity-marker--super");
-        if (entity.id === "hound") marker.classList.add("entity-marker--hound");
+        if (entity.id?.includes("hound")) marker.classList.add("entity-marker--hound");
         if (entity.id === "level-seven-thing") marker.classList.add("entity-marker--thing");
         const name = document.createElement("strong");
         name.textContent = getLocalizedText(ENTITY_TEXT, entity.id)?.marker ?? entity.id.toUpperCase();
@@ -2897,6 +2912,7 @@ function animate() {
     repelSpeedMultiplier: SILENCE_LIQUID_REPEL_SPEED_MULTIPLIER,
   });
   lastMetrics = metrics;
+  canvas.dataset.viewModel = world.viewModelName ?? "NONE";
   updateFlashlight(delta);
   updateDetector(delta, metrics);
   applyEntityContactDamage(delta, metrics);

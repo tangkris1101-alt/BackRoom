@@ -251,6 +251,11 @@ export function createLevelOneScene({ initialState = null } = {}) {
     isWalkable,
     speed: 1.16,
     initialState: entityInitial.find((entity) => entity.type === "bacteria") ?? null,
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    worldToCell: levelOneWorldToCell,
+    cellCenter: levelOneCellCenter,
   });
 
   let objectiveReached = Boolean(objectiveInitial.reached);
@@ -343,7 +348,9 @@ export function createLevelOneScene({ initialState = null } = {}) {
     level: 1,
     levelLabel: "LEVEL 1",
     levelName: "HABITABLE ZONE",
-    viewModelName: getViewModelName(viewModel),
+    get viewModelName() {
+      return getViewModelName(viewModel);
+    },
     colliderCount: propColliders.length,
     nextLevel: 2,
     scene,

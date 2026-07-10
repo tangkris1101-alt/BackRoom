@@ -27,7 +27,7 @@ export function getFocusedEntity(camera, entities = []) {
         {
           distanceLimit: ENTITY_INSPECT_DISTANCE,
           height: entity.y ?? 1.2,
-          radius: entity.id === "hound" ? 0.8 : entity.id === "level-seven-thing" ? 1.05 : 0.58,
+          radius: entity.id?.includes("hound") ? 0.8 : entity.id === "level-seven-thing" ? 1.05 : 0.58,
         },
       );
       return distance === null

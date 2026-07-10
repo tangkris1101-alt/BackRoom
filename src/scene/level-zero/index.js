@@ -244,7 +244,9 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     level: 0,
     levelLabel: "LEVEL 0",
     levelName: "NOCLIP ZONE",
-    viewModelName: getViewModelName(viewModel),
+    get viewModelName() {
+      return getViewModelName(viewModel);
+    },
     nextLevel: 1,
     scene,
     camera,

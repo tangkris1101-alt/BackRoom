@@ -323,6 +323,11 @@ addLevelThreeBreakerDoor(scene, targetPosition);
         dormant: true,
         dormantArmRadius: CELL_SIZE * 2.4,
         initialState: entityInitial.find((entity) => entity.type === "ambush-hound") ?? null,
+        cols: LEVEL_THREE_COLS,
+        rows: LEVEL_THREE_ROWS,
+        isCellOpen: isLevelThreeOpenCell,
+        worldToCell: levelThreeWorldToCell,
+        cellCenter: levelThreeCellCenter,
       })
     : null;
 
@@ -420,7 +425,9 @@ addLevelThreeBreakerDoor(scene, targetPosition);
     level: 3,
     levelLabel: "LEVEL 3",
     levelName: "ELECTRICAL STATION",
-    viewModelName: getViewModelName(viewModel),
+    get viewModelName() {
+      return getViewModelName(viewModel);
+    },
     colliderCount: propColliders.length,
     nextLevel: 4,
     scene,

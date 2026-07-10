@@ -1,72 +1,139 @@
 import * as THREE from "three";
-import { BACTERIA_CONTACT_RADIUS, ENTITY_SPEED_MULTIPLIER } from "../constants.js";
+import { BACTERIA_CONTACT_RADIUS } from "../constants.js";
 import { createLimbSegment } from "../common/view-model.js";
-import { resolveEntityStep } from "./spawn.js";
-import { createNavGrid, aStar, followPath, pathContainsCell } from "./pathfinding.js";
+import { createEntityMover } from "./behavior.js";
 
-const RECOMPUTE_INTERVAL = 0.6;
-const STUCK_THRESHOLD = 0.8;
-const STUCK_MIN_PROGRESS = 0.25;
+const BACTERIA_RECOMPUTE_INTERVAL = 0.48;
+const BACTERIA_STUCK_THRESHOLD = 0.66;
+const BACTERIA_DIRECT_CHASE_DISTANCE = 8.8;
 
 export function createBacteriaModel() {
   const group = new THREE.Group();
   group.name = "bacteria-lifeform";
 
-  const bodyMaterial = new THREE.MeshStandardMaterial({
-    color: 0x050303,
-    emissive: 0x170403,
-    emissiveIntensity: 0.18,
-    roughness: 0.86,
+  const silhouetteMaterial = new THREE.MeshStandardMaterial({
+    color: 0x030202,
+    emissive: 0x060303,
+    emissiveIntensity: 0.1,
+    roughness: 0.94,
     metalness: 0,
   });
   const sinewMaterial = new THREE.MeshStandardMaterial({
-    color: 0x16100e,
-    emissive: 0x3b0906,
-    emissiveIntensity: 0.22,
-    roughness: 0.74,
+    color: 0x0c0807,
+    emissive: 0x100504,
+    emissiveIntensity: 0.12,
+    roughness: 0.88,
   });
-  const glowMaterial = new THREE.MeshBasicMaterial({
-    color: 0xff3d22,
+  const wetEdgeMaterial = new THREE.MeshStandardMaterial({
+    color: 0x120b09,
+    emissive: 0x180605,
+    emissiveIntensity: 0.16,
+    roughness: 0.72,
+  });
+  const mouthMaterial = new THREE.MeshBasicMaterial({
+    color: 0x2a0805,
     transparent: true,
-    opacity: 0.78,
+    opacity: 0.42,
   });
 
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 1.45, 10), bodyMaterial);
-  torso.position.y = 1.12;
-  torso.rotation.z = 0.08;
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.135, 1.42, 9), silhouetteMaterial);
+  torso.position.set(-0.01, 1.28, 0);
+  torso.rotation.z = -0.12;
+  torso.scale.set(0.74, 1, 0.58);
   group.add(torso);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 10), bodyMaterial);
-  head.position.set(0.03, 1.94, 0);
-  head.scale.set(0.78, 1.12, 0.7);
-  group.add(head);
-
-  const maw = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.024, 0.035), glowMaterial);
-  maw.position.set(0.03, 1.9, -0.145);
-  group.add(maw);
-
-  const limbs = [
-    [[-0.12, 1.58, 0], [-0.6, 0.72, -0.12], 0.028, 0.02],
-    [[0.13, 1.54, 0], [0.55, 0.68, -0.1], 0.028, 0.02],
-    [[-0.08, 0.56, 0], [-0.36, 0.02, -0.08], 0.036, 0.024],
-    [[0.09, 0.56, 0], [0.34, 0.02, -0.07], 0.036, 0.024],
-    [[0.01, 1.72, 0.02], [-0.2, 1.2, 0.34], 0.015, 0.009],
-    [[0.02, 1.76, 0.02], [0.26, 1.12, 0.3], 0.015, 0.009],
+  const ribs = [
+    [[-0.13, 1.56, -0.015], [0.12, 1.49, -0.02]],
+    [[-0.14, 1.38, -0.006], [0.11, 1.31, -0.012]],
+    [[-0.11, 1.18, 0.005], [0.08, 1.12, 0]],
   ];
-  limbs.forEach(([start, end, top, bottom]) => {
-    group.add(createLimbSegment(start, end, top, bottom, sinewMaterial));
+  ribs.forEach(([start, end]) => {
+    group.add(createLimbSegment(start, end, 0.011, 0.008, wetEdgeMaterial));
   });
 
-  for (let i = 0; i < 7; i += 1) {
-    const tendril = createLimbSegment(
-      [(Math.random() - 0.5) * 0.16, 1.4 + Math.random() * 0.45, 0.03],
-      [(Math.random() - 0.5) * 0.64, 0.55 + Math.random() * 0.55, 0.18 + Math.random() * 0.28],
-      0.009,
-      0.004,
-      sinewMaterial,
-    );
+  const neck = createLimbSegment([0.025, 1.9, -0.01], [0.06, 2.14, -0.035], 0.035, 0.024, sinewMaterial);
+  group.add(neck);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 10), silhouetteMaterial);
+  head.name = "bacteria-head";
+  head.position.set(0.08, 2.26, -0.05);
+  head.scale.set(0.95, 1.18, 0.72);
+  head.rotation.z = 0.16;
+  group.add(head);
+
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.028, 0.032), mouthMaterial);
+  jaw.position.set(0.08, 2.18, -0.18);
+  jaw.rotation.z = -0.08;
+  group.add(jaw);
+
+  const hip = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), silhouetteMaterial);
+  hip.position.set(-0.045, 0.62, 0.018);
+  hip.scale.set(0.82, 0.62, 0.54);
+  group.add(hip);
+
+  const jointedLimbs = [
+    [
+      [-0.1, 1.78, -0.02],
+      [-0.5, 1.04, -0.1],
+      [-0.66, 0.3, -0.19],
+      [-0.72, 0.03, -0.28],
+      0.024,
+    ],
+    [
+      [0.11, 1.74, -0.015],
+      [0.45, 1.08, -0.11],
+      [0.72, 0.44, -0.2],
+      [0.64, 0.09, -0.28],
+      0.023,
+    ],
+    [
+      [-0.08, 0.68, 0.015],
+      [-0.22, 0.38, -0.02],
+      [-0.25, 0.08, -0.08],
+      [-0.18, -0.02, -0.2],
+      0.034,
+    ],
+    [
+      [0.06, 0.68, 0.012],
+      [0.2, 0.42, -0.035],
+      [0.17, 0.1, -0.1],
+      [0.34, -0.02, -0.2],
+      0.032,
+    ],
+  ];
+  jointedLimbs.forEach(([a, b, c, d, radius]) => {
+    group.add(createLimbSegment(a, b, radius, radius * 0.72, sinewMaterial));
+    group.add(createLimbSegment(b, c, radius * 0.72, radius * 0.48, sinewMaterial));
+    group.add(createLimbSegment(c, d, radius * 0.44, radius * 0.2, sinewMaterial));
+  });
+
+  const headTendrils = [
+    [[0.04, 2.34, -0.01], [-0.18, 2.25, -0.16]],
+    [[0.13, 2.36, -0.01], [0.33, 2.3, -0.13]],
+    [[0.01, 2.28, 0.02], [-0.28, 2.06, 0.08]],
+    [[0.16, 2.28, 0.02], [0.42, 2.08, 0.04]],
+    [[0.08, 2.42, -0.02], [0.02, 2.58, -0.08]],
+    [[0.1, 2.38, 0.03], [0.28, 2.54, 0.05]],
+  ];
+  const animatedTendrils = [];
+  headTendrils.forEach(([start, end]) => {
+    const tendril = createLimbSegment(start, end, 0.012, 0.004, sinewMaterial);
+    animatedTendrils.push(tendril);
     group.add(tendril);
-  }
+  });
+
+  [
+    [[-0.02, 1.72, 0.02], [-0.3, 1.34, 0.22]],
+    [[0.06, 1.7, 0.02], [0.28, 1.28, 0.24]],
+    [[-0.02, 1.34, 0.02], [-0.38, 0.86, 0.12]],
+    [[0.04, 1.28, 0.02], [0.42, 0.82, 0.1]],
+  ].forEach(([start, end]) => {
+    group.add(createLimbSegment(start, end, 0.009, 0.003, wetEdgeMaterial));
+  });
+
+  group.userData.head = head;
+  group.userData.tendrils = animatedTendrils;
+  group.userData.baseScale = new THREE.Vector3(1, 1, 1);
 
   return group;
 }
@@ -90,6 +157,10 @@ export function createBacteriaEntity(
   const group = createBacteriaModel();
   group.position.set(spawnPosition.x, 0, spawnPosition.z);
   group.rotation.y = Math.random() * Math.PI * 2;
+  if (id === "super-bacteria") {
+    group.scale.setScalar(1.14);
+    group.userData.baseScale?.setScalar(1.14);
+  }
   scene.add(group);
 
   let contact = false;
@@ -97,32 +168,21 @@ export function createBacteriaEntity(
     group.position.x = initialState.position.x;
     group.position.z = initialState.position.z;
   }
-  const navGrid =
-    cols && rows && isCellOpen && worldToCell && cellCenter
-      ? createNavGrid({ cols, rows, isCellOpen })
-      : null;
-  const path = { waypoints: [], index: 0 };
-  let recomputeTimer = 0;
-  let stuckTimer = 0;
-  let lastPlayerCellKey = "";
-  let lastPositionX = group.position.x;
-  let lastPositionZ = group.position.z;
-  const movementSpeed = speed * ENTITY_SPEED_MULTIPLIER;
-
-  function repathTo(playerPosition) {
-    if (!navGrid) return;
-    const start = worldToCell(group.position.x, group.position.z);
-    const goal = worldToCell(playerPosition.x, playerPosition.z);
-    const next = aStar(navGrid, start, goal);
-    if (next && next.length > 0) {
-      path.waypoints = next;
-      path.index = 0;
-    } else {
-      path.waypoints = [];
-      path.index = 0;
-    }
-    recomputeTimer = RECOMPUTE_INTERVAL;
-  }
+  const mover = createEntityMover({
+    group,
+    isWalkable,
+    speed,
+    contactRadius: BACTERIA_CONTACT_RADIUS,
+    cols,
+    rows,
+    isCellOpen,
+    worldToCell,
+    cellCenter,
+    recomputeInterval: BACTERIA_RECOMPUTE_INTERVAL,
+    stuckThreshold: BACTERIA_STUCK_THRESHOLD,
+    directChaseDistance: BACTERIA_DIRECT_CHASE_DISTANCE,
+    turnRate: 7.2,
+  });
 
   return {
     getState() {
@@ -134,128 +194,37 @@ export function createBacteriaEntity(
       };
     },
     update(delta, elapsed, playerPosition, effects = {}) {
-      const dx = playerPosition.x - group.position.x;
-      const dz = playerPosition.z - group.position.z;
-      const distance = Math.hypot(dx, dz);
-      const repelRadius = Number.isFinite(effects.repelRadius) ? effects.repelRadius : 0;
-      const repelActive = Boolean(effects.entityRepelActive && distance <= repelRadius);
+      const tension = id === "super-bacteria" ? 1.16 : 1;
+      const moveState = mover.update(delta, elapsed, playerPosition, effects, {
+        speedScale: tension * (1 + Math.sin(elapsed * 2.4) * 0.035),
+      });
+      contact = moveState.contact;
 
-      if (repelActive) {
-        contact = false;
-        path.waypoints = [];
-        path.index = 0;
-        recomputeTimer = RECOMPUTE_INTERVAL;
-        stuckTimer = 0;
-      }
-
-      if (!contact && !repelActive && navGrid) {
-        const playerCell = worldToCell(playerPosition.x, playerPosition.z);
-        const playerCellKey = `${playerCell.col},${playerCell.row}`;
-        const playerMoved = playerCellKey !== lastPlayerCellKey;
-        const playerOffPath = !pathContainsCell(path.waypoints, playerCell, path.index);
-        const stuck = stuckTimer > STUCK_THRESHOLD;
-        const needRepath =
-          path.waypoints.length === 0 ||
-          recomputeTimer <= 0 ||
-          (playerMoved && playerOffPath) ||
-          stuck;
-        if (needRepath) {
-          repathTo(playerPosition);
-          lastPlayerCellKey = playerCellKey;
-        }
-      }
-
-      let nextX = group.position.x;
-      let nextZ = group.position.z;
-      let advanced = false;
-      let reachedEnd = false;
-
-      if (!contact && repelActive && distance > 0.001) {
-        const repelMultiplier = Number.isFinite(effects.repelSpeedMultiplier)
-          ? Math.max(0.2, effects.repelSpeedMultiplier)
-          : 1.35;
-        const step = movementSpeed * repelMultiplier * delta;
-        const resolved = resolveEntityStep(
-          group.position,
-          (-dx / distance) * step,
-          (-dz / distance) * step,
-          isWalkable,
-        );
-        nextX = resolved.x;
-        nextZ = resolved.z;
-        advanced = nextX !== group.position.x || nextZ !== group.position.z;
-      } else if (!contact && path.waypoints.length > 0) {
-        const followed = followPath({
-          entityPos: group.position,
-          waypoints: path.waypoints,
-          indexRef: path,
-          cellCenter,
-          speed: movementSpeed,
-          delta,
-          isWalkable,
-        });
-        nextX = followed.x;
-        nextZ = followed.z;
-        advanced = followed.advanced;
-        reachedEnd = followed.reachedEnd;
-        if (reachedEnd && distance > 0.001) {
-          const step = Math.min(distance, movementSpeed * delta);
-          const resolved = resolveEntityStep(
-            group.position,
-            (dx / distance) * step,
-            (dz / distance) * step,
-            isWalkable,
-          );
-          nextX = resolved.x;
-          nextZ = resolved.z;
-          advanced = nextX !== group.position.x || nextZ !== group.position.z;
-        }
-      } else if (distance > 0.001 && !contact) {
-        const step = Math.min(distance, movementSpeed * delta);
-        const resolved = resolveEntityStep(
-          group.position,
-          (dx / distance) * step,
-          (dz / distance) * step,
-          isWalkable,
-        );
-        nextX = resolved.x;
-        nextZ = resolved.z;
-        advanced = nextX !== group.position.x || nextZ !== group.position.z;
-      }
-
-      if (!contact) {
-        const movedNow = Math.hypot(nextX - lastPositionX, nextZ - lastPositionZ);
-        const expected = movementSpeed * delta * STUCK_MIN_PROGRESS;
-        if (movedNow < expected) {
-          stuckTimer += delta;
-        } else {
-          stuckTimer = 0;
-        }
-        lastPositionX = nextX;
-        lastPositionZ = nextZ;
-      }
-
-      group.position.x = nextX;
-      group.position.z = nextZ;
-      if (distance > 0.001 && (advanced || reachedEnd)) {
-        group.rotation.y = repelActive ? Math.atan2(-dx, -dz) : Math.atan2(dx, dz);
-      }
-
-      const sway = Math.sin(elapsed * 2.1) * 0.04;
-      group.position.y = Math.sin(elapsed * 3.6) * 0.025;
+      const proximity = Math.max(0, 1 - moveState.distance / 9);
+      const sway = Math.sin(elapsed * 2.25) * (0.045 + proximity * 0.035);
+      group.position.y = Math.sin(elapsed * 3.6) * 0.018 + proximity * 0.02;
       group.rotation.z = sway;
-      const currentDistance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
-      contact = !repelActive && currentDistance <= BACTERIA_CONTACT_RADIUS;
-
-      if (recomputeTimer > 0) recomputeTimer -= delta;
+      const baseScale = group.userData.baseScale ?? new THREE.Vector3(1, 1, 1);
+      group.scale.set(
+        baseScale.x * (1 + Math.sin(elapsed * 4.2) * 0.012 * proximity),
+        baseScale.y * (1 + Math.sin(elapsed * 3.1) * 0.018 * proximity),
+        baseScale.z,
+      );
+      if (group.userData.head) {
+        group.userData.head.rotation.x = Math.sin(elapsed * 1.9) * 0.12;
+        group.userData.head.rotation.z = 0.16 + Math.sin(elapsed * 2.7) * 0.08;
+      }
+      group.userData.tendrils?.forEach((tendril, index) => {
+        tendril.rotation.z = Math.sin(elapsed * (2.1 + index * 0.2) + index) * 0.08;
+      });
 
       return {
         id,
         active: true,
         contact,
-        distance: currentDistance,
+        distance: moveState.distance,
         x: group.position.x,
-        y: 1.45,
+        y: 1.72,
         z: group.position.z,
       };
     },

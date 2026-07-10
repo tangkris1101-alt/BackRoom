@@ -86,6 +86,7 @@ function sanitizePlayer(raw) {
     healthMax: clampNumber(raw.healthMax, 100),
     houndSlowTimer: clampNumber(raw.houndSlowTimer, 0),
     isSprinting: Boolean(raw.isSprinting),
+    sprintExhausted: Boolean(raw.sprintExhausted),
     isDrinking: Boolean(raw.isDrinking),
     drinkTimer: clampNumber(raw.drinkTimer, 0),
     drinkItemId: typeof raw.drinkItemId === "string" ? raw.drinkItemId : null,

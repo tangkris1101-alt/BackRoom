@@ -719,6 +719,11 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     isWalkable,
     speed: 1.22,
     initialState: entityInitial.find((entity) => entity.type === "bacteria") ?? null,
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    worldToCell: levelTwoWorldToCell,
+    cellCenter: levelTwoCellCenter,
   });
   const hound = createHoundEntity(scene, {
     spawnPosition:
@@ -735,6 +740,11 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     isWalkable,
     speed: 1.83,
     initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
+    cols: LEVEL_TWO_COLS,
+    rows: LEVEL_TWO_ROWS,
+    isCellOpen: isLevelTwoOpenCell,
+    worldToCell: levelTwoWorldToCell,
+    cellCenter: levelTwoCellCenter,
   });
 
   let objectiveReached = Boolean(objectiveInitial.reached);
@@ -855,7 +865,9 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     level: 2,
     levelLabel: "LEVEL 2",
     levelName: "PIPE DREAMS",
-    viewModelName: getViewModelName(viewModel),
+    get viewModelName() {
+      return getViewModelName(viewModel);
+    },
     colliderCount: propColliders.length,
     nextLevel: 3,
     scene,

@@ -546,7 +546,9 @@ export function createLevelSevenScene({ initialState = null } = {}) {
     level: 7,
     levelLabel: "LEVEL 7",
     levelName: "THALASSOPHOBIA",
-    viewModelName: getViewModelName(viewModel),
+    get viewModelName() {
+      return getViewModelName(viewModel);
+    },
     colliderCount: propColliders.length,
     nextLevel: null,
     scene,

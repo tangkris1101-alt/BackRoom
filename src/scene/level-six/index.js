@@ -406,7 +406,9 @@ export function createLevelSixScene({ initialState = null } = {}) {
     level: 6,
     levelLabel: "LEVEL 6",
     levelName: "LIGHTS OUT",
-    viewModelName: getViewModelName(viewModel),
+    get viewModelName() {
+      return getViewModelName(viewModel);
+    },
     colliderCount: propColliders.length,
     nextLevel: 7,
     scene,
