@@ -22,7 +22,10 @@ const flashlightButton = document.querySelector("#flashlight-button");
 const detectorButton = document.querySelector("#detector-button");
 const pauseButton = document.querySelector("#pause-button");
 const statusText = document.querySelector("#status-text");
-const levelSelect = document.querySelector("#level-select");
+const levelPicker = document.querySelector("#level-picker");
+const levelPickerButton = document.querySelector("#level-picker-button");
+const levelPickerLabel = document.querySelector("#level-picker-label");
+const levelPickerMenu = document.querySelector("#level-picker-menu");
 const languageSelect = document.querySelector("#language-select");
 const distanceReadout = document.querySelector("#distance-readout");
 const lightReadout = document.querySelector("#light-readout");
@@ -1326,26 +1329,146 @@ function openExitDoor() {
   return true;
 }
 
-function syncLevelHud() {
-  if (levelSelect) {
-    const options = levelSelect.querySelectorAll("option");
-    options.forEach((option) => {
-      const lv = Number(option.value);
-      const info = getBackroomsLevelInfo(lv);
-      const reached = reachedLevels.has(lv);
-      const completed = completedLevels.has(lv);
-      option.disabled = !reached;
-      option.dataset.reached = reached ? "true" : "false";
-      option.dataset.completed = completed ? "true" : "false";
-      option.title = info.levelName;
-      let label = info.levelLabel;
-      if (completed) label += ` · ${formatLocalizedStatus("levelCleared")}`;
-      else if (!reached) label += ` · ${formatLocalizedStatus("levelLocked")}`;
-      option.textContent = label;
-    });
-    levelSelect.value = String(world.level);
-    levelSelect.dataset.currentCompleted = completedLevels.has(world.level) ? "true" : "false";
+function getLevelPickerState(level) {
+  const lv = Number(level);
+  const info = getBackroomsLevelInfo(lv);
+  const reached = reachedLevels.has(lv);
+  const completed = completedLevels.has(lv);
+  let label = info.levelLabel;
+  if (completed) label += ` - ${formatLocalizedStatus("levelCleared")}`;
+  else if (!reached) label += ` - ${formatLocalizedStatus("levelLocked")}`;
+  return { level: lv, info, reached, completed, label };
+}
+
+function isLevelPickerOpen() {
+  return levelPicker?.dataset.open === "true";
+}
+
+function renderLevelPickerMenu() {
+  if (!levelPickerMenu || !world) return;
+  const fragment = document.createDocumentFragment();
+  for (let lv = 0; lv <= 7; lv += 1) {
+    const state = getLevelPickerState(lv);
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "level-picker__option";
+    option.dataset.level = String(lv);
+    option.dataset.reached = state.reached ? "true" : "false";
+    option.dataset.completed = state.completed ? "true" : "false";
+    option.dataset.current = lv === world.level ? "true" : "false";
+    option.disabled = !state.reached;
+    option.title = state.info.levelName;
+    option.setAttribute("role", "option");
+    option.setAttribute("aria-selected", lv === world.level ? "true" : "false");
+
+    const label = document.createElement("span");
+    label.className = "level-picker__option-label";
+    const name = document.createElement("strong");
+    name.textContent = state.info.levelLabel;
+    const subtitle = document.createElement("small");
+    subtitle.textContent = state.info.levelName;
+    label.append(name, subtitle);
+
+    const status = document.createElement("span");
+    status.className = "level-picker__option-status";
+    if (state.completed) status.textContent = formatLocalizedStatus("levelCleared");
+    else if (!state.reached) status.textContent = formatLocalizedStatus("levelLocked");
+    else status.textContent = "";
+
+    option.append(label, status);
+    fragment.append(option);
   }
+  levelPickerMenu.replaceChildren(fragment);
+}
+
+function setLevelPickerOpen(open) {
+  if (!levelPicker || !levelPickerButton || !levelPickerMenu) return;
+  const nextOpen = Boolean(open);
+  levelPicker.dataset.open = nextOpen ? "true" : "false";
+  levelPickerButton.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+  if (nextOpen) {
+    renderLevelPickerMenu();
+    levelPickerMenu.removeAttribute("hidden");
+  } else {
+    levelPickerMenu.setAttribute("hidden", "");
+  }
+}
+
+function syncLevelPicker() {
+  if (!levelPicker || !levelPickerButton || !levelPickerLabel || !world) return;
+  const current = getLevelPickerState(world.level);
+  levelPickerLabel.textContent = current.label;
+  levelPicker.dataset.currentCompleted = current.completed ? "true" : "false";
+  levelPicker.dataset.currentLevel = String(world.level);
+  levelPickerButton.title = world.levelName;
+  renderLevelPickerMenu();
+}
+
+function chooseLevel(nextLevel) {
+  if (!world) return;
+  if (nextLevel === world.level) {
+    setLevelPickerOpen(false);
+    levelPickerButton?.focus();
+    return;
+  }
+  if (!reachedLevels.has(nextLevel)) {
+    flashPickupHint("levelLockedHint", 1400);
+    syncLevelPicker();
+    return;
+  }
+  setLevelPickerOpen(false);
+  levelPickerButton?.blur();
+  expireCompassAtExit({ silent: true });
+  levelTransition = null;
+  exitComplete = false;
+  gameFailed = false;
+  playerHealthCooldown = 0;
+  resetExitDoorState();
+  canvas.dataset.transitioning = "false";
+  canvas.dataset.exitReached = "false";
+  canvas.dataset.gameFailed = "false";
+  hideExitOverlay();
+  loadLevel(nextLevel, { updateUrl: true });
+}
+
+let levelPickerActivationAt = -Infinity;
+
+function recentlyHandledLevelPickerActivation() {
+  return performance.now() - levelPickerActivationAt < 320;
+}
+
+function markLevelPickerActivation() {
+  levelPickerActivationAt = performance.now();
+}
+
+function shouldHandleLevelPickerActivation(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if ((event.type === "mousedown" || event.type === "click") && recentlyHandledLevelPickerActivation()) {
+    return false;
+  }
+  markLevelPickerActivation();
+  return true;
+}
+
+function getLevelPickerOptionFromEvent(event) {
+  return event.target instanceof Element ? event.target.closest(".level-picker__option") : null;
+}
+
+function handleLevelPickerButtonActivation(event) {
+  if (!shouldHandleLevelPickerActivation(event)) return;
+  setLevelPickerOpen(!isLevelPickerOpen());
+}
+
+function handleLevelPickerOptionActivation(event) {
+  const option = getLevelPickerOptionFromEvent(event);
+  if (!option || option.disabled) return;
+  if (!shouldHandleLevelPickerActivation(event)) return;
+  chooseLevel(Number(option.dataset.level));
+}
+
+function syncLevelHud() {
+  syncLevelPicker();
   if (loadingLevelLabel) loadingLevelLabel.textContent = world.levelLabel;
   canvas.dataset.level = String(world.level);
   canvas.dataset.levelName = world.levelName;
@@ -1687,27 +1810,59 @@ function updateLevelTransition(delta) {
   canvas.dataset.exitReached = "false";
 }
 
-levelSelect?.addEventListener("change", () => {
-  if (!world) return;
-  const nextLevel = Number(levelSelect.value);
-  levelSelect.blur();
-  if (nextLevel === world.level) return;
-  if (!reachedLevels.has(nextLevel)) {
-    if (levelSelect) levelSelect.value = String(world.level);
-    flashPickupHint("levelLockedHint", 1400);
+levelPickerButton?.addEventListener("pointerdown", handleLevelPickerButtonActivation);
+levelPickerButton?.addEventListener("mousedown", handleLevelPickerButtonActivation);
+levelPickerButton?.addEventListener("click", handleLevelPickerButtonActivation);
+
+levelPickerButton?.addEventListener("keydown", (event) => {
+  if (event.key !== "ArrowDown" && event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  event.stopPropagation();
+  markLevelPickerActivation();
+  setLevelPickerOpen(true);
+  const current =
+    levelPickerMenu?.querySelector('[data-current="true"]:not(:disabled)') ??
+    levelPickerMenu?.querySelector(".level-picker__option:not(:disabled)");
+  current?.focus();
+});
+
+levelPickerMenu?.addEventListener("pointerdown", handleLevelPickerOptionActivation);
+levelPickerMenu?.addEventListener("mousedown", handleLevelPickerOptionActivation);
+levelPickerMenu?.addEventListener("click", handleLevelPickerOptionActivation);
+
+levelPickerMenu?.addEventListener("keydown", (event) => {
+  const options = [...levelPickerMenu.querySelectorAll(".level-picker__option:not(:disabled)")];
+  if (!options.length) return;
+
+  if (event.key === "Escape" || event.key === "Tab") {
+    setLevelPickerOpen(false);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      levelPickerButton?.focus();
+    }
     return;
   }
-  expireCompassAtExit({ silent: true });
-  levelTransition = null;
-  exitComplete = false;
-  gameFailed = false;
-  playerHealthCooldown = 0;
-  resetExitDoorState();
-  canvas.dataset.transitioning = "false";
-  canvas.dataset.exitReached = "false";
-  canvas.dataset.gameFailed = "false";
-  hideExitOverlay();
-  loadLevel(nextLevel, { updateUrl: true });
+
+  if (event.key === "Enter" || event.key === " ") {
+    const option = getLevelPickerOptionFromEvent(event);
+    if (!option || option.disabled) return;
+    event.preventDefault();
+    markLevelPickerActivation();
+    chooseLevel(Number(option.dataset.level));
+    return;
+  }
+
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  event.preventDefault();
+  const currentIndex = Math.max(0, options.indexOf(document.activeElement));
+  const direction = event.key === "ArrowDown" ? 1 : -1;
+  const nextIndex = (currentIndex + direction + options.length) % options.length;
+  options[nextIndex]?.focus();
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!isLevelPickerOpen() || levelPicker?.contains(event.target)) return;
+  setLevelPickerOpen(false);
 });
 
 languageSelect?.addEventListener("change", () => {

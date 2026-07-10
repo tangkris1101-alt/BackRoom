@@ -125,7 +125,8 @@ body {
   pointer-events: auto;
 }
 
-.level-select,
+.level-picker,
+.level-picker__button,
 .language-select,
 .meters span {
   font-size: 12px;
@@ -135,7 +136,13 @@ body {
   white-space: nowrap;
 }
 
-.level-select,
+.level-picker {
+  position: relative;
+  max-width: 188px;
+  min-width: 104px;
+}
+
+.level-picker__button,
 .language-select {
   max-width: 92px;
   border: 0;
@@ -144,34 +151,132 @@ body {
   font: inherit;
   outline: none;
   cursor: pointer;
+  appearance: none;
+  touch-action: manipulation;
 }
 
-.level-select {
+.level-picker__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
   max-width: 188px;
+  padding: 0;
+  text-align: left;
+}
+
+.level-picker__button::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  opacity: 0.82;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.level-picker[data-open="true"] .level-picker__button::after {
+  opacity: 1;
+  transform: rotate(225deg) translateY(-1px);
+}
+
+.level-picker[data-current-completed="true"] .level-picker__button {
+  color: #b6e6a3;
+}
+
+.level-picker__button:focus-visible,
+.level-picker__option:focus-visible,
+.language-select:focus-visible {
+  outline: 1px solid rgba(181, 255, 156, 0.75);
+  outline-offset: 4px;
+}
+
+.level-picker__menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: -12px;
+  z-index: 24;
+  width: max-content;
+  min-width: 240px;
+  max-width: min(76vw, 320px);
+  max-height: min(54vh, 340px);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid rgba(205, 229, 133, 0.26);
+  background: rgba(5, 8, 5, 0.86);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.38), 0 0 22px rgba(116, 164, 77, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.level-picker__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #e6f7b4;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.level-picker__option:not(:disabled):hover,
+.level-picker__option:not(:disabled):focus-visible,
+.level-picker__option[data-current="true"] {
+  border-color: rgba(181, 255, 156, 0.28);
+  background: rgba(181, 255, 156, 0.09);
+}
+
+.level-picker__option[data-completed="true"]:not(:disabled) {
+  color: #b6e6a3;
+}
+
+.level-picker__option:disabled {
+  color: rgba(180, 180, 180, 0.45);
+  cursor: not-allowed;
+}
+
+.level-picker__option-label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.level-picker__option-label strong,
+.level-picker__option-label small,
+.level-picker__option-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.level-picker__option-label small {
+  color: rgba(230, 247, 180, 0.58);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.level-picker__option-status {
+  flex: 0 1 auto;
+  max-width: 96px;
+  color: #86ff9f;
+  font-size: 10px;
+  text-align: right;
 }
 
 .language-select {
   max-width: 108px;
 }
 
-.level-select option,
 .language-select option {
   color: #e6f7b4;
   background: #080c07;
-}
-
-.level-select option:disabled {
-  color: rgba(180, 180, 180, 0.45);
-  background: #050805;
-  font-style: italic;
-}
-
-.level-select option[data-completed="true"]:not(:disabled) {
-  color: #6fbf6a;
-}
-
-.level-select[data-current-completed="true"] {
-  color: #b6e6a3;
 }
 
 #status-text {
@@ -1674,7 +1779,8 @@ body {
     font-size: 11px;
   }
 
-  .level-select,
+  .level-picker__button,
+  .level-picker__option,
   .language-select,
   .meters span,
   #status-text,
@@ -1687,6 +1793,11 @@ body {
   #detector-readout,
   #compass-readout {
     font-size: 11px;
+  }
+
+  .level-picker__menu {
+    left: 0;
+    min-width: min(76vw, 260px);
   }
 
   .stamina-meter,

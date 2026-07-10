@@ -19,16 +19,19 @@
             <span class="timer-readout__value">00:00</span>
           </div>
           <div class="signal">
-            <select id="level-select" class="level-select" aria-label="Level">
-              <option value="0">LEVEL 0</option>
-              <option value="1">LEVEL 1</option>
-              <option value="2">LEVEL 2</option>
-              <option value="3">LEVEL 3</option>
-              <option value="4">LEVEL 4</option>
-              <option value="5">LEVEL 5</option>
-              <option value="6">LEVEL 6</option>
-              <option value="7">LEVEL 7</option>
-            </select>
+            <div id="level-picker" class="level-picker" data-open="false">
+              <button
+                id="level-picker-button"
+                class="level-picker__button"
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-controls="level-picker-menu"
+              >
+                <span id="level-picker-label">LEVEL 0</span>
+              </button>
+              <div id="level-picker-menu" class="level-picker__menu" role="listbox" tabindex="-1" hidden></div>
+            </div>
             <span id="status-text">NO SIGNAL</span>
             <select id="language-select" class="language-select" aria-label="Language">
               <option value="zh-CN">简体中文</option>
