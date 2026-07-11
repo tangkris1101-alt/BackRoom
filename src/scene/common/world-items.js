@@ -166,7 +166,7 @@ function createNoteFaceMaterial(color) {
   return new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9, metalness: 0 });
 }
 
-function createItemModel(id) {
+export function createWorldItemModel(id) {
   const toolModelFactories = {
     flashlight: createFlashlightModel,
     detector: createDetectorModel,
@@ -258,7 +258,7 @@ export function createWorldItemManager(scene, defaultSpawns = [], initialState =
 
   function addItem(raw) {
     if (!raw?.id || !raw.position) return null;
-    const model = createItemModel(raw.id);
+    const model = createWorldItemModel(raw.id);
     model.position.set(raw.position.x, raw.position.y ?? 0.24, raw.position.z);
     model.rotation.set(raw.tiltX ?? 0, raw.rotation ?? 0, raw.tiltZ ?? 0);
     model.visible = raw.active !== false;

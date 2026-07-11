@@ -9,6 +9,7 @@ import {
   SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
   SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+  HUB_LEVEL,
 } from "../constants.js";
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
@@ -376,7 +377,7 @@ export function createLevelSevenScene({ initialState = null } = {}) {
   const interactions = [...propInteractions];
   const routes = [
     { id: "level-seven-terminal-exit", targetLevel: null, targetLabel: "EXIT", label: "EXIT", kind: "door", position: targetPosition, rotation: 0 },
-    { id: "level-seven-hidden-hub-door", targetLevel: 8, targetLabel: "THE HUB", kind: "door", hidden: true, position: levelSevenCellCenter(8, 3), rotation: Math.PI },
+    { id: "level-seven-hidden-hub-door", targetLevel: HUB_LEVEL, targetLabel: "THE HUB", kind: "door", hidden: true, position: levelSevenCellCenter(8, 3), rotation: Math.PI },
   ];
   const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
 

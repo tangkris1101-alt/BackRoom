@@ -9,6 +9,7 @@ import {
   SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
   SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+  HUB_LEVEL,
 } from "../constants.js";
 import { updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
@@ -696,7 +697,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     { id: "level-two-door-level-three", targetLevel: 3, targetLabel: "LEVEL 3", label: "UNLOCKED", kind: "door", position: targetPosition, rotation: 0 },
     { id: "level-two-door-level-one", targetLevel: 1, targetLabel: "LEVEL 1", label: "RETURN", kind: "door", position: levelTwoCellCenter(12, 2), rotation: 0 },
     { id: "level-two-door-level-four", targetLevel: 4, targetLabel: "LEVEL 4", label: "OFFICE", kind: "door", position: levelTwoCellCenter(37, 26), rotation: Math.PI },
-    { id: "level-two-hidden-hub-door", targetLevel: 8, targetLabel: "THE HUB", kind: "door", hidden: true, position: levelTwoCellCenter(31, 9), rotation: Math.PI / 2 },
+    { id: "level-two-hidden-hub-door", targetLevel: HUB_LEVEL, targetLabel: "THE HUB", kind: "door", hidden: true, position: levelTwoCellCenter(31, 9), rotation: Math.PI / 2 },
   ];
   const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
   const hound = createHoundEntity(scene, {

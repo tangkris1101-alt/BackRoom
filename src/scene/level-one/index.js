@@ -9,6 +9,7 @@ import {
   SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
   SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
+  HUB_LEVEL,
 } from "../constants.js";
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
@@ -275,7 +276,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
     },
     {
       id: "level-one-hidden-hub-door",
-      targetLevel: 8,
+      targetLevel: HUB_LEVEL,
       targetLabel: "THE HUB",
       kind: "door",
       hidden: true,

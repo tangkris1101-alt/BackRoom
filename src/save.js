@@ -1,5 +1,13 @@
 const STORAGE_KEY = "backrooms-save";
 const SAVE_VERSION = 1;
+const HUB_LEVEL = -1;
+
+function normalizeLevelId(level) {
+  const normalized = Math.floor(level);
+  // Saves written before the Hub was separated used 8 for its state.
+  if (normalized === 8) return HUB_LEVEL;
+  return Math.max(HUB_LEVEL, Math.min(8, normalized));
+}
 
 function safeStorage() {
   try {
@@ -96,7 +104,7 @@ function sanitizePlayer(raw) {
   const superAlmondWaterTimer = clampNumber(raw.superAlmondWaterTimer, 0);
   const staminaMax = superAlmondWaterTimer > 0 ? 250 : almondWaterTimer > 0 ? 150 : 100;
   return {
-    level: Math.max(0, Math.min(8, Math.floor(raw.level ?? 0))),
+    level: normalizeLevelId(raw.level ?? 0),
     position: {
       x: position.x,
       y: Number.isFinite(position.y) ? position.y : 0,
@@ -174,7 +182,7 @@ export function loadSave() {
   const pickups = {};
   if (parsed.pickups && typeof parsed.pickups === "object") {
     for (const [levelKey, levelPickups] of Object.entries(parsed.pickups)) {
-      const levelNum = Math.floor(Number(levelKey));
+      const levelNum = normalizeLevelId(Number(levelKey));
       if (!Number.isFinite(levelNum)) continue;
       const sanitized = {};
       if (levelPickups && typeof levelPickups === "object") {
@@ -189,7 +197,7 @@ export function loadSave() {
   const interactions = {};
   if (parsed.interactions && typeof parsed.interactions === "object") {
     for (const [levelKey, levelInteractions] of Object.entries(parsed.interactions)) {
-      const levelNum = Math.floor(Number(levelKey));
+      const levelNum = normalizeLevelId(Number(levelKey));
       if (!Number.isFinite(levelNum)) continue;
       const sanitized = {};
       if (levelInteractions && typeof levelInteractions === "object") {
@@ -205,7 +213,7 @@ export function loadSave() {
   const objectives = {};
   if (parsed.objectives && typeof parsed.objectives === "object") {
     for (const [levelKey, value] of Object.entries(parsed.objectives)) {
-      const levelNum = Math.floor(Number(levelKey));
+      const levelNum = normalizeLevelId(Number(levelKey));
       if (!Number.isFinite(levelNum)) continue;
       objectives[levelNum] = { reached: Boolean(value?.reached) };
     }
@@ -213,7 +221,7 @@ export function loadSave() {
   const entities = {};
   if (parsed.entities && typeof parsed.entities === "object") {
     for (const [levelKey, list] of Object.entries(parsed.entities)) {
-      const levelNum = Math.floor(Number(levelKey));
+      const levelNum = normalizeLevelId(Number(levelKey));
       if (!Number.isFinite(levelNum)) continue;
       if (Array.isArray(list)) {
         entities[levelNum] = list.map(sanitizeEntityState).filter(Boolean);
@@ -223,7 +231,7 @@ export function loadSave() {
   const worldItems = {};
   if (parsed.worldItems && typeof parsed.worldItems === "object") {
     for (const [levelKey, list] of Object.entries(parsed.worldItems)) {
-      const levelNum = Math.floor(Number(levelKey));
+      const levelNum = normalizeLevelId(Number(levelKey));
       if (!Number.isFinite(levelNum)) continue;
       if (Array.isArray(list)) worldItems[levelNum] = list.map(sanitizeWorldItem).filter(Boolean);
     }

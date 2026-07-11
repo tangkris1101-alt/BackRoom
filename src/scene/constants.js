@@ -43,11 +43,13 @@ export const ENTITY_SPEED_MULTIPLIER = 2;
 export const ENTITY_INSPECT_DISTANCE = 10.5;
 export const INTERACTION_RADIUS = 3.0;
 export const INTERACTION_INSPECT_DISTANCE = 8.0;
+export const HUB_LEVEL = -1;
 
 export const LAYOUT_COLS = 31;
 export const LAYOUT_ROWS = 27;
 
 const LEVEL_INFOS = new Map([
+  [HUB_LEVEL, { level: HUB_LEVEL, levelLabel: "THE HUB", levelName: "NEXUS TUNNELS" }],
   [0, { level: 0, levelLabel: "LEVEL 0", levelName: "NOCLIP ZONE" }],
   [1, { level: 1, levelLabel: "LEVEL 1", levelName: "HABITABLE ZONE" }],
   [2, { level: 2, levelLabel: "LEVEL 2", levelName: "PIPE DREAMS" }],
@@ -56,7 +58,7 @@ const LEVEL_INFOS = new Map([
   [5, { level: 5, levelLabel: "LEVEL 5", levelName: "TERROR HOTEL" }],
   [6, { level: 6, levelLabel: "LEVEL 6", levelName: "LIGHTS OUT" }],
   [7, { level: 7, levelLabel: "LEVEL 7", levelName: "THALASSOPHOBIA" }],
-  [8, { level: 8, levelLabel: "THE HUB", levelName: "NEXUS TUNNELS" }],
+  [8, { level: 8, levelLabel: "LEVEL 8", levelName: "UNMAPPED" }],
 ]);
 
 export function getBackroomsLevelInfo(level = 0) {

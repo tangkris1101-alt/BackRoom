@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createExitNetwork } from "../common/exit-network.js";
+import { HUB_LEVEL } from "../constants.js";
 
-const HUB_LEVEL = 8;
 const HALF_WIDTH = 17;
 const HALF_LENGTH = 76;
 const CEILING_HEIGHT = 7.2;

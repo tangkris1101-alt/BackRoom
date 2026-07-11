@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import bakedArmBase64 from "../../assets/models/fps-arm-para-baked.bin.b64?raw";
 import { SHOW_FIRST_PERSON_VIEW_MODEL } from "../constants.js";
+import { createWorldItemModel } from "./world-items.js";
 
 const VIEW_MODEL_NAME = "BAKED RIGGED FPS HAZMAT ARMS";
 const ARMS_SCALE = 0.15;
@@ -13,6 +14,7 @@ let bakedArmMaterial = null;
 
 const motionEuler = new THREE.Euler(0, 0, 0, "YXZ");
 const motionQuaternion = new THREE.Quaternion();
+const HELD_ITEM_NAME = "first-person-held-item";
 
 export function createLimbSegment(start, end, radiusTop, radiusBottom, material) {
   const startVector = new THREE.Vector3(...start);
@@ -123,6 +125,71 @@ export function attachFirstPersonViewModel(camera) {
     viewModel.userData.loadError = error?.message ?? "failed";
   }
   return viewModel;
+}
+
+function setHeldItemMaterialState(root) {
+  root.traverse((child) => {
+    if (!child.isMesh) return;
+    child.renderOrder = 21;
+    child.frustumCulled = false;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    materials.filter(Boolean).forEach((material) => {
+      const isTransparent = material.transparent || material.opacity < 1 || material.transmission > 0;
+      material.depthTest = isTransparent;
+      material.depthWrite = false;
+      material.needsUpdate = true;
+    });
+  });
+}
+
+function positionHeldItem(item, itemId) {
+  item.position.set(0.19, -0.475, -0.64);
+  item.rotation.set(0, 0, 0);
+  item.scale.setScalar(0.8);
+
+  if (itemId === "flashlight") {
+    item.position.set(0.2, -0.52, -0.69);
+    item.rotation.set(0.12, Math.PI / 2, -0.16);
+    item.scale.setScalar(0.84);
+  } else if (itemId === "detector") {
+    item.position.set(0.19, -0.51, -0.63);
+    item.rotation.set(-0.82, 0.16, -0.14);
+    item.scale.setScalar(0.9);
+  } else if (itemId === "compass") {
+    item.position.set(0.18, -0.51, -0.62);
+    item.rotation.set(-0.95, 0.06, -0.08);
+    item.scale.setScalar(0.42);
+  } else if (itemId === "almond-water" || itemId === "super-almond-water" || itemId === "silence-liquid") {
+    item.position.set(0.155, -0.6, -0.84);
+    item.rotation.set(0.08, -0.26, -0.08);
+    item.scale.setScalar(0.36);
+  } else if (itemId?.startsWith("level-key-")) {
+    item.position.set(0.18, -0.49, -0.62);
+    item.rotation.set(0.18, -0.26, -0.52);
+    item.scale.setScalar(0.9);
+  } else {
+    item.position.set(0.18, -0.5, -0.62);
+    item.rotation.set(0.18, -0.3, -0.18);
+    item.scale.setScalar(0.78);
+  }
+}
+
+export function syncFirstPersonHeldItem(camera, itemId) {
+  const viewModel = camera?.getObjectByName("first-person-baked-hazmat-arms");
+  if (!viewModel) return;
+  const heldItemId = typeof itemId === "string" && itemId ? itemId : null;
+  if (viewModel.userData.heldItemId === heldItemId) return;
+
+  const previous = viewModel.getObjectByName(HELD_ITEM_NAME);
+  if (previous) viewModel.remove(previous);
+  viewModel.userData.heldItemId = heldItemId;
+  if (!heldItemId) return;
+
+  const heldItem = createWorldItemModel(heldItemId);
+  heldItem.name = HELD_ITEM_NAME;
+  setHeldItemMaterialState(heldItem);
+  positionHeldItem(heldItem, heldItemId);
+  viewModel.add(heldItem);
 }
 
 export function getViewModelName(viewModel) {

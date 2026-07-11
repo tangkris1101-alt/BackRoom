@@ -3,6 +3,8 @@ import "./styles.css";
 import { createAmbientHum } from "./ambient-audio.js";
 import { createBackroomsScene, getBackroomsLevelInfo } from "./scene.js";
 import { FirstPersonControls } from "./first-person-controls.js";
+import { syncFirstPersonHeldItem } from "./scene/common/view-model.js";
+import { HUB_LEVEL } from "./scene/constants.js";
 import {
   hasSavedGame,
   loadSave,
@@ -915,7 +917,9 @@ function getInitialLevel() {
   if (requested === 0) return 0;
   try {
     const reached = JSON.parse(window.localStorage?.getItem(REACHED_KEY) ?? "[]");
-    return Array.isArray(reached) && reached.includes(requested) ? requested : 0;
+    if (!Array.isArray(reached)) return 0;
+    if (level === 8 && reached.includes(8)) return HUB_LEVEL;
+    return reached.includes(requested) ? requested : 0;
   } catch {
     return 0;
   }
@@ -1162,12 +1166,45 @@ const ITEM_ICON_SVG = {
     <path d="M25 42 Q39 33 54 42 T76 40 M27 55 Q42 47 57 56 T75 54 M31 68 Q43 60 55 68" fill="none" stroke="#30384e" stroke-width="3" stroke-linecap="round" opacity="0.82"/>
     <path d="M22 20 L31 35 L17 68 M72 15 L65 33 L82 32 M77 82 L61 72 L28 87" fill="none" stroke="#8c8266" stroke-width="1.5" opacity="0.75"/>`,
 
+  "rusted-key": `
+    <circle cx="28" cy="43" r="15" fill="none" stroke="#9a7043" stroke-width="8"/>
+    <circle cx="28" cy="43" r="5" fill="#2f251b"/>
+    <path d="M39 54 L79 76 M60 66 L67 57 M70 72 L78 64" fill="none" stroke="#9a7043" stroke-width="8" stroke-linecap="square"/>
+    <path d="M19 29 L27 36 M36 51 L43 57 M53 62 L60 68" stroke="#c19b62" stroke-width="2.6" opacity="0.68" stroke-linecap="round"/>
+    <circle cx="49" cy="61" r="2.2" fill="#4a3523"/><circle cx="67" cy="70" r="2" fill="#4a3523"/>`,
+
+  "office-badge": `
+    <path d="M29 17 L71 17 L78 27 L74 84 L26 84 L22 27 Z" fill="#7fa7b4" stroke="#253d46" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="32" y="30" width="22" height="26" rx="2" fill="#d5ded3" stroke="#415862" stroke-width="1.5"/>
+    <circle cx="43" cy="39" r="6" fill="#7b8e85"/><path d="M34 52 Q43 43 52 52" fill="#7b8e85"/>
+    <path d="M59 34 L70 34 M59 42 L70 42 M33 66 L69 66 M33 73 L61 73" stroke="#e2f0dc" stroke-width="3" opacity="0.86"/>
+    <circle cx="50" cy="22" r="4" fill="#e4eee2" stroke="#415862" stroke-width="1.5"/>`,
+
+  "hotel-token": `
+    <circle cx="50" cy="50" r="33" fill="#c69a45" stroke="#563916" stroke-width="4"/>
+    <circle cx="50" cy="50" r="24" fill="none" stroke="#f2d77e" stroke-width="2" stroke-dasharray="3 3"/>
+    <path d="M38 31 L62 31 L66 45 L62 69 L38 69 L34 45 Z" fill="#7d5421" stroke="#f3d980" stroke-width="2"/>
+    <text x="50" y="56" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="16" fill="#fff0a9">404</text>
+    <path d="M26 50 L32 50 M68 50 L74 50" stroke="#fff0a9" stroke-width="2" opacity="0.72"/>`,
+
+  seashell: `
+    <path d="M19 67 Q20 27 50 18 Q80 27 81 67 Q72 82 50 84 Q28 82 19 67 Z" fill="#d9c7aa" stroke="#745f4c" stroke-width="3"/>
+    <path d="M50 21 L50 80 M31 30 Q40 49 38 78 M69 30 Q60 49 62 78 M23 45 Q36 57 29 73 M77 45 Q64 57 71 73" fill="none" stroke="#a89177" stroke-width="2.5"/>
+    <path d="M50 27 Q57 48 50 77 Q43 48 50 27" fill="#eee1c7" opacity="0.6"/>`,
+
   "empty-can": `
     <path d="M31 24 Q50 16 69 24 L65 79 Q50 87 35 79 Z" fill="#7b8480" stroke="#28302d" stroke-width="3"/>
     <ellipse cx="50" cy="24" rx="19" ry="7" fill="#b7c0b8" stroke="#28302d" stroke-width="2.5"/>
     <ellipse cx="50" cy="24" rx="9" ry="3.5" fill="#333b38"/>
     <path d="M34 37 Q50 43 66 37 M34 61 Q50 54 66 61" fill="none" stroke="#cfd6ce" stroke-width="2" opacity="0.55"/>
     <path d="M39 29 L45 76 M57 29 L52 76" stroke="#4d5651" stroke-width="2" opacity="0.65"/>`,
+
+  "concrete-chip": `
+    <path d="M21 68 L31 29 L55 18 L79 37 L73 70 L52 84 L30 80 Z" fill="#83837a" stroke="#302f2a" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M31 29 L43 47 L55 18 M43 47 L73 70 M43 47 L30 80 M43 47 L66 38" fill="none" stroke="#b5b2a4" stroke-width="2.2" opacity="0.72"/>
+    <path d="M24 67 L51 62 L75 48" fill="none" stroke="#4a4941" stroke-width="2" opacity="0.68"/>
+    <circle cx="60" cy="33" r="2.5" fill="#d1c28c" opacity="0.72"/>
+    <circle cx="35" cy="67" r="2" fill="#d1c28c" opacity="0.56"/>`,
 };
 
 let iconIdCounter = 0;
@@ -1295,7 +1332,11 @@ function loadIntegerSet(key) {
     if (!raw) return new Set();
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((n) => Number.isInteger(n) && n >= 0 && n <= 8));
+    return new Set(
+      parsed
+        .filter((n) => Number.isInteger(n) && n >= HUB_LEVEL && n <= 8)
+        .map((n) => n === 8 ? HUB_LEVEL : n),
+    );
   } catch {
     return new Set();
   }
@@ -2471,7 +2512,7 @@ function formatCompassDirection(angle) {
 function updateCompassHud(metrics) {
   const equipped = getEquipped();
   const equippedKeyTarget = getLevelKeyTarget(equipped?.id);
-  const isLevelKeyEquipped = world?.level === 8 && equippedKeyTarget !== null;
+  const isLevelKeyEquipped = world?.level === HUB_LEVEL && equippedKeyTarget !== null;
   const isEquipped = equipped?.id === "compass" || isLevelKeyEquipped;
   const owned = getInventoryCount("compass") > 0;
   const targetPosition = isLevelKeyEquipped
@@ -3402,6 +3443,7 @@ function animate() {
 
   updateLevelTransition(delta);
   if (!exitComplete && !gameFailed && !levelTransition) controls.update(delta);
+  syncFirstPersonHeldItem(world.camera, getEquipped()?.id ?? null);
   const controlState = controls.getState();
   if (controlState.drinkCancelled && !controlState.isDrinking) {
     lastDrinkCancelled = true;
