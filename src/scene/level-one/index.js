@@ -15,12 +15,12 @@ import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatVi
 import {
   LEVEL_ONE_COLS,
   LEVEL_ONE_ROWS,
-  LEVEL_ONE_EXIT_TRIGGER_RADIUS,
   LEVEL_ONE_START_CELL,
   LEVEL_ONE_TARGET_CELL,
   isLevelOneOpenCell,
   levelOneCellCenter,
   levelOneWorldToCell,
+  getLevelOneTargetMount,
 } from "./layout.js";
 import {
   createLevelOneFloorTexture,
@@ -29,7 +29,6 @@ import {
 } from "./textures.js";
 import {
   createLevelOneLights,
-  addLevelOneElevator,
   addLevelOnePipes,
   addLevelOneCrates,
   addLevelOnePuddles,
@@ -53,15 +52,44 @@ import {
 import {
   createBacteriaEntity,
   chooseBacteriaSpawn,
-  createInteractionSpot,
   getPickupTarget,
   tryPickupItems,
   getFocusedEntity,
-  getFocusedInteraction,
   getFocusedItem,
-  tryInteractWithSpots,
 } from "../entities/index.js";
 import { snapEntityStates } from "../common/snap.js";
+import { createExitNetwork } from "../common/exit-network.js";
+
+const LEVEL_ONE_DOORWAY_WIDTH = 2.7;
+const LEVEL_ONE_DOORWAY_HEIGHT = 2.56;
+
+function addLevelOneDoorwayWall(scene, mount, material) {
+  const sideWidth = (CELL_SIZE - LEVEL_ONE_DOORWAY_WIDTH) / 2;
+  const isNorthSouth = Math.abs(Math.sin(mount.rotation ?? 0)) < 0.5;
+  const sideGeometry = new THREE.BoxGeometry(
+    isNorthSouth ? sideWidth : WALL_THICKNESS,
+    WALL_HEIGHT,
+    isNorthSouth ? WALL_THICKNESS : sideWidth,
+  );
+  const lintelGeometry = new THREE.BoxGeometry(
+    isNorthSouth ? LEVEL_ONE_DOORWAY_WIDTH : WALL_THICKNESS,
+    WALL_HEIGHT - LEVEL_ONE_DOORWAY_HEIGHT,
+    isNorthSouth ? WALL_THICKNESS : LEVEL_ONE_DOORWAY_WIDTH,
+  );
+  const offset = LEVEL_ONE_DOORWAY_WIDTH / 2 + sideWidth / 2;
+  for (const direction of [-1, 1]) {
+    const side = new THREE.Mesh(sideGeometry, material);
+    side.position.set(
+      mount.x + (isNorthSouth ? direction * offset : 0),
+      WALL_HEIGHT / 2,
+      mount.z + (isNorthSouth ? 0 : direction * offset),
+    );
+    scene.add(side);
+  }
+  const lintel = new THREE.Mesh(lintelGeometry, material);
+  lintel.position.set(mount.x, LEVEL_ONE_DOORWAY_HEIGHT + (WALL_HEIGHT - LEVEL_ONE_DOORWAY_HEIGHT) / 2, mount.z);
+  scene.add(lintel);
+}
 
 export function createLevelOneScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
@@ -77,6 +105,9 @@ export function createLevelOneScene({ initialState = null } = {}) {
   const spawnCell = levelOneCellCenter(LEVEL_ONE_START_CELL.col, LEVEL_ONE_START_CELL.row);
   const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: LEVEL_ONE_START_CELL.yaw };
   const targetPosition = levelOneCellCenter(LEVEL_ONE_TARGET_CELL.col, LEVEL_ONE_TARGET_CELL.row);
+  const hubCell = levelOneCellCenter(33, 23);
+  const elevatorMount = getLevelOneTargetMount(targetPosition);
+  const hubMount = getLevelOneTargetMount(hubCell);
 
   let propColliders = addLevelOneCrates(scene);
   propColliders = propColliders.concat(addLevelOneSupplyShelves(scene));
@@ -140,7 +171,9 @@ export function createLevelOneScene({ initialState = null } = {}) {
   ceiling.position.set(0, CEILING_Y, 0);
   scene.add(ceiling);
 
-  const { northSouth, eastWest, fixturePositions } = collectLevelOneTransforms();
+  const { northSouth, eastWest, fixturePositions } = collectLevelOneTransforms({
+    openings: [elevatorMount, hubMount],
+  });
   addInstancedBoxes(
     scene,
     new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
@@ -153,6 +186,8 @@ export function createLevelOneScene({ initialState = null } = {}) {
     wallMaterials,
     eastWest,
   );
+  addLevelOneDoorwayWall(scene, elevatorMount, wallMaterials);
+  addLevelOneDoorwayWall(scene, hubMount, wallMaterials);
 
   scene.add(new THREE.HemisphereLight(0xe3eadf, 0x6c766b, 1.68));
   const ceilingFill = new THREE.DirectionalLight(0xd8e4d4, 0.22);
@@ -164,7 +199,6 @@ export function createLevelOneScene({ initialState = null } = {}) {
     dimBelow: 0.48,
     normalAbove: 0.62,
   });
-  addLevelOneElevator(scene, targetPosition);
   addLevelOnePipes(scene);
   addLevelOnePuddles(scene);
   addLevelOneFloorZones(scene);
@@ -229,16 +263,27 @@ export function createLevelOneScene({ initialState = null } = {}) {
     blockedAabbs: propColliders,
     initialState: pickupInitial["silence-liquid"] ?? null,
   });
-  const interactions = [
-    createInteractionSpot({
-      id: "level-one-elevator-panel",
-      position: targetPosition,
-      inspectHeight: 1.6,
-      inspectRadius: 0.75,
-      responseKey: "levelOneElevatorResponse",
-      initialState: interactionInitial["level-one-elevator-panel"] ?? null,
-    }),
+  const routes = [
+    {
+      id: "level-one-elevator-level-two",
+      targetLevel: 2,
+      targetLabel: "LEVEL 2",
+      label: "ELEVATOR",
+      kind: "elevator",
+      position: elevatorMount,
+      rotation: elevatorMount.rotation,
+    },
+    {
+      id: "level-one-hidden-hub-door",
+      targetLevel: 8,
+      targetLabel: "THE HUB",
+      kind: "door",
+      hidden: true,
+      position: hubMount,
+      rotation: hubMount.rotation,
+    },
   ];
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
   const bacteria = createBacteriaEntity(scene, {
     spawnPosition: chooseBacteriaSpawn({
       cols: LEVEL_ONE_COLS,
@@ -295,11 +340,12 @@ export function createLevelOneScene({ initialState = null } = {}) {
     });
 
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.76;
-    const exitDistance = Math.hypot(
-      playerPosition.x - targetPosition.x,
-      playerPosition.z - targetPosition.z,
-    );
-    if (exitDistance < LEVEL_ONE_EXIT_TRIGGER_RADIUS) objectiveReached = true;
+    const enteredExit = exitNetwork.update(delta, playerPosition);
+    const exitDistance = Math.min(...routes.map((route) => Math.hypot(
+      playerPosition.x - route.position.x,
+      playerPosition.z - route.position.z,
+    )));
+    if (enteredExit) objectiveReached = true;
     scene.fog.density = 0.012 + (1 - flicker) * 0.009;
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
@@ -314,7 +360,8 @@ export function createLevelOneScene({ initialState = null } = {}) {
 
     return {
       exitDistance: Math.round(exitDistance),
-      exitReached: objectiveReached,
+      exitReached: Boolean(enteredExit),
+      nextLevel: enteredExit?.targetLevel,
       entityContact: entities.some((entity) => entity.contact),
       flicker,
       almondWater: almondWaterState,
@@ -326,7 +373,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
       pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
-      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
+      focusInteraction: exitNetwork.inspect(playerPosition),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
@@ -353,17 +400,22 @@ export function createLevelOneScene({ initialState = null } = {}) {
     },
     colliderCount: propColliders.length,
     nextLevel: 2,
+    exitMode: "network",
     scene,
     camera,
     spawn,
     targetPosition,
     isWalkable,
+    decorativeItemSpawns: [
+      { id: "empty-can", position: { ...levelOneCellCenter(10, 20), y: 0.2 }, rotation: 0.7, tiltZ: 0.12 },
+      { id: "crumpled-note", position: { ...levelOneCellCenter(27, 18), y: 0.08 }, rotation: -0.35, tiltX: 0.04 },
+    ],
     update,
     getPickupTarget: (playerPosition) =>
       getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
-    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+    interact: (playerPosition) => exitNetwork.interact(playerPosition),
     getSnapshot() {
       return {
         pickups: {
@@ -374,9 +426,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },
-        interactions: Object.fromEntries(
-          interactions.map((spot) => [spot.id, spot.getState()]),
-        ),
+        interactions: exitNetwork.getState(),
         objectives: { reached: objectiveReached },
         entities: [bacteria.getState()],
       };

@@ -98,7 +98,8 @@ export const ORIGIN_Z = -(ROWS * CELL_SIZE) / 2;
 
 export const START_CELL = { col: 3, row: 23, yaw: -Math.PI * 0.48 };
 export const EXIT_CELL = { col: 27, row: 3 };
-export const EXIT_TRIGGER_RADIUS = CELL_SIZE * 0.8;
+export const EXIT_HOLE_RADIUS = CELL_SIZE * 0.4;
+export const EXIT_FALL_TRIGGER_Y = 0.58;
 
 export function isOpenCell(col, row) {
   return row >= 0 && row < ROWS && col >= 0 && col < COLS && MAP[row][col] === ".";

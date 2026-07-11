@@ -13,6 +13,7 @@ import {
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createWideSignTexture } from "../common/textures.js";
+import { createExitNetwork } from "../common/exit-network.js";
 import { snapEntityStates } from "../common/snap.js";
 import { createInteractionSpot, getPickupTarget, tryPickupItems, getFocusedEntity, getFocusedInteraction, getFocusedItem, tryInteractWithSpots } from "../entities/index.js";
 import {
@@ -27,7 +28,6 @@ import {
   LEVEL_SEVEN_ROWS,
   LEVEL_SEVEN_START_CELL,
   LEVEL_SEVEN_TARGET_CELL,
-  LEVEL_SEVEN_EXIT_TRIGGER_RADIUS,
   LEVEL_SEVEN_DARK_WATER_ZONES,
   isLevelSevenOpenCell,
   isLevelSevenWaterCell,
@@ -309,7 +309,6 @@ export function createLevelSevenScene({ initialState = null } = {}) {
     isWalkable,
   );
   addLevelSevenWater(scene);
-  addLevelSevenExit(scene, targetPosition);
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: createLevelSevenRoomFloorTexture(),
@@ -374,17 +373,12 @@ export function createLevelSevenScene({ initialState = null } = {}) {
     normalDelay: 1.1,
   });
 
-  const interactions = [
-    ...propInteractions,
-    createInteractionSpot({
-      id: "level-seven-exit",
-      position: targetPosition,
-      inspectHeight: 0.95,
-      inspectRadius: 0.9,
-      responseKey: "levelSevenExitResponse",
-      initialState: interactionInitial["level-seven-exit"] ?? null,
-    }),
+  const interactions = [...propInteractions];
+  const routes = [
+    { id: "level-seven-terminal-exit", targetLevel: null, targetLabel: "EXIT", label: "EXIT", kind: "door", position: targetPosition, rotation: 0 },
+    { id: "level-seven-hidden-hub-door", targetLevel: 8, targetLabel: "THE HUB", kind: "door", hidden: true, position: levelSevenCellCenter(8, 3), rotation: Math.PI },
   ];
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
 
   const almondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_SEVEN_COLS,
@@ -494,8 +488,9 @@ export function createLevelSevenScene({ initialState = null } = {}) {
     });
 
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.38;
-    const exitDistance = Math.hypot(playerPosition.x - targetPosition.x, playerPosition.z - targetPosition.z);
-    if (exitDistance < LEVEL_SEVEN_EXIT_TRIGGER_RADIUS) objectiveReached = true;
+    const enteredExit = exitNetwork.update(delta, playerPosition);
+    const exitDistance = Math.min(...routes.map((route) => Math.hypot(playerPosition.x - route.position.x, playerPosition.z - route.position.z)));
+    if (enteredExit) objectiveReached = true;
     scene.fog.density = 0.0105 + (1 - flicker) * 0.005 + (exitDistance > 80 ? 0.0015 : 0);
     cameraMistLight.intensity = 0.36 + Math.sin(elapsed * 0.58) * 0.055;
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
@@ -512,7 +507,8 @@ export function createLevelSevenScene({ initialState = null } = {}) {
 
     return {
       exitDistance: Math.round(exitDistance),
-      exitReached: objectiveReached,
+      exitReached: Boolean(enteredExit),
+      nextLevel: enteredExit?.targetLevel,
       entityContact: entities.some((entity) => entity.contact),
       flicker,
       almondWater: almondWaterState,
@@ -524,7 +520,7 @@ export function createLevelSevenScene({ initialState = null } = {}) {
       pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
-      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
+      focusInteraction: exitNetwork.inspect(playerPosition) ?? getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
@@ -551,18 +547,22 @@ export function createLevelSevenScene({ initialState = null } = {}) {
     },
     colliderCount: propColliders.length,
     nextLevel: null,
+    exitMode: "network",
     scene,
     camera,
     spawn,
     targetPosition,
     isWalkable,
+    decorativeItemSpawns: [
+      { id: "seashell", position: { ...levelSevenCellCenter(12, 12), y: 0.18 }, rotation: -0.4, tiltZ: 0.16 },
+    ],
     flashlightEffectiveness: 1.08,
     update,
     getPickupTarget: (playerPosition) =>
       getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
-    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+    interact: (playerPosition) => exitNetwork.interact(playerPosition) ?? tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {
@@ -573,9 +573,10 @@ export function createLevelSevenScene({ initialState = null } = {}) {
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },
-        interactions: Object.fromEntries(
-          interactions.map((spot) => [spot.id, spot.getState()]),
-        ),
+        interactions: {
+          ...exitNetwork.getState(),
+          ...Object.fromEntries(interactions.map((spot) => [spot.id, spot.getState()])),
+        },
         objectives: { reached: objectiveReached },
         entities: [thing.getState()],
       };

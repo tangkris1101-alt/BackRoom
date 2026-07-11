@@ -410,10 +410,13 @@ export function addLevelOneSupplyShelves(scene) {
   return colliders;
 }
 
-export function collectLevelOneTransforms() {
+export function collectLevelOneTransforms({ openings = [] } = {}) {
   const northSouth = [];
   const eastWest = [];
   const fixtureCandidates = [];
+  const hasOpeningAt = (x, z) => openings.some(
+    (opening) => Math.abs(opening.x - x) < 0.01 && Math.abs(opening.z - z) < 0.01,
+  );
 
   for (let row = 0; row < LEVEL_ONE_ROWS; row += 1) {
     for (let col = 0; col < LEVEL_ONE_COLS; col += 1) {
@@ -425,16 +428,16 @@ export function collectLevelOneTransforms() {
       const openNeighborCount = countLevelOneOpenNeighbors(col, row);
       const isOpenHall = openNeighborCount >= 3;
 
-      if (!isLevelOneOpenCell(col, row - 1)) {
+      if (!isLevelOneOpenCell(col, row - 1) && !hasOpeningAt(center.x, center.z - CELL_SIZE / 2)) {
         northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2));
       }
-      if (!isLevelOneOpenCell(col, row + 1)) {
+      if (!isLevelOneOpenCell(col, row + 1) && !hasOpeningAt(center.x, center.z + CELL_SIZE / 2)) {
         northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2));
       }
-      if (!isLevelOneOpenCell(col - 1, row)) {
+      if (!isLevelOneOpenCell(col - 1, row) && !hasOpeningAt(center.x - CELL_SIZE / 2, center.z)) {
         eastWest.push(new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
       }
-      if (!isLevelOneOpenCell(col + 1, row)) {
+      if (!isLevelOneOpenCell(col + 1, row) && !hasOpeningAt(center.x + CELL_SIZE / 2, center.z)) {
         eastWest.push(new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
       }
 

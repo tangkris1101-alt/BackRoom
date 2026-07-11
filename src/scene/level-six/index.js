@@ -13,6 +13,7 @@ import {
 import { addInstancedBoxes, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createWideSignTexture } from "../common/textures.js";
+import { createExitNetwork } from "../common/exit-network.js";
 import { createInteractionSpot, getPickupTarget, tryPickupItems, getFocusedEntity, getFocusedInteraction, getFocusedItem, tryInteractWithSpots } from "../entities/index.js";
 import {
   createAlmondWaterPickup,
@@ -26,7 +27,6 @@ import {
   LEVEL_SIX_ROWS,
   LEVEL_SIX_START_CELL,
   LEVEL_SIX_TARGET_CELL,
-  LEVEL_SIX_EXIT_TRIGGER_RADIUS,
   LEVEL_SIX_DARK_ZONES,
   isLevelSixOpenCell,
   levelSixCellCenter,
@@ -194,7 +194,6 @@ export function createLevelSixScene({ initialState = null } = {}) {
   const objectiveInitial = initialState?.objectives ?? {};
 
   const { colliders: propColliders, interactions: propInteractions } = addLevelSixDetails(scene, interactionInitial);
-  addLevelSixExit(scene, targetPosition);
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: createLevelSixFloorTexture(),
@@ -258,17 +257,12 @@ export function createLevelSixScene({ initialState = null } = {}) {
     normalDelay: 1.2,
   });
 
-  const interactions = [
-    ...propInteractions,
-    createInteractionSpot({
-      id: "level-six-exit",
-      position: targetPosition,
-      inspectHeight: 1.35,
-      inspectRadius: 0.72,
-      responseKey: "levelSixExitResponse",
-      initialState: interactionInitial["level-six-exit"] ?? null,
-    }),
+  const interactions = [...propInteractions];
+  const routes = [
+    { id: "level-six-stairs-level-seven", targetLevel: 7, targetLabel: "LEVEL 7", label: "DESCENT", kind: "stair", position: targetPosition, rotation: 0 },
+    { id: "level-six-return-level-five", targetLevel: 5, targetLabel: "LEVEL 5", label: "RETURN", kind: "door", position: levelSixCellCenter(4, 15), rotation: Math.PI },
   ];
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
 
   const almondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_SIX_COLS,
@@ -354,8 +348,9 @@ export function createLevelSixScene({ initialState = null } = {}) {
   }
 
   function update(delta, elapsed, playerPosition) {
-    const exitDistance = Math.hypot(playerPosition.x - targetPosition.x, playerPosition.z - targetPosition.z);
-    if (exitDistance < LEVEL_SIX_EXIT_TRIGGER_RADIUS) objectiveReached = true;
+    const enteredExit = exitNetwork.update(delta, playerPosition);
+    const exitDistance = Math.min(...routes.map((route) => Math.hypot(playerPosition.x - route.position.x, playerPosition.z - route.position.z)));
+    if (enteredExit) objectiveReached = true;
     const flicker = 0.22 + Math.sin(elapsed * 0.73) * 0.035;
     scene.fog.density = 0.019 + (1 - flicker) * 0.009;
     cameraDimLight.intensity = 0.62 + Math.sin(elapsed * 0.41) * 0.06;
@@ -372,7 +367,8 @@ export function createLevelSixScene({ initialState = null } = {}) {
 
     return {
       exitDistance: Math.round(exitDistance),
-      exitReached: objectiveReached,
+      exitReached: Boolean(enteredExit),
+      nextLevel: enteredExit?.targetLevel,
       entityContact: false,
       flicker,
       almondWater: almondWaterState,
@@ -384,7 +380,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
       pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
-      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
+      focusInteraction: exitNetwork.inspect(playerPosition) ?? getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
@@ -411,18 +407,22 @@ export function createLevelSixScene({ initialState = null } = {}) {
     },
     colliderCount: propColliders.length,
     nextLevel: 7,
+    exitMode: "network",
     scene,
     camera,
     spawn,
     targetPosition,
     isWalkable,
+    decorativeItemSpawns: [
+      { id: "concrete-chip", position: { ...levelSixCellCenter(10, 10), y: 0.18 }, rotation: 0.7, tiltX: 0.14 },
+    ],
     flashlightEffectiveness: 1.24,
     update,
     getPickupTarget: (playerPosition) =>
       getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
-    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+    interact: (playerPosition) => exitNetwork.interact(playerPosition) ?? tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {
@@ -433,9 +433,10 @@ export function createLevelSixScene({ initialState = null } = {}) {
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },
-        interactions: Object.fromEntries(
-          interactions.map((spot) => [spot.id, spot.getState()]),
-        ),
+        interactions: {
+          ...exitNetwork.getState(),
+          ...Object.fromEntries(interactions.map((spot) => [spot.id, spot.getState()])),
+        },
         objectives: { reached: objectiveReached },
         entities: [],
       };

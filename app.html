@@ -12,6 +12,35 @@
       <div class="vignette" aria-hidden="true"></div>
       <div id="damage-flash" class="damage-flash" aria-hidden="true"></div>
 
+      <section id="main-menu" class="main-menu" aria-label="Game menu">
+        <div class="main-menu__shade" aria-hidden="true"></div>
+        <div class="main-menu__content">
+          <header class="main-menu__brand">
+            <span id="main-menu-eyebrow" class="main-menu__eyebrow">LEVEL 0 · NOCLIP ZONE</span>
+            <h1>THE BACKROOMS</h1>
+            <p id="main-menu-subtitle">YOU ARE NOT SUPPOSED TO BE HERE.</p>
+          </header>
+          <div class="main-menu__actions">
+            <button id="main-menu-start" class="main-menu__button main-menu__button--primary" type="button">
+              <strong id="main-menu-start-label">开始游戏</strong>
+              <small id="main-menu-start-hint">进入 LEVEL 0</small>
+            </button>
+            <button id="main-menu-settings" class="main-menu__button" type="button" aria-expanded="false" aria-controls="main-menu-settings-panel">
+              <strong id="main-menu-settings-label">设置</strong>
+              <small id="main-menu-settings-hint">语言</small>
+            </button>
+          </div>
+        </div>
+        <section id="main-menu-settings-panel" class="main-menu__settings" aria-labelledby="main-menu-settings-title" hidden>
+          <button id="main-menu-settings-close" class="main-menu__settings-close" type="button" aria-label="Close settings">×</button>
+          <span id="main-menu-settings-title" class="main-menu__settings-title">语言</span>
+          <div class="main-menu__language-options" role="group" aria-label="Language">
+            <button id="main-menu-language-zh" class="main-menu__language" type="button" data-language="zh-CN">简体中文</button>
+            <button id="main-menu-language-en" class="main-menu__language" type="button" data-language="en">English</button>
+          </div>
+        </section>
+      </section>
+
       <header class="hud hud--top" hidden>
         <div class="hud-top-left">
           <div id="timer-readout" class="timer-readout" aria-label="Run timer">
@@ -24,6 +53,7 @@
                 id="level-picker-button"
                 class="level-picker__button"
                 type="button"
+                aria-label="Preview visited levels"
                 aria-haspopup="listbox"
                 aria-expanded="false"
                 aria-controls="level-picker-menu"
@@ -33,10 +63,6 @@
               <div id="level-picker-menu" class="level-picker__menu" role="listbox" tabindex="-1" hidden></div>
             </div>
             <span id="status-text">NO SIGNAL</span>
-            <select id="language-select" class="language-select" aria-label="Language">
-              <option value="zh-CN">简体中文</option>
-              <option value="en">English</option>
-            </select>
           </div>
         </div>
         <div class="hud-stack">
@@ -50,7 +76,7 @@
             <div class="stamina-meter__track">
               <div id="stamina-fill" class="stamina-meter__fill"></div>
             </div>
-            <span id="stamina-readout">150/150</span>
+            <span id="stamina-readout">100/100</span>
           </div>
           <div class="health-meter" aria-label="Health">
             <span class="health-meter__label">HEALTH</span>
@@ -155,7 +181,7 @@
                 <strong id="save-prompt-restart-label">重新开始</strong>
                 <small id="save-prompt-restart-hint">清空存档,从头开始</small>
               </button>
-              <button id="save-prompt-jump" class="save-prompt__btn save-prompt__btn--accent" type="button">
+              <button id="save-prompt-jump" class="save-prompt__btn save-prompt__btn--accent" type="button" hidden aria-hidden="true">
                 <strong id="save-prompt-jump-label">前往其他层级</strong>
                 <small id="save-prompt-jump-hint">选择已解锁的层级开始</small>
               </button>
@@ -179,7 +205,25 @@
         <div class="pause-overlay__resume" id="pause-resume-area">
           <strong id="pause-title">已暂停</strong>
           <span id="pause-subtitle">按 ESC 或点击继续</span>
+          <div class="pause-overlay__time" aria-live="off">
+            <span id="pause-time-label">当前耗时</span>
+            <output id="pause-time-readout">00:00</output>
+          </div>
         </div>
+        <button id="pause-settings" class="pause-overlay__settings" type="button" aria-expanded="false" aria-controls="pause-settings-panel">
+          <strong id="pause-settings-label">设置</strong>
+          <small id="pause-settings-hint">语言</small>
+        </button>
+        <section id="pause-settings-panel" class="pause-overlay__settings-panel" aria-labelledby="pause-settings-title" hidden>
+          <div class="pause-overlay__settings-header">
+            <span id="pause-settings-title">语言</span>
+            <button id="pause-settings-close" class="pause-overlay__settings-close" type="button" aria-label="关闭设置">×</button>
+          </div>
+          <div class="pause-overlay__language-options" role="group" aria-label="Language">
+            <button id="pause-language-zh" class="pause-overlay__language" type="button" data-language="zh-CN">简体中文</button>
+            <button id="pause-language-en" class="pause-overlay__language" type="button" data-language="en">English</button>
+          </div>
+        </section>
         <button id="pause-tutorial" class="pause-overlay__tutorial" type="button" aria-label="查看教程">
           <strong id="pause-tutorial-label">查看教程</strong>
           <small id="pause-tutorial-hint">重新阅读操作说明</small>
@@ -288,7 +332,7 @@
                   Level 1+ 会出现<strong style="color:#ff8060">细菌实体</strong>，
                   Level 2+ 会出现 <strong style="color:#ffaa5e">Hound</strong>，
                   Level 3 还会出现更危险的<strong style="color:#ff5040">超级细菌</strong>。
-                  接触会扣减生命值：普通细菌 −50、超级细菌 −60、Hound −30 并附带短暂减速。
+                  接触会扣减生命值：普通细菌 −50、超级细菌 −60、Hound −30。
                   受到任意伤害后会获得 <strong style="color:#ff5050">1 秒无敌帧</strong>，期间不会再次扣血；
                   血量归零则视为失联。装备
                   <kbd class="tutorial-key tutorial-key--inline">E</kbd>

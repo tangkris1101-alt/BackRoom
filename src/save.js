@@ -52,6 +52,31 @@ function sanitizeEntityState(raw) {
   };
 }
 
+function sanitizeWorldItem(raw) {
+  if (!raw || typeof raw !== "object" || typeof raw.id !== "string" || !raw.id) return null;
+  const position = raw.position;
+  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) return null;
+  return {
+    id: raw.id,
+    active: raw.active !== false,
+    position: {
+      x: position.x,
+      y: Number.isFinite(position.y) ? position.y : 0.24,
+      z: position.z,
+    },
+    rotation: clampNumber(raw.rotation, 0),
+    tiltX: clampNumber(raw.tiltX, 0),
+    tiltZ: clampNumber(raw.tiltZ, 0),
+    data: raw.data && typeof raw.data === "object"
+      ? {
+          battery: clampNumber(raw.data.battery, 0),
+          activeTimer: clampNumber(raw.data.activeTimer, 0),
+          cooldownTimer: clampNumber(raw.data.cooldownTimer, 0),
+        }
+      : null,
+  };
+}
+
 function sanitizeInventoryEntry(raw) {
   if (!raw || typeof raw !== "object") return null;
   const id = raw.id;
@@ -67,8 +92,11 @@ function sanitizePlayer(raw) {
   if (!raw || typeof raw !== "object") return null;
   const position = raw.position;
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) return null;
+  const almondWaterTimer = clampNumber(raw.almondWaterTimer, 0);
+  const superAlmondWaterTimer = clampNumber(raw.superAlmondWaterTimer, 0);
+  const staminaMax = superAlmondWaterTimer > 0 ? 250 : almondWaterTimer > 0 ? 150 : 100;
   return {
-    level: Math.max(0, Math.min(7, Math.floor(raw.level ?? 0))),
+    level: Math.max(0, Math.min(8, Math.floor(raw.level ?? 0))),
     position: {
       x: position.x,
       y: Number.isFinite(position.y) ? position.y : 0,
@@ -76,15 +104,14 @@ function sanitizePlayer(raw) {
     },
     yaw: clampNumber(raw.yaw, 0),
     pitch: clampNumber(raw.pitch, -0.025),
-    stamina: clampNumber(raw.stamina, 0),
-    staminaMax: clampNumber(raw.staminaMax, 150),
-    staminaBaseMax: clampNumber(raw.staminaBaseMax, 150),
+    stamina: Math.max(0, Math.min(clampNumber(raw.stamina, staminaMax), staminaMax)),
+    staminaMax,
+    staminaBaseMax: 100,
     staminaRecoveryDelay: clampNumber(raw.staminaRecoveryDelay, 0),
-    almondWaterTimer: clampNumber(raw.almondWaterTimer, 0),
-    superAlmondWaterTimer: clampNumber(raw.superAlmondWaterTimer, 0),
+    almondWaterTimer,
+    superAlmondWaterTimer,
     health: clampNumber(raw.health, 100),
     healthMax: clampNumber(raw.healthMax, 100),
-    houndSlowTimer: clampNumber(raw.houndSlowTimer, 0),
     isSprinting: Boolean(raw.isSprinting),
     sprintExhausted: Boolean(raw.sprintExhausted),
     isDrinking: Boolean(raw.isDrinking),
@@ -193,6 +220,14 @@ export function loadSave() {
       }
     }
   }
+  const worldItems = {};
+  if (parsed.worldItems && typeof parsed.worldItems === "object") {
+    for (const [levelKey, list] of Object.entries(parsed.worldItems)) {
+      const levelNum = Math.floor(Number(levelKey));
+      if (!Number.isFinite(levelNum)) continue;
+      if (Array.isArray(list)) worldItems[levelNum] = list.map(sanitizeWorldItem).filter(Boolean);
+    }
+  }
   return {
     version: SAVE_VERSION,
     savedAt: clampNumber(parsed.savedAt, Date.now()),
@@ -205,6 +240,7 @@ export function loadSave() {
     interactions,
     objectives,
     entities,
+    worldItems,
   };
 }
 
@@ -220,6 +256,7 @@ export function writeSave(updates) {
         interactions: { ...(current.interactions ?? {}), ...(updates.interactions ?? {}) },
         objectives: { ...(current.objectives ?? {}), ...(updates.objectives ?? {}) },
         entities: { ...(current.entities ?? {}), ...(updates.entities ?? {}) },
+        worldItems: { ...(current.worldItems ?? {}), ...(updates.worldItems ?? {}) },
       }
     : { ...updates };
   merged.version = SAVE_VERSION;

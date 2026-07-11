@@ -15,7 +15,6 @@ import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatVi
 import {
   LEVEL_THREE_COLS,
   LEVEL_THREE_ROWS,
-  LEVEL_THREE_EXIT_TRIGGER_RADIUS,
   LEVEL_THREE_START_CELL,
   LEVEL_THREE_TARGET_CELL,
   LEVEL_THREE_MAX_POINT_LIGHTS,
@@ -34,7 +33,6 @@ import { collectLevelTransforms, createLayoutLights, addLayoutDarkPockets } from
 import { createLevelThreeFloorTexture, createLevelThreeCeilingTexture, createLevelThreeBrickTexture } from "./textures.js";
 import {
   addLevelThreeElectricalDetails,
-  addLevelThreeBreakerDoor,
   addLevelThreeBlackSludgePipes,
   addLevelThreeIndestructibleBars,
   addLevelThreeSanctumStatue,
@@ -45,6 +43,7 @@ import {
   addLevelThreeBoilerRoomPipe,
 } from "./props.js";
 import { snapEntityStates } from "../common/snap.js";
+import { createExitNetwork } from "../common/exit-network.js";
 import {
   createAlmondWaterPickup,
   createFlashlightPickup,
@@ -176,7 +175,6 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     dimDelay: 0.45,
     normalDelay: 0.8,
   });
-addLevelThreeBreakerDoor(scene, targetPosition);
   addLayoutDarkPockets(scene, {
     darkZones: LEVEL_THREE_DARK_ZONES,
     originX: LEVEL_THREE_ORIGIN_X,
@@ -250,14 +248,6 @@ addLevelThreeBreakerDoor(scene, targetPosition);
   });
   const interactions = [
     createInteractionSpot({
-      id: "level-three-breaker",
-      position: targetPosition,
-      inspectHeight: 1.72,
-      inspectRadius: 0.86,
-      responseKey: "levelThreeBreakerResponse",
-      initialState: interactionInitial["level-three-breaker"] ?? null,
-    }),
-    createInteractionSpot({
       id: "level-three-generator",
       position: levelThreeCellCenter(7, 8),
       inspectHeight: 0.78,
@@ -266,6 +256,11 @@ addLevelThreeBreakerDoor(scene, targetPosition);
       initialState: interactionInitial["level-three-generator"] ?? null,
     }),
   ];
+  const routes = [
+    { id: "level-three-elevator-level-four", targetLevel: 4, targetLabel: "LEVEL 4", label: "OFFICE", kind: "elevator", position: targetPosition, rotation: 0 },
+    { id: "level-three-elevator-level-five", targetLevel: 5, targetLabel: "LEVEL 5", label: "HOTEL", kind: "elevator", position: levelThreeCellCenter(15, 18), rotation: Math.PI },
+  ];
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
   const bacteriaSpawns = pickBacteriaSpawnPositions({
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
@@ -367,11 +362,9 @@ addLevelThreeBreakerDoor(scene, targetPosition);
     });
 
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.42;
-    const exitDistance = Math.hypot(
-      playerPosition.x - targetPosition.x,
-      playerPosition.z - targetPosition.z,
-    );
-    if (exitDistance < LEVEL_THREE_EXIT_TRIGGER_RADIUS) objectiveReached = true;
+    const enteredExit = exitNetwork.update(delta, playerPosition);
+    const exitDistance = Math.min(...routes.map((route) => Math.hypot(playerPosition.x - route.position.x, playerPosition.z - route.position.z)));
+    if (enteredExit) objectiveReached = true;
     scene.fog.density = 0.017 + (1 - flicker) * 0.012;
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
@@ -391,7 +384,8 @@ addLevelThreeBreakerDoor(scene, targetPosition);
 
     return {
       exitDistance: Math.round(exitDistance),
-      exitReached: objectiveReached,
+      exitReached: Boolean(enteredExit),
+      nextLevel: enteredExit?.targetLevel,
       entityContact,
       flicker,
       almondWater: almondWaterState,
@@ -403,7 +397,7 @@ addLevelThreeBreakerDoor(scene, targetPosition);
       pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
-      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
+      focusInteraction: exitNetwork.inspect(playerPosition) ?? getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
@@ -430,17 +424,21 @@ addLevelThreeBreakerDoor(scene, targetPosition);
     },
     colliderCount: propColliders.length,
     nextLevel: 4,
+    exitMode: "network",
     scene,
     camera,
     spawn,
     targetPosition,
     isWalkable,
+    decorativeItemSpawns: [
+      { id: "wire-spool", position: { ...levelThreeCellCenter(8, 9), y: 0.2 }, rotation: 0.9, tiltZ: 0.18 },
+    ],
     update,
     getPickupTarget: (playerPosition) =>
       getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
-    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+    interact: (playerPosition) => exitNetwork.interact(playerPosition) ?? tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {
@@ -451,9 +449,10 @@ addLevelThreeBreakerDoor(scene, targetPosition);
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },
-        interactions: Object.fromEntries(
-          interactions.map((spot) => [spot.id, spot.getState()]),
-        ),
+        interactions: {
+          ...exitNetwork.getState(),
+          ...Object.fromEntries(interactions.map((spot) => [spot.id, spot.getState()])),
+        },
         objectives: { reached: objectiveReached },
         entities: [
           ...bacteria.map((b) => b.getState()),

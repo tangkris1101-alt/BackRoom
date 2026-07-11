@@ -3,8 +3,8 @@ import * as THREE from "three";
 const PLAYER_RADIUS = 0.36;
 const GRAVITY = 11.5;
 const JUMP_VELOCITY = 4.4;
-const MAX_STAMINA = 150;
-const STAMINA_DRAIN_RATE = 30;
+const MAX_STAMINA = 100;
+const STAMINA_DRAIN_RATE = 15;
 const STAMINA_RECOVERY_RATE = 20;
 const STAMINA_RECOVERY_DELAY = 0.55;
 const MIN_SPRINT_STAMINA = 0;
@@ -20,8 +20,6 @@ const ALMOND_WATER_DRINK_DURATION = 1.0;
 const DRINK_MOVE_MULTIPLIER = 0.5;
 const DRINK_ON_COMPLETE_EVENT = "backrooms:drink-complete";
 const HEALTH_MAX = 100;
-const HOUND_SLOW_MOVE_MULTIPLIER = 0.7;
-const DAMAGE_SLOW_CLEANSE_DURATION = 3;
 const DEFAULT_HEALTH_REGEN_DURATION = 5;
 const SILENCE_LIQUID_DURATION = 12;
 
@@ -34,13 +32,14 @@ function clampPitch(pitch) {
 }
 
 export class FirstPersonControls {
-  constructor({ camera, canvas, joystick, jumpButton, isWalkable, spawn }) {
+  constructor({ camera, canvas, joystick, jumpButton, isWalkable, getFloorHeight, spawn }) {
     this.camera = camera;
     this.canvas = canvas;
     this.joystick = joystick;
     this.joystickKnob = joystick?.querySelector(".joystick__knob");
     this.jumpButton = jumpButton;
     this.isWalkable = isWalkable;
+    this.getFloorHeight = typeof getFloorHeight === "function" ? getFloorHeight : () => 0;
     this.spawn = spawn;
     this.eyeHeight = 1.62;
     this.moveSpeed = 3.05;
@@ -61,7 +60,8 @@ export class FirstPersonControls {
     this.verticalVelocity = 0;
     this.groundY = this.eyeHeight;
     this.bodyY = this.eyeHeight;
-    this.isGrounded = true;
+    this.hasFloorSupport = true;
+    this.isGrounded = this.hasFloorSupport;
     this.jumpQueued = false;
     this.staminaMax = MAX_STAMINA;
     this.stamina = MAX_STAMINA;
@@ -70,8 +70,6 @@ export class FirstPersonControls {
     this.superAlmondWaterTimer = 0;
     this.healthMax = HEALTH_MAX;
     this.health = HEALTH_MAX;
-    this.houndSlowTimer = 0;
-    this.damageSlowCleanseTimer = 0;
     this.healthRegenTimer = 0;
     this.healthRegenRemaining = 0;
     this.healthRegenRate = 0;
@@ -134,20 +132,21 @@ export class FirstPersonControls {
   }
 
   reset() {
-    this.bodyY = this.eyeHeight;
+    const spawnFloorHeight = this.resolveFloorHeight(this.spawn.x, this.spawn.z);
+    this.hasFloorSupport = spawnFloorHeight !== null;
+    this.groundY = (spawnFloorHeight ?? 0) + this.eyeHeight;
+    this.bodyY = this.groundY;
     this.headBobY = 0;
     this.rollOffset = 0;
     this.walkCycle = 0;
     this.walkBobStrength = 0;
     this.camera.position.set(this.spawn.x, this.bodyY, this.spawn.z);
     this.verticalVelocity = 0;
-    this.isGrounded = true;
+    this.isGrounded = this.hasFloorSupport;
     this.jumpQueued = false;
     this.refreshStaminaModifiers({ fill: true });
     this.staminaRecoveryDelay = 0;
     this.health = this.healthMax;
-    this.houndSlowTimer = 0;
-    this.damageSlowCleanseTimer = 0;
     this.healthRegenTimer = 0;
     this.healthRegenRemaining = 0;
     this.healthRegenRate = 0;
@@ -163,12 +162,25 @@ export class FirstPersonControls {
     this.yaw = this.spawn.yaw;
     this.pitch = -0.025;
     this.applyRotation();
+    this.syncViewModelMotion();
     this.syncCameraState();
   }
 
-  setWorld({ camera, isWalkable, spawn }) {
+  syncViewModelMotion() {
+    const motion = this.camera.userData.firstPersonMotion ?? {};
+    motion.walkCycle = this.walkCycle;
+    motion.walkBobStrength = this.walkBobStrength;
+    motion.moving = this.isMoving;
+    motion.movementSpeed = this.movementSpeed;
+    motion.sprinting = this.isSprinting;
+    motion.grounded = this.isGrounded;
+    this.camera.userData.firstPersonMotion = motion;
+  }
+
+  setWorld({ camera, isWalkable, getFloorHeight, spawn }) {
     this.camera = camera;
     this.isWalkable = isWalkable;
+    this.getFloorHeight = typeof getFloorHeight === "function" ? getFloorHeight : () => 0;
     this.spawn = spawn;
     this.keys.clear();
     this.resetJoystick();
@@ -192,12 +204,6 @@ export class FirstPersonControls {
       : 0;
     this.healthMax = Number.isFinite(state.healthMax) && state.healthMax > 0 ? state.healthMax : HEALTH_MAX;
     this.health = Number.isFinite(state.health) ? Math.max(0, Math.min(state.health, this.healthMax)) : this.healthMax;
-    this.houndSlowTimer = Number.isFinite(state.houndSlowTimer)
-      ? Math.max(0, state.houndSlowTimer)
-      : 0;
-    this.damageSlowCleanseTimer = Number.isFinite(state.damageSlowCleanseTimer)
-      ? Math.max(0, state.damageSlowCleanseTimer)
-      : 0;
     this.healthRegenTimer = Number.isFinite(state.healthRegenTimer)
       ? Math.max(0, state.healthRegenTimer)
       : 0;
@@ -223,7 +229,11 @@ export class FirstPersonControls {
       : ALMOND_WATER_STAMINA_BONUS;
     this.drinkCancelled = false;
     this.verticalVelocity = 0;
-    this.isGrounded = true;
+    this.hasFloorSupport = this.resolveFloorHeight(
+      this.camera.position.x,
+      this.camera.position.z,
+    ) !== null;
+    this.isGrounded = this.hasFloorSupport;
     this.jumpQueued = false;
     this.refreshStaminaModifiers({ fill: false });
     if (!this.isDrinking) {
@@ -249,8 +259,6 @@ export class FirstPersonControls {
       superAlmondWaterTimer: this.superAlmondWaterTimer,
       health: this.health,
       healthMax: this.healthMax,
-      houndSlowTimer: this.houndSlowTimer,
-      damageSlowCleanseTimer: this.damageSlowCleanseTimer,
       healthRegenTimer: this.healthRegenTimer,
       healthRegenRemaining: this.healthRegenRemaining,
       healthRegenRate: this.healthRegenRate,
@@ -302,6 +310,7 @@ export class FirstPersonControls {
     this.canvas.dataset.cameraYaw = this.yaw.toFixed(3);
     this.canvas.dataset.cameraPitch = this.pitch.toFixed(3);
     this.canvas.dataset.grounded = String(this.isGrounded);
+    this.canvas.dataset.floorSupported = String(this.hasFloorSupport);
     this.canvas.dataset.stamina = this.stamina.toFixed(0);
     this.canvas.dataset.staminaMax = this.staminaMax.toFixed(0);
     this.canvas.dataset.staminaBaseMax = MAX_STAMINA.toFixed(0);
@@ -314,10 +323,6 @@ export class FirstPersonControls {
     this.canvas.dataset.sprintExhausted = String(this.sprintExhausted);
     this.canvas.dataset.health = this.health.toFixed(0);
     this.canvas.dataset.healthMax = this.healthMax.toFixed(0);
-    this.canvas.dataset.houndSlow = this.houndSlowTimer > 0 ? "1" : "0";
-    this.canvas.dataset.houndSlowRemaining = this.houndSlowTimer.toFixed(1);
-    this.canvas.dataset.damageSlowCleanse = this.damageSlowCleanseTimer > 0 ? "1" : "0";
-    this.canvas.dataset.damageSlowCleanseRemaining = this.damageSlowCleanseTimer.toFixed(1);
     this.canvas.dataset.healthRegenerating = this.healthRegenTimer > 0 ? "1" : "0";
     this.canvas.dataset.healthRegenRemaining = this.healthRegenTimer.toFixed(1);
     this.canvas.dataset.silenceLiquidActive = this.silenceLiquidTimer > 0 ? "1" : "0";
@@ -325,6 +330,8 @@ export class FirstPersonControls {
     this.canvas.dataset.moving = String(this.isMoving);
     this.canvas.dataset.movementSpeed = this.movementSpeed.toFixed(3);
     this.canvas.dataset.headBob = this.headBobY.toFixed(3);
+    this.canvas.dataset.walkCycle = this.walkCycle.toFixed(3);
+    this.canvas.dataset.walkBobStrength = this.walkBobStrength.toFixed(3);
     this.canvas.dataset.drinking = String(this.isDrinking);
     this.canvas.dataset.drinkItemId = this.drinkItemId ?? "";
     this.canvas.dataset.drinkProgress = this.isDrinking
@@ -342,6 +349,11 @@ export class FirstPersonControls {
 
   canStandAt(x, z) {
     return this.isWalkable(x, z, PLAYER_RADIUS);
+  }
+
+  resolveFloorHeight(x, z) {
+    const floorHeight = this.getFloorHeight(x, z);
+    return Number.isFinite(floorHeight) ? floorHeight : null;
   }
 
   resolveMove(nextX, nextZ) {
@@ -465,6 +477,7 @@ export class FirstPersonControls {
     this.isMoving = false;
     this.movementSpeed = 0;
     this.resetJoystick();
+    this.syncViewModelMotion();
   }
 
   onJoystickDown(event) {
@@ -534,16 +547,22 @@ export class FirstPersonControls {
   }
 
   updateVerticalMotion(delta) {
-    if (this.jumpQueued && this.isGrounded) {
+    const floorHeight = this.resolveFloorHeight(this.camera.position.x, this.camera.position.z);
+    this.hasFloorSupport = floorHeight !== null;
+    if (this.hasFloorSupport) this.groundY = floorHeight + this.eyeHeight;
+
+    if (this.jumpQueued && this.isGrounded && this.hasFloorSupport) {
       this.verticalVelocity = JUMP_VELOCITY;
       this.isGrounded = false;
     }
     this.jumpQueued = false;
 
+    if (!this.hasFloorSupport) this.isGrounded = false;
+
     this.verticalVelocity -= GRAVITY * delta;
     this.bodyY += this.verticalVelocity * delta;
 
-    if (this.bodyY <= this.groundY) {
+    if (this.hasFloorSupport && this.bodyY <= this.groundY) {
       this.bodyY = this.groundY;
       this.verticalVelocity = 0;
       this.isGrounded = true;
@@ -555,7 +574,6 @@ export class FirstPersonControls {
   }
 
   getMoveSpeedMultiplier() {
-    if (this.houndSlowTimer > 0) return HOUND_SLOW_MOVE_MULTIPLIER;
     return this.superAlmondWaterTimer > 0 ? SUPER_ALMOND_WATER_SPEED_MULTIPLIER : 1;
   }
 
@@ -583,11 +601,6 @@ export class FirstPersonControls {
   }
 
   updateHealthEffects(delta) {
-    if (this.damageSlowCleanseTimer > 0) {
-      this.damageSlowCleanseTimer = Math.max(0, this.damageSlowCleanseTimer - delta);
-      this.houndSlowTimer = 0;
-    }
-
     if (this.healthRegenTimer > 0 && this.healthRegenRemaining > 0) {
       const healBudget = Math.min(this.healthRegenRemaining, this.healthRegenRate * delta);
       this.health = Math.min(this.healthMax, this.health + healBudget);
@@ -625,14 +638,12 @@ export class FirstPersonControls {
     this.headBobY = Math.sin(this.walkCycle * 2) * verticalAmplitude * this.walkBobStrength;
     this.rollOffset = Math.sin(this.walkCycle) * rollAmplitude * this.walkBobStrength;
     this.camera.position.y = this.bodyY + this.headBobY;
+    this.syncViewModelMotion();
   }
 
   update(delta) {
     this.updateStaminaEffects(delta);
     this.updateHealthEffects(delta);
-    if (this.houndSlowTimer > 0) {
-      this.houndSlowTimer = Math.max(0, this.houndSlowTimer - delta);
-    }
     this.updateDrinking(delta);
     let inputX = this.joystickInput.x;
     let inputY = this.joystickInput.y;
@@ -740,8 +751,6 @@ export class FirstPersonControls {
       activeBuffs: this.getActiveBuffs(),
       health: this.health,
       healthMax: this.healthMax,
-      houndSlowRemaining: this.houndSlowTimer,
-      damageSlowCleanseRemaining: this.damageSlowCleanseTimer,
       healthRegenRemaining: this.healthRegenTimer,
       healthRegenAmountRemaining: this.healthRegenRemaining,
       healthRegenerating: this.healthRegenTimer > 0 && this.healthRegenRemaining > 0,
@@ -781,14 +790,6 @@ export class FirstPersonControls {
           recoveryMultiplier: 1,
         },
       );
-    }
-
-    if (this.damageSlowCleanseTimer > 0) {
-      buffs.push({
-        id: "damage-slow-cleanse",
-        remaining: this.damageSlowCleanseTimer,
-        duration: DAMAGE_SLOW_CLEANSE_DURATION,
-      });
     }
 
     if (this.healthRegenTimer > 0 && this.healthRegenRemaining > 0) {
@@ -873,20 +874,12 @@ export class FirstPersonControls {
     return this.getState();
   }
 
-  startDrinkRecovery(amount, {
-    duration = DEFAULT_HEALTH_REGEN_DURATION,
-    cleanseDuration = DAMAGE_SLOW_CLEANSE_DURATION,
-  } = {}) {
+  startDrinkRecovery(amount, { duration = DEFAULT_HEALTH_REGEN_DURATION } = {}) {
     if (!Number.isFinite(amount) || amount <= 0 || this.health <= 0) return false;
     const safeDuration = Math.max(0.2, Number.isFinite(duration) ? duration : DEFAULT_HEALTH_REGEN_DURATION);
     this.healthRegenRemaining = Math.max(0, this.healthRegenRemaining) + amount;
     this.healthRegenTimer = Math.max(this.healthRegenTimer, safeDuration);
     this.healthRegenRate = this.healthRegenRemaining / this.healthRegenTimer;
-    this.damageSlowCleanseTimer = Math.max(
-      this.damageSlowCleanseTimer,
-      Number.isFinite(cleanseDuration) ? cleanseDuration : DAMAGE_SLOW_CLEANSE_DURATION,
-    );
-    this.houndSlowTimer = 0;
     this.syncCameraState();
     return true;
   }
@@ -896,7 +889,6 @@ export class FirstPersonControls {
       this.silenceLiquidTimer,
       Number.isFinite(duration) ? duration : SILENCE_LIQUID_DURATION,
     );
-    this.houndSlowTimer = 0;
     this.syncCameraState();
     return true;
   }

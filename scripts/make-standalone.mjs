@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -25,12 +25,49 @@ if (!stylesheetMatch || !scriptMatch) {
 const resolveAsset = (assetPath) =>
   resolve(distDirectory, assetPath.replace(/^\/+/, ""));
 
+const stylesheetPath = resolveAsset(stylesheetMatch[1]);
 const [css, javascript] = await Promise.all([
-  readFile(resolveAsset(stylesheetMatch[1]), "utf8"),
+  readFile(stylesheetPath, "utf8"),
   readFile(resolveAsset(scriptMatch[1]), "utf8"),
 ]);
 
-const inlineCss = css.replace(/<\/style/gi, "<\\/style");
+const mimeTypes = {
+  ".avif": "image/avif",
+  ".gif": "image/gif",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+};
+
+async function inlineCssAssets(source) {
+  const matches = [...source.matchAll(/url\((['"]?)([^'"()]+)\1\)/g)];
+  const replacements = await Promise.all(
+    matches.map(async (match) => {
+      const reference = match[2].trim();
+      if (!reference || reference.startsWith("data:") || reference.startsWith("#") || /^(https?:)?\/\//i.test(reference)) {
+        return null;
+      }
+      const filename = reference.replace(/[?#].*$/, "");
+      const mimeType = mimeTypes[extname(filename).toLowerCase()];
+      if (!mimeType) return null;
+      try {
+        const data = await readFile(resolve(dirname(stylesheetPath), filename));
+        return { source: match[0], replacement: `url("data:${mimeType};base64,${data.toString("base64")}")` };
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return replacements.filter(Boolean).reduce(
+    (result, { source: original, replacement }) => result.replaceAll(original, replacement),
+    source,
+  );
+}
+
+const inlineCss = (await inlineCssAssets(css)).replace(/<\/style/gi, "<\\/style");
 const inlineJavascript = javascript.replace(/<\/script/gi, "<\\/script");
 
 html = html

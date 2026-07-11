@@ -15,7 +15,6 @@ import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatVi
 import {
   LEVEL_ONE_COLS,
   LEVEL_ONE_ROWS,
-  LEVEL_ONE_EXIT_TRIGGER_RADIUS,
   LEVEL_ONE_START_CELL,
   LEVEL_ONE_TARGET_CELL,
   isLevelOneOpenCell,
@@ -24,7 +23,7 @@ import {
 } from "../level-one/layout.js";
 import { createLevelOneLights, collectLevelOneTransforms } from "../level-one/props.js";
 import { createLevelFourCarpetTexture, createLevelFourWallTexture, createLevelFourCeilingTexture } from "./textures.js";
-import { addLevelFourStairDoor, addLevelFourOfficeDetails } from "./props.js";
+import { addLevelFourOfficeDetails } from "./props.js";
 import {
   createAlmondWaterPickup,
   createCompassPickup,
@@ -41,9 +40,9 @@ import {
   getFocusedInteraction,
   getFocusedItem,
   tryInteractWithSpots,
-  createInteractionSpot,
 } from "../entities/index.js";
 import { snapEntityStates } from "../common/snap.js";
+import { createExitNetwork } from "../common/exit-network.js";
 
 export function createLevelFourScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
@@ -61,7 +60,6 @@ export function createLevelFourScene({ initialState = null } = {}) {
   const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: -Math.PI * 0.12 };
   const targetPosition = levelOneCellCenter(LEVEL_ONE_TARGET_CELL.col, LEVEL_ONE_TARGET_CELL.row);
 
-  addLevelFourStairDoor(scene, targetPosition);
   const { colliders: propColliders, interactions: propInteractions } = addLevelFourOfficeDetails(
     scene,
     initialState?.interactions ?? {},
@@ -159,17 +157,13 @@ export function createLevelFourScene({ initialState = null } = {}) {
     dimDelay: 0.62,
     normalDelay: 0.86,
   });
-  const interactions = [
-    ...propInteractions,
-    createInteractionSpot({
-      id: "level-four-stair-door",
-      position: targetPosition,
-      inspectHeight: 1.58,
-      inspectRadius: 0.82,
-      responseKey: "levelFourStairDoorResponse",
-      initialState: interactionInitial["level-four-stair-door"] ?? null,
-    }),
+  const interactions = [...propInteractions];
+  const routes = [
+    { id: "level-four-stairs-level-five", targetLevel: 5, targetLabel: "LEVEL 5", label: "HOTEL", kind: "stair", position: targetPosition, rotation: 0 },
+    { id: "level-four-stairs-level-six", targetLevel: 6, targetLabel: "LEVEL 6", label: "DARKNESS", kind: "stair", position: levelOneCellCenter(2, 22), rotation: Math.PI },
+    { id: "level-four-elevator-level-three", targetLevel: 3, targetLabel: "LEVEL 3", label: "MAINTENANCE", kind: "elevator", position: levelOneCellCenter(1, 1), rotation: Math.PI / 2 },
   ];
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
 
   const almondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_ONE_COLS,
@@ -284,11 +278,9 @@ export function createLevelFourScene({ initialState = null } = {}) {
       lightTotal += pulse;
     });
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.82;
-    const exitDistance = Math.hypot(
-      playerPosition.x - targetPosition.x,
-      playerPosition.z - targetPosition.z,
-    );
-    if (exitDistance < LEVEL_ONE_EXIT_TRIGGER_RADIUS) objectiveReached = true;
+    const enteredExit = exitNetwork.update(delta, playerPosition);
+    const exitDistance = Math.min(...routes.map((route) => Math.hypot(playerPosition.x - route.position.x, playerPosition.z - route.position.z)));
+    if (enteredExit) objectiveReached = true;
     scene.fog.density = 0.0086 + (1 - flicker) * 0.006;
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
@@ -303,7 +295,8 @@ export function createLevelFourScene({ initialState = null } = {}) {
 
     return {
       exitDistance: Math.round(exitDistance),
-      exitReached: objectiveReached,
+      exitReached: Boolean(enteredExit),
+      nextLevel: enteredExit?.targetLevel,
       entityContact: entities.some((entity) => entity.contact),
       flicker,
       almondWater: almondWaterState,
@@ -315,7 +308,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
       pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
-      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
+      focusInteraction: exitNetwork.inspect(playerPosition) ?? getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
@@ -342,17 +335,22 @@ export function createLevelFourScene({ initialState = null } = {}) {
     },
     colliderCount: propColliders.length,
     nextLevel: 5,
+    exitMode: "network",
     scene,
     camera,
     spawn,
     targetPosition,
     isWalkable,
+    decorativeItemSpawns: [
+      { id: "office-badge", position: { ...levelOneCellCenter(18, 12), y: 0.08 }, rotation: 0.2, tiltX: 0.04 },
+      { id: "empty-can", position: { ...levelOneCellCenter(28, 19), y: 0.2 }, rotation: 1.2, tiltZ: -0.15 },
+    ],
     update,
     getPickupTarget: (playerPosition) =>
       getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
-    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+    interact: (playerPosition) => exitNetwork.interact(playerPosition) ?? tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {
@@ -363,9 +361,10 @@ export function createLevelFourScene({ initialState = null } = {}) {
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },
-        interactions: Object.fromEntries(
-          interactions.map((spot) => [spot.id, spot.getState()]),
-        ),
+        interactions: {
+          ...exitNetwork.getState(),
+          ...Object.fromEntries(interactions.map((spot) => [spot.id, spot.getState()])),
+        },
         objectives: { reached: objectiveReached },
         entities: [hound.getState()],
       };

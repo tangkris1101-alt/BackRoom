@@ -17,7 +17,6 @@ import { addLayoutDarkPockets } from "../level-two/props.js";
 import {
   LEVEL_FIVE_COLS,
   LEVEL_FIVE_ROWS,
-  LEVEL_FIVE_EXIT_TRIGGER_RADIUS,
   LEVEL_FIVE_START_CELL,
   LEVEL_FIVE_TARGET_CELL,
   LEVEL_FIVE_DARK_ZONES,
@@ -33,7 +32,6 @@ import {
 import {
   collectLevelFiveTransforms,
   createLevelFiveLights,
-  addLevelFiveExitDoor,
   addLevelFiveHotelDetails,
 } from "./props.js";
 import {
@@ -46,7 +44,6 @@ import {
 import {
   createHoundEntity,
   chooseBacteriaSpawn,
-  createInteractionSpot,
   getPickupTarget,
   tryPickupItems,
   getFocusedEntity,
@@ -54,6 +51,7 @@ import {
   getFocusedItem,
   tryInteractWithSpots,
 } from "../entities/index.js";
+import { createExitNetwork } from "../common/exit-network.js";
 
 export function createLevelFiveScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
@@ -82,7 +80,6 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     Array.isArray(initialState?.entities) ? initialState.entities : [],
     isWalkable,
   );
-  addLevelFiveExitDoor(scene, targetPosition);
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: createLevelFiveCarpetTexture(),
@@ -230,17 +227,13 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     initialState: pickupInitial["silence-liquid"] ?? null,
   });
 
-  const interactions = [
-    ...propInteractions,
-    createInteractionSpot({
-      id: "level-five-boiler-exit",
-      position: targetPosition,
-      inspectHeight: 1.58,
-      inspectRadius: 0.9,
-      responseKey: "levelFiveBoilerExitResponse",
-      initialState: interactionInitial["level-five-boiler-exit"] ?? null,
-    }),
+  const interactions = [...propInteractions];
+  const routes = [
+    { id: "level-five-boiler-level-six", targetLevel: 6, targetLabel: "LEVEL 6", label: "BOILER", kind: "door", position: targetPosition, rotation: 0 },
+    { id: "level-five-elevator-level-three", targetLevel: 3, targetLabel: "LEVEL 3", label: "SERVICE", kind: "elevator", position: levelFiveCellCenter(37, 5), rotation: Math.PI },
+    { id: "level-five-stairs-level-four", targetLevel: 4, targetLabel: "LEVEL 4", label: "STAIRS", kind: "stair", position: levelFiveCellCenter(7, 5), rotation: 0 },
   ];
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
 
   const houndSpawn =
     chooseBacteriaSpawn({
@@ -298,11 +291,9 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     });
 
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.5;
-    const exitDistance = Math.hypot(
-      playerPosition.x - targetPosition.x,
-      playerPosition.z - targetPosition.z,
-    );
-    if (exitDistance < LEVEL_FIVE_EXIT_TRIGGER_RADIUS) objectiveReached = true;
+    const enteredExit = exitNetwork.update(delta, playerPosition);
+    const exitDistance = Math.min(...routes.map((route) => Math.hypot(playerPosition.x - route.position.x, playerPosition.z - route.position.z)));
+    if (enteredExit) objectiveReached = true;
     scene.fog.density = 0.0076 + (1 - flicker) * 0.0055 + (exitDistance < 24 ? 0.0014 : 0);
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
 
@@ -318,7 +309,8 @@ export function createLevelFiveScene({ initialState = null } = {}) {
 
     return {
       exitDistance: Math.round(exitDistance),
-      exitReached: objectiveReached,
+      exitReached: Boolean(enteredExit),
+      nextLevel: enteredExit?.targetLevel,
       entityContact: entities.some((entity) => entity.contact),
       flicker,
       almondWater: almondWaterState,
@@ -330,7 +322,7 @@ export function createLevelFiveScene({ initialState = null } = {}) {
       pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
-      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
+      focusInteraction: exitNetwork.inspect(playerPosition) ?? getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
@@ -357,17 +349,22 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     },
     colliderCount: propColliders.length,
     nextLevel: 6,
+    exitMode: "network",
     scene,
     camera,
     spawn,
     targetPosition,
     isWalkable,
+    decorativeItemSpawns: [
+      { id: "hotel-token", position: { ...levelFiveCellCenter(20, 12), y: 0.1 }, rotation: 0.45, tiltZ: 0.08 },
+      { id: "crumpled-note", position: { ...levelFiveCellCenter(28, 14), y: 0.08 }, rotation: -0.3, tiltX: 0.05 },
+    ],
     update,
     getPickupTarget: (playerPosition) =>
       getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
-    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+    interact: (playerPosition) => exitNetwork.interact(playerPosition) ?? tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {
@@ -378,9 +375,10 @@ export function createLevelFiveScene({ initialState = null } = {}) {
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },
-        interactions: Object.fromEntries(
-          interactions.map((spot) => [spot.id, spot.getState()]),
-        ),
+        interactions: {
+          ...exitNetwork.getState(),
+          ...Object.fromEntries(interactions.map((spot) => [spot.id, spot.getState()])),
+        },
         objectives: { reached: objectiveReached },
         entities: [hound.getState()],
       };

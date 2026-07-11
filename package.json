@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "bake:arms": "node scripts/bake-fps-arms.mjs",
     "dev": "vite --host 127.0.0.1",
     "prebuild": "node scripts/check-encoding.mjs src app.html",
     "build": "npm run prebuild && vite build && node scripts/make-standalone.mjs",

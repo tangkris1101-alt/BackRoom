@@ -15,7 +15,6 @@ import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatVi
 import {
   LEVEL_TWO_COLS,
   LEVEL_TWO_ROWS,
-  LEVEL_TWO_EXIT_TRIGGER_RADIUS,
   LEVEL_TWO_START_CELL,
   LEVEL_TWO_TARGET_CELL,
   LEVEL_TWO_CELL_META,
@@ -52,7 +51,6 @@ import {
   addLevelTwoPipes,
   addLevelTwoMachinery,
   addLevelTwoSteam,
-  addLevelTwoServiceDoor,
   addLevelTwoFloorHeat,
   addLevelTwoDarkPockets,
   addLevelTwoIndustrialDetails,
@@ -67,7 +65,6 @@ import {
   createSilenceLiquidPickup,
 } from "../items/index.js";
 import {
-  createBacteriaEntity,
   createHoundEntity,
   chooseBacteriaSpawn,
   createInteractionSpot,
@@ -78,6 +75,7 @@ import {
   getFocusedItem,
   tryInteractWithSpots,
 } from "../entities/index.js";
+import { createExitNetwork } from "../common/exit-network.js";
 
 const S = CELL_SIZE;
 const H = WALL_HEIGHT;
@@ -615,8 +613,6 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     dimDelay: 0.5,
     normalDelay: 0.78,
   });
-  addLevelTwoServiceDoor(scene, targetPosition);
-
   const machineryColliders = buildLevelTwoMachineryColliders();
   addLevelTwoPipes(scene);
   let propColliders = addLevelTwoMachinery(scene, machineryColliders);
@@ -695,36 +691,14 @@ export function createLevelTwoScene({ initialState = null } = {}) {
       responseKey: "levelTwoValveResponse",
       initialState: interactionInitial["level-two-valve"] ?? null,
     }),
-    createInteractionSpot({
-      id: "level-two-service-door",
-      position: targetPosition,
-      inspectHeight: 1.65,
-      inspectRadius: 0.8,
-      responseKey: "levelTwoServiceDoorResponse",
-      initialState: interactionInitial["level-two-service-door"] ?? null,
-    }),
   ];
-
-  const bacteriaSpawn =
-    chooseBacteriaSpawn({
-      cols: LEVEL_TWO_COLS,
-      rows: LEVEL_TWO_ROWS,
-      isCellOpen: isLevelTwoOpenCell,
-      getCellCenter: levelTwoCellCenter,
-      targetPosition,
-      spawnPosition: spawnCell,
-    })[0] ?? targetPosition;
-  const bacteria = createBacteriaEntity(scene, {
-    spawnPosition: bacteriaSpawn,
-    isWalkable,
-    speed: 1.22,
-    initialState: entityInitial.find((entity) => entity.type === "bacteria") ?? null,
-    cols: LEVEL_TWO_COLS,
-    rows: LEVEL_TWO_ROWS,
-    isCellOpen: isLevelTwoOpenCell,
-    worldToCell: levelTwoWorldToCell,
-    cellCenter: levelTwoCellCenter,
-  });
+  const routes = [
+    { id: "level-two-door-level-three", targetLevel: 3, targetLabel: "LEVEL 3", label: "UNLOCKED", kind: "door", position: targetPosition, rotation: 0 },
+    { id: "level-two-door-level-one", targetLevel: 1, targetLabel: "LEVEL 1", label: "RETURN", kind: "door", position: levelTwoCellCenter(12, 2), rotation: 0 },
+    { id: "level-two-door-level-four", targetLevel: 4, targetLabel: "LEVEL 4", label: "OFFICE", kind: "door", position: levelTwoCellCenter(37, 26), rotation: Math.PI },
+    { id: "level-two-hidden-hub-door", targetLevel: 8, targetLabel: "THE HUB", kind: "door", hidden: true, position: levelTwoCellCenter(31, 9), rotation: Math.PI / 2 },
+  ];
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
   const hound = createHoundEntity(scene, {
     spawnPosition:
       chooseBacteriaSpawn({
@@ -734,8 +708,6 @@ export function createLevelTwoScene({ initialState = null } = {}) {
         getCellCenter: levelTwoCellCenter,
         targetPosition,
         spawnPosition: spawnCell,
-        avoidPositions: [bacteriaSpawn],
-        minSeparation: CELL_SIZE * 7,
       })[0] ?? targetPosition,
     isWalkable,
     speed: 1.83,
@@ -811,11 +783,12 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     });
 
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.56;
-    const exitDistance = Math.hypot(
-      playerPosition.x - targetPosition.x,
-      playerPosition.z - targetPosition.z,
-    );
-    if (exitDistance < LEVEL_TWO_EXIT_TRIGGER_RADIUS) objectiveReached = true;
+    const enteredExit = exitNetwork.update(delta, playerPosition);
+    const exitDistance = Math.min(...routes.map((route) => Math.hypot(
+      playerPosition.x - route.position.x,
+      playerPosition.z - route.position.z,
+    )));
+    if (enteredExit) objectiveReached = true;
     scene.fog.density = 0.011 + (1 - flicker) * 0.008;
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
@@ -824,14 +797,14 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const compassState = compass.update(delta, elapsed, playerPosition);
     const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
-    const bacteriaState = bacteria.update(delta, elapsed, playerPosition, effects);
     const houndState = hound.update(delta, elapsed, playerPosition, effects);
-    const entities = [bacteriaState, houndState];
+    const entities = [houndState];
     const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
-      exitReached: objectiveReached,
+      exitReached: Boolean(enteredExit),
+      nextLevel: enteredExit?.targetLevel,
       entityContact: entities.some((entity) => entity.contact),
       flicker,
       almondWater: almondWaterState,
@@ -843,7 +816,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
       pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
-      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
+      focusInteraction: exitNetwork.inspect(playerPosition) ?? getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
@@ -870,18 +843,23 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     },
     colliderCount: propColliders.length,
     nextLevel: 3,
+    exitMode: "network",
     scene,
     camera,
     spawn,
     targetPosition,
     isWalkable,
+    decorativeItemSpawns: [
+      { id: "wire-spool", position: { ...levelTwoCellCenter(24, 16), y: 0.2 }, rotation: 1.1, tiltZ: 0.16 },
+      { id: "rusted-key", position: { ...levelTwoCellCenter(14, 6), y: 0.08 }, rotation: -0.8, tiltX: 0.06 },
+    ],
     flashlightEffectiveness: 1.82,
     update,
     getPickupTarget: (playerPosition) =>
       getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
-    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
+    interact: (playerPosition) => exitNetwork.interact(playerPosition) ?? tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {
@@ -892,11 +870,12 @@ export function createLevelTwoScene({ initialState = null } = {}) {
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },
-        interactions: Object.fromEntries(
-          interactions.map((spot) => [spot.id, spot.getState()]),
-        ),
+        interactions: {
+          ...exitNetwork.getState(),
+          ...Object.fromEntries(interactions.map((spot) => [spot.id, spot.getState()])),
+        },
         objectives: { reached: objectiveReached },
-        entities: [bacteria.getState(), hound.getState()],
+        entities: [hound.getState()],
       };
     },
   };

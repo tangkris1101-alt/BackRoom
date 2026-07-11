@@ -11,9 +11,31 @@ import {
   getInitialLevelFromSave,
 } from "./save.js";
 import { BACTERIA_CONTACT_RADIUS, HOUND_CONTACT_RADIUS } from "./scene/constants.js";
+import {
+  createWorldItemManager,
+  DECORATIVE_ITEM_DEFS,
+  getLevelKeyTarget,
+  getWorldItemDefinition,
+  isLevelKeyId,
+  LEVEL_KEY_IDS,
+} from "./scene/common/world-items.js";
 
 const canvas = document.querySelector("#scene");
 const appRoot = canvas?.closest("#app") ?? document.body;
+const mainMenu = document.querySelector("#main-menu");
+const mainMenuEyebrow = document.querySelector("#main-menu-eyebrow");
+const mainMenuSubtitle = document.querySelector("#main-menu-subtitle");
+const mainMenuStart = document.querySelector("#main-menu-start");
+const mainMenuStartLabel = document.querySelector("#main-menu-start-label");
+const mainMenuStartHint = document.querySelector("#main-menu-start-hint");
+const mainMenuSettings = document.querySelector("#main-menu-settings");
+const mainMenuSettingsLabel = document.querySelector("#main-menu-settings-label");
+const mainMenuSettingsHint = document.querySelector("#main-menu-settings-hint");
+const mainMenuSettingsPanel = document.querySelector("#main-menu-settings-panel");
+const mainMenuSettingsTitle = document.querySelector("#main-menu-settings-title");
+const mainMenuSettingsClose = document.querySelector("#main-menu-settings-close");
+const mainMenuLanguageZh = document.querySelector("#main-menu-language-zh");
+const mainMenuLanguageEn = document.querySelector("#main-menu-language-en");
 const joystick = document.querySelector("#joystick");
 const jumpButton = document.querySelector("#jump-button");
 const useButton = document.querySelector("#use-button");
@@ -26,7 +48,6 @@ const levelPicker = document.querySelector("#level-picker");
 const levelPickerButton = document.querySelector("#level-picker-button");
 const levelPickerLabel = document.querySelector("#level-picker-label");
 const levelPickerMenu = document.querySelector("#level-picker-menu");
-const languageSelect = document.querySelector("#language-select");
 const distanceReadout = document.querySelector("#distance-readout");
 const lightReadout = document.querySelector("#light-readout");
 const fpsReadout = document.querySelector("#fps-readout");
@@ -76,6 +97,16 @@ const pauseResumeArea = document.querySelector("#pause-resume-area");
 const pauseTutorialButton = document.querySelector("#pause-tutorial");
 const pauseTutorialLabel = document.querySelector("#pause-tutorial-label");
 const pauseTutorialHint = document.querySelector("#pause-tutorial-hint");
+const pauseTimeLabel = document.querySelector("#pause-time-label");
+const pauseTimeReadout = document.querySelector("#pause-time-readout");
+const pauseSettingsButton = document.querySelector("#pause-settings");
+const pauseSettingsLabel = document.querySelector("#pause-settings-label");
+const pauseSettingsHint = document.querySelector("#pause-settings-hint");
+const pauseSettingsPanel = document.querySelector("#pause-settings-panel");
+const pauseSettingsTitle = document.querySelector("#pause-settings-title");
+const pauseSettingsClose = document.querySelector("#pause-settings-close");
+const pauseLanguageZh = document.querySelector("#pause-language-zh");
+const pauseLanguageEn = document.querySelector("#pause-language-en");
 const pauseResetButton = document.querySelector("#pause-reset");
 const pauseResetLabel = document.querySelector("#pause-reset-label");
 const pauseResetHint = document.querySelector("#pause-reset-hint");
@@ -135,7 +166,7 @@ const FLASHLIGHT_DRAIN_RATE = 4.2;
 const FLASHLIGHT_MAX_STACK = 3;
 const DETECTOR_SCAN_DURATION = 5;
 const DETECTOR_COOLDOWN_DURATION = 60;
-const DETECTOR_RANGE = 72;
+const DETECTOR_RANGE = 112;
 const LANGUAGE_STORAGE_KEY = "backrooms-language";
 const ALMOND_WATER_DURATION = 45;
 const SUPER_ALMOND_WATER_DURATION = 25;
@@ -151,7 +182,6 @@ const BACTERIA_DAMAGE = 50;
 const SUPER_BACTERIA_DAMAGE = 60;
 const HOUND_DAMAGE = 30;
 const LEVEL_SEVEN_THING_DAMAGE = 68;
-const HOUND_SLOW_DURATION = 3.0;
 const DAMAGE_COOLDOWN_S = 1.0;
 const ALMOND_WATER_HEAL = 30;
 const SUPER_ALMOND_WATER_HEAL = 80;
@@ -160,7 +190,6 @@ const EXIT_DOOR_INTERACT_RADIUS = 4.2;
 const EXIT_ELEVATOR_ENTER_RADIUS = 1.65;
 const ALMOND_WATER_HEAL_DURATION = 5;
 const SUPER_ALMOND_WATER_HEAL_DURATION = 6;
-const DRINK_SLOW_CLEANSE_DURATION = 3;
 const SILENCE_LIQUID_DURATION = 12;
 const SILENCE_LIQUID_REPEL_RADIUS = 18;
 const SILENCE_LIQUID_REPEL_SPEED_MULTIPLIER = 1.55;
@@ -169,7 +198,7 @@ const ITEM_TEXT = {
   "zh-CN": {
     "almond-water": {
       name: "杏仁水",
-      effect: "+50 体力上限 / 持续回血 / 3秒解除实体减速",
+      effect: "+50 体力上限 / 持续回血",
       action: "F / 按钮拾取并饮用",
     },
     "super-almond-water": {
@@ -201,7 +230,7 @@ const ITEM_TEXT = {
   en: {
     "almond-water": {
       name: "ALMOND WATER",
-      effect: "+50 STAMINA CAP / HEALTH REGEN / 3s SLOW CLEANSE",
+      effect: "+50 STAMINA CAP / HEALTH REGEN",
       action: "F / BUTTON PICK UP",
     },
     "super-almond-water": {
@@ -650,10 +679,6 @@ const BUFF_TEXT = {
       name: "超级杏仁水",
       detail: "体力上限 250 · 恢复 x2",
     },
-    "damage-slow-cleanse": {
-      name: "减速净化",
-      detail: "解除实体造成的减速",
-    },
     "health-regen": {
       name: "生命恢复",
       detail: "血量持续恢复中",
@@ -671,10 +696,6 @@ const BUFF_TEXT = {
     "super-almond-water": {
       name: "SUPER ALMOND WATER",
       detail: "250 STAMINA CAP · RECOVERY x2",
-    },
-    "damage-slow-cleanse": {
-      name: "SLOW CLEANSE",
-      detail: "REMOVES ENTITY SLOWDOWN",
     },
     "health-regen": {
       name: "HEALTH REGEN",
@@ -721,16 +742,22 @@ const STATUS_TEXT = {
     pauseSubtitle: "按 ESC 或点击继续",
     pauseTutorialLabel: "查看教程",
     pauseTutorialHint: "重新阅读操作说明",
+    pauseElapsedLabel: "当前耗时",
+    pauseSettingsLabel: "设置",
+    pauseSettingsHint: "语言",
+    pauseSettingsTitle: "语言",
+    pauseSettingsClose: "关闭设置",
     pauseResetLabel: "重置进度",
     pauseResetHint: "清空所有存档并回到 L0",
     pauseResetArmedLabel: "再次按下以确认",
     pauseResetArmedHint: "⚠ 所有进度将被清除且不可撤销",
-    inventoryHint: "← → / 滚轮 切换 · 点击 切换 / E 使用",
+    inventoryHint: "← → / 滚轮切换 · E 使用 · Q 丢弃",
     inventoryEmpty: "背包为空",
     pickupEmpty: "无物品可拾取",
     exitDoorOpened: "\u7535\u68af\u95e8\u5df2\u6253\u5f00",
     exitDoorReady: "\u8d70\u5165\u7535\u68af",
     exitDoorNearby: "\u6309 F \u6253\u5f00\u7535\u68af\u95e8",
+    exitFallNearby: "\u8df3\u5165\u9ed1\u6d1e\u8fdb\u5165 LEVEL 1",
     compassExpired: "\u6307\u5357\u9488\u5df2\u5728\u672c\u5c42\u51fa\u53e3\u5931\u6548",
     failureRestartLabel: "\u91cd\u65b0\u5f00\u59cb",
     failureRestartHint: "\u6e05\u7a7a\u8fdb\u5ea6\u5e76\u56de\u5230 Level 0",
@@ -740,6 +767,9 @@ const STATUS_TEXT = {
     levelLocked: "未解锁",
     levelLockedHint: "该层级尚未解锁",
     levelCleared: "已通关",
+    levelCurrent: "当前",
+    levelVisited: "已到达",
+    itemDropped: "已丢弃 {item}",
     savePromptJumpLabel: "前往其他层级",
     savePromptJumpHint: "选择已解锁的层级开始",
     savePromptLevelsTitle: "选择层级",
@@ -778,16 +808,22 @@ const STATUS_TEXT = {
     pauseSubtitle: "ESC / TAP TO RESUME",
     pauseTutorialLabel: "VIEW TUTORIAL",
     pauseTutorialHint: "RE-READ THE CONTROLS",
+    pauseElapsedLabel: "CURRENT TIME",
+    pauseSettingsLabel: "SETTINGS",
+    pauseSettingsHint: "LANGUAGE",
+    pauseSettingsTitle: "LANGUAGE",
+    pauseSettingsClose: "CLOSE SETTINGS",
     pauseResetLabel: "RESET PROGRESS",
     pauseResetHint: "WIPE SAVE · RESTART AT L0",
     pauseResetArmedLabel: "TAP AGAIN TO CONFIRM",
     pauseResetArmedHint: "⚠ ALL PROGRESS WILL BE LOST",
-    inventoryHint: "← → / WHEEL · TAP TO SWITCH / E USE",
+    inventoryHint: "← → / WHEEL SWITCH · E USE · Q DROP",
     inventoryEmpty: "INVENTORY EMPTY",
     pickupEmpty: "NO ITEM IN RANGE",
     exitDoorOpened: "ELEVATOR DOOR OPEN",
     exitDoorReady: "ENTER THE ELEVATOR",
     exitDoorNearby: "PRESS F TO OPEN ELEVATOR DOOR",
+    exitFallNearby: "DROP INTO THE VOID TO ENTER LEVEL 1",
     compassExpired: "COMPASS EXPIRED AT THIS LEVEL EXIT",
     failureRestartLabel: "RESTART",
     failureRestartHint: "CLEAR PROGRESS AND RETURN TO LEVEL 0",
@@ -797,6 +833,9 @@ const STATUS_TEXT = {
     levelLocked: "LOCKED",
     levelLockedHint: "LEVEL NOT YET UNLOCKED",
     levelCleared: "CLEARED",
+    levelCurrent: "CURRENT",
+    levelVisited: "VISITED",
+    itemDropped: "DROPPED {item}",
     savePromptJumpLabel: "CHOOSE LEVEL",
     savePromptJumpHint: "PICK AN UNLOCKED LEVEL",
     savePromptLevelsTitle: "SELECT LEVEL",
@@ -805,10 +844,53 @@ const STATUS_TEXT = {
   },
 };
 
-[hud, joystick, jumpButton, useButton, actionButton, flashlightButton, detectorButton, pauseButton, loadingOverlay, inventoryBar].forEach((element) => {
-  element?.removeAttribute("hidden");
-});
-exitOverlay?.setAttribute("hidden", "");
+const MAIN_MENU_TEXT = {
+  "zh-CN": {
+    eyebrow: "LEVEL 0 · NOCLIP ZONE",
+    subtitle: "你不该来到这里。",
+    start: "开始游戏",
+    startHint: "进入 LEVEL 0",
+    settings: "设置",
+    settingsHint: "语言",
+    language: "语言",
+    close: "关闭设置",
+  },
+  en: {
+    eyebrow: "LEVEL 0 · NOCLIP ZONE",
+    subtitle: "YOU ARE NOT SUPPOSED TO BE HERE.",
+    start: "START GAME",
+    startHint: "ENTER LEVEL 0",
+    settings: "SETTINGS",
+    settingsHint: "LANGUAGE",
+    language: "LANGUAGE",
+    close: "CLOSE SETTINGS",
+  },
+};
+
+const gameplayUiElements = [
+  hud,
+  joystick,
+  jumpButton,
+  useButton,
+  actionButton,
+  flashlightButton,
+  detectorButton,
+  pauseButton,
+  loadingOverlay,
+  inventoryBar,
+];
+
+function showGameplayUi() {
+  gameplayUiElements.forEach((element) => element?.removeAttribute("hidden"));
+  exitOverlay?.setAttribute("hidden", "");
+}
+
+function hideGameplayUi() {
+  gameplayUiElements.forEach((element) => element?.setAttribute("hidden", ""));
+  exitOverlay?.setAttribute("hidden", "");
+}
+
+hideGameplayUi();
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
@@ -829,10 +911,18 @@ flashlightTarget.position.set(0, -0.16, -1);
 
 function getInitialLevel() {
   const level = Number(new URLSearchParams(window.location.search).get("level"));
-  return getBackroomsLevelInfo(level).level;
+  const requested = getBackroomsLevelInfo(level).level;
+  if (requested === 0) return 0;
+  try {
+    const reached = JSON.parse(window.localStorage?.getItem(REACHED_KEY) ?? "[]");
+    return Array.isArray(reached) && reached.includes(requested) ? requested : 0;
+  } catch {
+    return 0;
+  }
 }
 
 let world = null;
+let worldItems = null;
 let controls = null;
 let animationFrameStarted = false;
 let saveDirtyTimer = 0;
@@ -853,7 +943,6 @@ function handleDrinkComplete(itemId) {
     renderInventoryBar();
     controls?.startDrinkRecovery(ALMOND_WATER_HEAL, {
       duration: ALMOND_WATER_HEAL_DURATION,
-      cleanseDuration: DRINK_SLOW_CLEANSE_DURATION,
     });
     markDirty();
   } else if (itemId === "super-almond-water") {
@@ -861,7 +950,6 @@ function handleDrinkComplete(itemId) {
     renderInventoryBar();
     controls?.startDrinkRecovery(SUPER_ALMOND_WATER_HEAL, {
       duration: SUPER_ALMOND_WATER_HEAL_DURATION,
-      cleanseDuration: DRINK_SLOW_CLEANSE_DURATION,
     });
     markDirty();
   }
@@ -895,8 +983,10 @@ const INVENTORY_ORDER = [
   "detector",
   "silence-liquid",
   "compass",
+  ...LEVEL_KEY_IDS,
   "almond-water",
   "super-almond-water",
+  ...Object.keys(DECORATIVE_ITEM_DEFS),
 ];
 
 const INVENTORY_DEFS = {
@@ -910,6 +1000,9 @@ const INVENTORY_DEFS = {
   detector: { id: "detector", type: "scan", unique: true, stackable: false },
   "silence-liquid": { id: "silence-liquid", type: "consumable", unique: false, stackable: true },
   compass: { id: "compass", type: "passive", unique: true, stackable: false },
+  ...Object.fromEntries(
+    LEVEL_KEY_IDS.map((id) => [id, { id, type: "key", unique: true, stackable: false }]),
+  ),
   "almond-water": { id: "almond-water", type: "consumable", unique: false, stackable: true },
   "super-almond-water": {
     id: "super-almond-water",
@@ -917,6 +1010,12 @@ const INVENTORY_DEFS = {
     unique: false,
     stackable: true,
   },
+  ...Object.fromEntries(
+    Object.keys(DECORATIVE_ITEM_DEFS).map((id) => [
+      id,
+      { id, type: "decorative", unique: false, stackable: true, maxStack: 9 },
+    ]),
+  ),
 };
 
 const ITEM_ICON_SVG = {
@@ -1036,6 +1135,14 @@ const ITEM_ICON_SVG = {
     <rect x="39" y="30" width="3" height="54" fill="#fff" opacity="0.28"/>
     <rect x="58" y="30" width="2" height="54" fill="#000" opacity="0.16"/>`,
 
+  "wire-spool": `
+    <ellipse cx="50" cy="50" rx="31" ry="17" fill="#9d4e2b" stroke="#32140c" stroke-width="3"/>
+    <ellipse cx="50" cy="50" rx="21" ry="11" fill="#2e2824" stroke="#d07a42" stroke-width="2"/>
+    <ellipse cx="50" cy="50" rx="7" ry="4" fill="#161312" stroke="#d4b28a" stroke-width="1.5"/>
+    <path d="M22 50 C34 27 66 27 78 50 C66 73 34 73 22 50 Z" fill="none" stroke="#d9a16d" stroke-width="2" opacity="0.75"/>
+    <path d="M27 42 C40 34 60 34 73 42 M27 58 C40 66 60 66 73 58" fill="none" stroke="#f0c28d" stroke-width="1.5" opacity="0.65"/>
+    <path d="M79 49 C89 42 91 58 83 61" fill="none" stroke="#30393a" stroke-width="4" stroke-linecap="round"/>`,
+
   compass: `
     <circle cx="50" cy="50" r="34" fill="#b2873f" stroke="#3a2410" stroke-width="2"/>
     <circle cx="50" cy="50" r="27" fill="#efe2b5" stroke="#5d3a16" stroke-width="1.2"/>
@@ -1049,6 +1156,18 @@ const ITEM_ICON_SVG = {
     <circle cx="50" cy="50" r="4.5" fill="#392414"/>
     <path d="M30 18 Q50 7 70 18" fill="none" stroke="#f5c86e" stroke-width="2" opacity="0.55"/>
     <path d="M36 38 Q50 28 64 38" fill="none" stroke="#fff6cf" stroke-width="1.4" opacity="0.32"/>`,
+
+  "crumpled-note": `
+    <path d="M22 20 L72 15 L82 32 L77 82 L28 87 L17 68 Z" fill="#d8cfaa" stroke="#6f664e" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M25 42 Q39 33 54 42 T76 40 M27 55 Q42 47 57 56 T75 54 M31 68 Q43 60 55 68" fill="none" stroke="#30384e" stroke-width="3" stroke-linecap="round" opacity="0.82"/>
+    <path d="M22 20 L31 35 L17 68 M72 15 L65 33 L82 32 M77 82 L61 72 L28 87" fill="none" stroke="#8c8266" stroke-width="1.5" opacity="0.75"/>`,
+
+  "empty-can": `
+    <path d="M31 24 Q50 16 69 24 L65 79 Q50 87 35 79 Z" fill="#7b8480" stroke="#28302d" stroke-width="3"/>
+    <ellipse cx="50" cy="24" rx="19" ry="7" fill="#b7c0b8" stroke="#28302d" stroke-width="2.5"/>
+    <ellipse cx="50" cy="24" rx="9" ry="3.5" fill="#333b38"/>
+    <path d="M34 37 Q50 43 66 37 M34 61 Q50 54 66 61" fill="none" stroke="#cfd6ce" stroke-width="2" opacity="0.55"/>
+    <path d="M39 29 L45 76 M57 29 L52 76" stroke="#4d5651" stroke-width="2" opacity="0.65"/>`,
 };
 
 let iconIdCounter = 0;
@@ -1060,6 +1179,17 @@ function createItemIcon(type) {
   svg.classList.add("inventory-slot__svg");
   const slotId = iconIdCounter++;
   let content = ITEM_ICON_SVG[type];
+  const keyTargetLevel = getLevelKeyTarget(type);
+  if (!content && keyTargetLevel !== null) {
+    content = `<circle cx="29" cy="38" r="16" fill="none" stroke="#d6ab58" stroke-width="9"/>
+      <path d="M40 49 L78 78 M61 65 L70 56 M70 74 L79 65" fill="none" stroke="#d6ab58" stroke-width="9" stroke-linecap="square"/>
+      <circle cx="29" cy="38" r="6" fill="#302513"/>
+      <text x="69" y="37" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="18" fill="#ffe29a">${keyTargetLevel}</text>`;
+  }
+  if (!content) {
+    content = `<circle cx="50" cy="50" r="27" fill="#777d72" stroke="#272b25" stroke-width="3"/>
+      <path d="M35 52 L45 62 L67 38" fill="none" stroke="#e3ddbd" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
   if (content) {
     content = content
       .replace(/id="(fl-body|fl-lens|aw-body|saw-body|det-body|det-screen|det-glow|sl-body|sl-glow)"/g, `id="$1-${slotId}"`)
@@ -1092,9 +1222,72 @@ try {
   currentLanguage = "zh-CN";
 }
 
-if (languageSelect) languageSelect.value = currentLanguage;
 document.documentElement.lang = currentLanguage;
 canvas.dataset.language = currentLanguage;
+
+function updateMainMenuText() {
+  const text = MAIN_MENU_TEXT[currentLanguage] ?? MAIN_MENU_TEXT.en;
+  if (mainMenuEyebrow) mainMenuEyebrow.textContent = text.eyebrow;
+  if (mainMenuSubtitle) mainMenuSubtitle.textContent = text.subtitle;
+  if (mainMenuStartLabel) mainMenuStartLabel.textContent = text.start;
+  if (mainMenuStartHint) mainMenuStartHint.textContent = text.startHint;
+  if (mainMenuSettingsLabel) mainMenuSettingsLabel.textContent = text.settings;
+  if (mainMenuSettingsHint) mainMenuSettingsHint.textContent = text.settingsHint;
+  if (mainMenuSettingsTitle) mainMenuSettingsTitle.textContent = text.language;
+  if (mainMenuSettingsClose) mainMenuSettingsClose.setAttribute("aria-label", text.close);
+  mainMenuLanguageZh?.setAttribute("aria-pressed", String(currentLanguage === "zh-CN"));
+  mainMenuLanguageEn?.setAttribute("aria-pressed", String(currentLanguage === "en"));
+}
+
+function setMainMenuSettingsOpen(open) {
+  if (!mainMenuSettingsPanel || !mainMenuSettings) return;
+  const nextOpen = Boolean(open);
+  mainMenuSettingsPanel.toggleAttribute("hidden", !nextOpen);
+  mainMenuSettings.setAttribute("aria-expanded", String(nextOpen));
+  mainMenu?.classList.toggle("is-settings-open", nextOpen);
+  if (nextOpen) mainMenuSettingsClose?.focus();
+}
+
+function isMainMenuVisible() {
+  return Boolean(mainMenu && !mainMenu.hasAttribute("hidden") && !mainMenu.classList.contains("is-save-prompt"));
+}
+
+function setLanguage(nextLanguage) {
+  currentLanguage = nextLanguage === "en" ? "en" : "zh-CN";
+  document.documentElement.lang = currentLanguage;
+  canvas.dataset.language = currentLanguage;
+  updateMainMenuText();
+  if (controls) {
+    updateBuffCards(controls.getState());
+    updateDetectorHud();
+    renderInventoryBar();
+    updateActionButtonState();
+  }
+  if (world) {
+    syncLevelHud();
+    if (lastMetrics) updateItemInfo(lastMetrics);
+  }
+  if (exitOverlay && !exitOverlay.hasAttribute("hidden")) {
+    if (gameFailed) updateFailureRestartButton();
+    if (levelTransition) {
+      updateLevelTransitionOverlayText();
+    } else {
+      setExitOverlayTime();
+    }
+  }
+  if (isPaused) {
+    if (pauseTitle) pauseTitle.textContent = formatLocalizedStatus("pauseTitle");
+    if (pauseSubtitle) pauseSubtitle.textContent = formatLocalizedStatus("pauseSubtitle");
+    updatePauseOverlay();
+  }
+  try {
+    window.localStorage?.setItem(LANGUAGE_STORAGE_KEY, currentLanguage);
+  } catch {
+    // Language fallback is non-critical.
+  }
+}
+
+updateMainMenuText();
 
 function loadIntegerSet(key) {
   try {
@@ -1102,7 +1295,7 @@ function loadIntegerSet(key) {
     if (!raw) return new Set();
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((n) => Number.isInteger(n) && n >= 0 && n <= 7));
+    return new Set(parsed.filter((n) => Number.isInteger(n) && n >= 0 && n <= 8));
   } catch {
     return new Set();
   }
@@ -1143,14 +1336,29 @@ let pickedUpItems = loadStringSet(PICKED_UP_KEY);
 {
   const initialLevel = getInitialLevel();
   reachedLevels.add(initialLevel);
-  if (new URLSearchParams(window.location.search).has("level") && initialLevel > 0) {
-    for (let i = 0; i <= initialLevel; i += 1) reachedLevels.add(i);
-  }
   saveIntegerSet(REACHED_KEY, reachedLevels);
 }
 
 function getLocalizedText(collection, id) {
   return collection[currentLanguage]?.[id] ?? collection.en?.[id] ?? collection["zh-CN"]?.[id] ?? {};
+}
+
+function getInventoryItemLabel(id) {
+  const statusLabel = getLocalizedText(STATUS_TEXT, id);
+  if (typeof statusLabel === "string" && statusLabel) return statusLabel;
+
+  const decorativeText =
+    DECORATIVE_ITEM_DEFS[id]?.i18n?.[currentLanguage] ??
+    DECORATIVE_ITEM_DEFS[id]?.i18n?.en;
+  if (typeof decorativeText?.name === "string" && decorativeText.name) {
+    return decorativeText.name;
+  }
+
+  const worldItemText = getWorldItemDefinition(id)?.i18n?.[currentLanguage]
+    ?? getWorldItemDefinition(id)?.i18n?.en;
+  if (typeof worldItemText?.name === "string" && worldItemText.name) return worldItemText.name;
+
+  return typeof id === "string" && id ? id.toUpperCase() : "UNKNOWN ITEM";
 }
 
 function isTypingTarget(target) {
@@ -1216,6 +1424,45 @@ function removeInventory(id) {
   return true;
 }
 
+function dropEquippedItem() {
+  if (!world || !worldItems || exitComplete || gameFailed || levelTransition || isPaused) return false;
+  if (controls?.getState?.().isDrinking) return false;
+  const equipped = getEquipped();
+  const droppedState = equipped?.id === "flashlight"
+    ? { battery: flashlightBattery }
+    : equipped?.id === "detector"
+      ? { activeTimer: detectorActiveTimer, cooldownTimer: detectorCooldownTimer }
+      : null;
+  if (!equipped || !removeInventory(equipped.id)) return false;
+  const playerState = controls?.getPlayerState?.();
+  worldItems.drop(
+    equipped.id,
+    world.camera.position,
+    playerState?.yaw ?? world.camera.rotation.y,
+    droppedState,
+  );
+  if (equipped.id === "flashlight" && getInventoryCount("flashlight") <= 0) {
+    flashlightOwned = false;
+    flashlightOn = false;
+    flashlightBattery = 0;
+  }
+  if (equipped.id === "detector" && getInventoryCount("detector") <= 0) {
+    detectorOwned = false;
+    detectorActiveTimer = 0;
+    detectorCooldownTimer = 0;
+  }
+  const definition = DECORATIVE_ITEM_DEFS[equipped.id];
+  const embedded = definition?.i18n?.[currentLanguage] ?? definition?.i18n?.en;
+  const itemName = getInventoryItemLabel(equipped.id) || embedded?.name;
+  pickupFlashText = formatLocalizedStatus("itemDropped", { item: itemName });
+  pickupFlashUntil = clock.elapsedTime + 1.4;
+  renderInventoryBar();
+  updateFlashlightHud();
+  updateDetectorHud();
+  markDirty();
+  return true;
+}
+
 function cycleInventory(direction) {
   if (inventory.length === 0) {
     equippedIndex = -1;
@@ -1263,6 +1510,7 @@ function getCurrentExitDistance(metrics = lastMetrics) {
 
 function getExitDoorInteraction(metrics = lastMetrics) {
   if (!world?.targetPosition || exitComplete || gameFailed || levelTransition) return null;
+  if (world.exitMode === "fall" || world.exitMode === "network") return null;
   const distance = getCurrentExitDistance(metrics);
   if (!Number.isFinite(distance)) return null;
   const promptRadius = exitDoorOpen ? EXIT_DOOR_INTERACT_RADIUS * 1.35 : EXIT_DOOR_INTERACT_RADIUS;
@@ -1278,11 +1526,17 @@ function getExitDoorInteraction(metrics = lastMetrics) {
 }
 
 function shouldEnterExit(metrics = lastMetrics) {
+  if (world?.exitMode === "fall" || world?.exitMode === "network") return Boolean(metrics?.exitReached);
   return exitDoorOpen && getCurrentExitDistance(metrics) <= EXIT_ELEVATOR_ENTER_RADIUS;
 }
 
 function withExitDoorMetrics(metrics) {
   if (!metrics) return metrics;
+  if (world?.exitMode === "fall" || world?.exitMode === "network") {
+    canvas.dataset.exitDoorOpen = "false";
+    canvas.dataset.exitDoorReady = "false";
+    return { ...metrics, rawExitReached: metrics.exitReached };
+  }
   const exitInteraction = getExitDoorInteraction(metrics);
   const readyToEnter = shouldEnterExit(metrics);
   canvas.dataset.exitDoorOpen = String(exitDoorOpen);
@@ -1347,8 +1601,9 @@ function isLevelPickerOpen() {
 function renderLevelPickerMenu() {
   if (!levelPickerMenu || !world) return;
   const fragment = document.createDocumentFragment();
-  for (let lv = 0; lv <= 7; lv += 1) {
+  for (let lv = 0; lv <= 8; lv += 1) {
     const state = getLevelPickerState(lv);
+    if (!state.reached) continue;
     const option = document.createElement("button");
     option.type = "button";
     option.className = "level-picker__option";
@@ -1356,7 +1611,7 @@ function renderLevelPickerMenu() {
     option.dataset.reached = state.reached ? "true" : "false";
     option.dataset.completed = state.completed ? "true" : "false";
     option.dataset.current = lv === world.level ? "true" : "false";
-    option.disabled = !state.reached;
+    option.disabled = true;
     option.title = state.info.levelName;
     option.setAttribute("role", "option");
     option.setAttribute("aria-selected", lv === world.level ? "true" : "false");
@@ -1371,9 +1626,9 @@ function renderLevelPickerMenu() {
 
     const status = document.createElement("span");
     status.className = "level-picker__option-status";
-    if (state.completed) status.textContent = formatLocalizedStatus("levelCleared");
-    else if (!state.reached) status.textContent = formatLocalizedStatus("levelLocked");
-    else status.textContent = "";
+    status.textContent = lv === world.level
+      ? formatLocalizedStatus("levelCurrent")
+      : formatLocalizedStatus("levelVisited");
 
     option.append(label, status);
     fragment.append(option);
@@ -1556,8 +1811,6 @@ function writeSaveSnapshot() {
     superAlmondWaterTimer: playerState.superAlmondWaterTimer,
     health: playerState.health,
     healthMax: playerState.healthMax,
-    houndSlowTimer: playerState.houndSlowTimer,
-    damageSlowCleanseTimer: playerState.damageSlowCleanseTimer,
     healthRegenTimer: playerState.healthRegenTimer,
     healthRegenRemaining: playerState.healthRegenRemaining,
     healthRegenRate: playerState.healthRegenRate,
@@ -1584,6 +1837,7 @@ function writeSaveSnapshot() {
     interactions: snapshot?.interactions ? { [level]: snapshot.interactions } : {},
     objectives: snapshot?.objectives ? { [level]: snapshot.objectives } : {},
     entities: snapshot?.entities ? { [level]: snapshot.entities } : {},
+    worldItems: { [level]: worldItems?.getState?.() ?? [] },
   };
   return writeSave(payload);
 }
@@ -1612,10 +1866,16 @@ function loadLevel(level, { updateUrl = false } = {}) {
   const initialStateForLevel = buildLevelInitialState(level, save);
 
   world = createBackroomsScene(level, { initialState: initialStateForLevel });
+  worldItems = createWorldItemManager(
+    world.scene,
+    world.decorativeItemSpawns ?? [],
+    save?.worldItems?.[level] ?? null,
+  );
   attachFlashlightToCamera(world.camera);
   controls.setWorld({
     camera: world.camera,
     isWalkable: world.isWalkable,
+    getFloorHeight: world.getFloorHeight,
     spawn: world.spawn,
   });
   if (save && save.player && save.player.level === level) {
@@ -1640,6 +1900,11 @@ function bootstrapWorld(level, save) {
   applySaveToRuntime(save);
   const initialState = buildLevelInitialState(level, save);
   world = createBackroomsScene(level, { initialState });
+  worldItems = createWorldItemManager(
+    world.scene,
+    world.decorativeItemSpawns ?? [],
+    save?.worldItems?.[level] ?? null,
+  );
   attachFlashlightToCamera(world.camera);
   controls = new FirstPersonControls({
     camera: world.camera,
@@ -1647,6 +1912,7 @@ function bootstrapWorld(level, save) {
     joystick,
     jumpButton,
     isWalkable: world.isWalkable,
+    getFloorHeight: world.getFloorHeight,
     spawn: world.spawn,
   });
   controls.notifyDrinkComplete = handleDrinkComplete;
@@ -1667,10 +1933,55 @@ function bootstrapWorld(level, save) {
   resize();
   renderInventoryBar();
   gameStarted = true;
+  scheduleTutorial();
   if (!animationFrameStarted) {
     animationFrameStarted = true;
     animate();
   }
+}
+
+function showMainMenu() {
+  hideGameplayUi();
+  loadingComplete = false;
+  mainMenu?.removeAttribute("hidden");
+  mainMenu?.classList.remove("is-leaving", "is-save-prompt");
+  setMainMenuSettingsOpen(false);
+  updateMainMenuText();
+}
+
+function leaveMainMenu() {
+  setMainMenuSettingsOpen(false);
+  mainMenu?.classList.remove("is-save-prompt");
+  mainMenu?.classList.add("is-leaving");
+  window.setTimeout(() => {
+    if (mainMenu?.classList.contains("is-leaving")) mainMenu.setAttribute("hidden", "");
+  }, 300);
+}
+
+function beginGameSession(level, save) {
+  leaveMainMenu();
+  showGameplayUi();
+  bootstrapWorld(level, save);
+}
+
+function handleMainMenuStart() {
+  startAudioOnce();
+  let save = null;
+  try {
+    save = hasSavedGame() ? loadSave() : null;
+  } catch {
+    save = null;
+  }
+
+  if (save) {
+    pendingSaveForPrompt = save;
+    mainMenu?.classList.add("is-save-prompt");
+    setMainMenuSettingsOpen(false);
+    showSavePrompt(save);
+    return;
+  }
+
+  beginGameSession(getInitialLevel(), null);
 }
 
 function setExitOverlayText(title, subtitle) {
@@ -1722,6 +2033,27 @@ function setExitOverlayFailureState(failed) {
 function updateTimerReadout() {
   if (!timerReadoutValue) return;
   timerReadoutValue.textContent = formatDuration(runTime);
+}
+
+function updatePauseOverlay() {
+  if (pauseTitle) pauseTitle.textContent = formatLocalizedStatus("pauseTitle");
+  if (pauseSubtitle) pauseSubtitle.textContent = formatLocalizedStatus("pauseSubtitle");
+  if (pauseTimeLabel) pauseTimeLabel.textContent = formatLocalizedStatus("pauseElapsedLabel");
+  if (pauseTimeReadout) pauseTimeReadout.textContent = formatDuration(runTime);
+  if (pauseSettingsLabel) pauseSettingsLabel.textContent = formatLocalizedStatus("pauseSettingsLabel");
+  if (pauseSettingsHint) pauseSettingsHint.textContent = formatLocalizedStatus("pauseSettingsHint");
+  if (pauseSettingsTitle) pauseSettingsTitle.textContent = formatLocalizedStatus("pauseSettingsTitle");
+  if (pauseSettingsClose) pauseSettingsClose.setAttribute("aria-label", formatLocalizedStatus("pauseSettingsClose"));
+  pauseLanguageZh?.setAttribute("aria-pressed", String(currentLanguage === "zh-CN"));
+  pauseLanguageEn?.setAttribute("aria-pressed", String(currentLanguage === "en"));
+}
+
+function setPauseSettingsOpen(open) {
+  const nextOpen = Boolean(open) && isPaused;
+  pauseSettingsPanel?.toggleAttribute("hidden", !nextOpen);
+  pauseSettingsButton?.setAttribute("aria-expanded", String(nextOpen));
+  pauseOverlay?.classList.toggle("is-settings-open", nextOpen);
+  if (nextOpen) pauseSettingsClose?.focus();
 }
 
 function showExitOverlay(title, subtitle, { showTime = true, variantClass = "", failed = false } = {}) {
@@ -1865,37 +2197,6 @@ document.addEventListener("pointerdown", (event) => {
   setLevelPickerOpen(false);
 });
 
-languageSelect?.addEventListener("change", () => {
-  const nextLanguage = languageSelect.value === "en" ? "en" : "zh-CN";
-  languageSelect.blur();
-  currentLanguage = nextLanguage;
-  document.documentElement.lang = nextLanguage;
-  canvas.dataset.language = nextLanguage;
-  updateBuffCards(controls.getState());
-  updateDetectorHud();
-  renderInventoryBar();
-  updateActionButtonState();
-  syncLevelHud();
-  if (lastMetrics) updateItemInfo(lastMetrics);
-  if (exitOverlay && !exitOverlay.hasAttribute("hidden")) {
-    if (gameFailed) updateFailureRestartButton();
-    if (levelTransition) {
-      updateLevelTransitionOverlayText();
-    } else {
-      setExitOverlayTime();
-    }
-  }
-  if (isPaused) {
-    if (pauseTitle) pauseTitle.textContent = formatLocalizedStatus("pauseTitle");
-    if (pauseSubtitle) pauseSubtitle.textContent = formatLocalizedStatus("pauseSubtitle");
-  }
-  try {
-    window.localStorage?.setItem(LANGUAGE_STORAGE_KEY, nextLanguage);
-  } catch {
-    // Language fallback is non-critical.
-  }
-});
-
 function resize() {
   if (!world) return;
   const width = window.innerWidth;
@@ -1989,17 +2290,12 @@ function updateHealthHud(controlState) {
     healthReadout.textContent = `${Math.round(health)}/${Math.round(healthMax)}`;
   }
   if (healthMeter) {
-    const slow = (controlState.houndSlowRemaining ?? 0) > 0;
     const regenerating = Boolean(controlState.healthRegenerating);
-    healthMeter.dataset.state = ratio <= 0.24 ? "low" : regenerating ? "regenerating" : slow ? "slowed" : "ready";
+    healthMeter.dataset.state = ratio <= 0.24 ? "low" : regenerating ? "regenerating" : "ready";
   }
   canvas.dataset.health = String(Math.round(health));
   canvas.dataset.healthMax = String(Math.round(healthMax));
   canvas.dataset.healthRatio = ratio.toFixed(3);
-  canvas.dataset.houndSlow = String((controlState.houndSlowRemaining ?? 0) > 0);
-  canvas.dataset.houndSlowRemaining = (controlState.houndSlowRemaining ?? 0).toFixed(1);
-  canvas.dataset.damageSlowCleanse = String((controlState.damageSlowCleanseRemaining ?? 0) > 0);
-  canvas.dataset.damageSlowCleanseRemaining = (controlState.damageSlowCleanseRemaining ?? 0).toFixed(1);
   canvas.dataset.healthRegenerating = String(Boolean(controlState.healthRegenerating));
   canvas.dataset.healthRegenRemaining = (controlState.healthRegenRemaining ?? 0).toFixed(1);
   canvas.dataset.silenceLiquidActive = String(Boolean(controlState.silenceLiquidActive));
@@ -2173,11 +2469,18 @@ function formatCompassDirection(angle) {
 }
 
 function updateCompassHud(metrics) {
-  const isEquipped = getEquipped()?.id === "compass";
+  const equipped = getEquipped();
+  const equippedKeyTarget = getLevelKeyTarget(equipped?.id);
+  const isLevelKeyEquipped = world?.level === 8 && equippedKeyTarget !== null;
+  const isEquipped = equipped?.id === "compass" || isLevelKeyEquipped;
   const owned = getInventoryCount("compass") > 0;
-  if (compassMeter) compassMeter.hidden = !owned || !isEquipped;
+  const targetPosition = isLevelKeyEquipped
+    ? world?.getLevelKeyTargetPosition?.(equippedKeyTarget)
+    : world?.targetPosition;
+  if (compassMeter) compassMeter.hidden = !isEquipped || (!owned && !isLevelKeyEquipped);
   canvas.dataset.compassOwned = String(owned);
-  if (!owned || !isEquipped || !world?.targetPosition || !world?.camera) {
+  canvas.dataset.levelKeyTarget = isLevelKeyEquipped ? String(equippedKeyTarget) : "";
+  if ((!owned && !isLevelKeyEquipped) || !isEquipped || !targetPosition || !world?.camera) {
     canvas.dataset.compassBearing = "";
     canvas.dataset.compassWorldBearing = "";
     canvas.dataset.compassDirection = "";
@@ -2186,7 +2489,7 @@ function updateCompassHud(metrics) {
     return;
   }
 
-  compassToExit.subVectors(world.targetPosition, world.camera.position);
+  compassToExit.subVectors(targetPosition, world.camera.position);
   compassToExit.y = 0;
   const targetYaw = Math.atan2(-compassToExit.x, -compassToExit.z);
   const playerState = controls?.getPlayerState?.();
@@ -2195,7 +2498,9 @@ function updateCompassHud(metrics) {
   const direction = formatCompassDirection(relative);
 
   if (compassArrow) compassArrow.style.transform = `rotate(${relative.toFixed(4)}rad)`;
-  if (compassReadout) compassReadout.textContent = direction;
+  if (compassReadout) {
+    compassReadout.textContent = isLevelKeyEquipped ? `L${equippedKeyTarget} · ${direction}` : direction;
+  }
   canvas.dataset.compassBearing = String(Math.round((relative * 180) / Math.PI));
   canvas.dataset.compassWorldBearing = String(Math.round((targetYaw * 180) / Math.PI));
   canvas.dataset.compassDirection = direction;
@@ -2328,8 +2633,7 @@ function createInventorySlot(entry, isEquipped) {
   if (isEquipped) {
     const name = document.createElement("span");
     name.className = "inventory-slot__name";
-    const localized = getLocalizedText(STATUS_TEXT, entry.id);
-    name.textContent = localized || entry.id;
+    name.textContent = getInventoryItemLabel(entry.id);
     slot.append(name);
   }
 
@@ -2356,7 +2660,7 @@ function scrollEquippedIntoView(container, equippedIndex) {
 function updateActionButtonState() {
   if (!actionButton) return;
   const equipped = getEquipped();
-  const hasUsable = Boolean(equipped && equipped.id !== "compass");
+  const hasUsable = Boolean(equipped && equipped.id !== "compass" && !isLevelKeyId(equipped.id));
   actionButton.classList.toggle("is-visible", hasUsable);
   actionButton.disabled = !hasUsable;
 }
@@ -2398,9 +2702,8 @@ function setPauseState(next, { fromUnlock = false } = {}) {
     pauseOverlay.classList.toggle("is-visible", isPaused);
     if (isPaused) pauseOverlay.removeAttribute("hidden");
   }
-  if (pauseTitle) pauseTitle.textContent = formatLocalizedStatus("pauseTitle");
-  if (pauseSubtitle) pauseSubtitle.textContent = formatLocalizedStatus("pauseSubtitle");
   if (isPaused) {
+    updatePauseOverlay();
     if (pauseResetLabel && !pauseResetArmed) {
       pauseResetLabel.textContent = formatLocalizedStatus("pauseResetLabel");
     }
@@ -2423,6 +2726,7 @@ function setPauseState(next, { fromUnlock = false } = {}) {
     }
     ambientHum.suspend();
   } else {
+    setPauseSettingsOpen(false);
     disarmPauseReset();
     clock.getDelta();
     ambientHum.resume();
@@ -2490,7 +2794,6 @@ function resetAllProgress() {
   completedLevels = new Set();
   if (controls) {
     controls.health = controls.healthMax;
-    controls.houndSlowTimer = 0;
   }
   playerHealthCooldown = 0;
   window.location.replace(window.location.pathname);
@@ -2699,14 +3002,15 @@ function findPickupableById(metrics, id) {
 
 function getPickupItemInfo(candidate) {
   if (!candidate?.id) return null;
+  const embedded = candidate.i18n?.[currentLanguage] ?? candidate.i18n?.en ?? {};
   const text = getLocalizedText(ITEM_TEXT, candidate.id);
-  if (!text) return null;
+  if (!text?.name && !embedded.name) return null;
   return {
     id: candidate.id,
     type: "item",
-    name: text.name,
-    effect: text.effect,
-    action: text.action,
+    name: text.name ?? embedded.name,
+    effect: text.effect ?? embedded.effect,
+    action: text.action ?? embedded.action,
     distance: candidate.distance,
   };
 }
@@ -2720,7 +3024,10 @@ function updateItemInfo(metrics) {
   let canPickup = false;
   let canInteract = false;
 
-  if (focusItem) {
+  if (pickupable) {
+    item = getPickupItemInfo(pickupable);
+    canPickup = Boolean(item);
+  } else if (focusItem) {
     item = focusItem;
     canPickup = Boolean(findPickupableById(metrics, focusItem.id));
   } else if (focusInteraction) {
@@ -2728,9 +3035,6 @@ function updateItemInfo(metrics) {
     canInteract = Boolean(focusInteraction.available);
   } else if (focusEntity) {
     item = focusEntity;
-  } else if (pickupable) {
-    item = getPickupItemInfo(pickupable);
-    canPickup = Boolean(item);
   }
 
   const hasFocus = Boolean(item);
@@ -2744,10 +3048,11 @@ function updateItemInfo(metrics) {
   if (hasFocus) {
     const collection =
       item.type === "entity" ? ENTITY_TEXT : item.type === "interaction" ? INTERACTION_TEXT : ITEM_TEXT;
-    const localized = getLocalizedText(collection, item.id) ?? item;
-    if (itemInfoName) itemInfoName.textContent = localized.name ?? item.name;
-    if (itemInfoEffect) itemInfoEffect.textContent = localized.effect ?? item.effect;
-    if (itemInfoAction) itemInfoAction.textContent = localized.action ?? item.action;
+    const embedded = item.i18n?.[currentLanguage] ?? item.i18n?.en ?? item;
+    const localized = getLocalizedText(collection, item.id) ?? {};
+    if (itemInfoName) itemInfoName.textContent = localized.name ?? embedded.name ?? item.name;
+    if (itemInfoEffect) itemInfoEffect.textContent = localized.effect ?? embedded.effect ?? item.effect;
+    if (itemInfoAction) itemInfoAction.textContent = localized.action ?? embedded.action ?? item.action;
   }
   canvas.dataset.focusItem = item?.type === "item" ? item.id : "";
   canvas.dataset.focusEntity = metrics.focusEntity?.id ?? "";
@@ -2780,6 +3085,41 @@ function flashPickupHint(textKey, durationMs = 1100) {
 
 function usePickup() {
   if (!world || exitComplete || gameFailed || levelTransition || isPaused) return;
+  const looseTarget = worldItems?.getPickupTarget(world.camera.position);
+  if (looseTarget) {
+    const result = worldItems.tryPickup(world.camera.position);
+    if (result?.pickedUp) {
+      let added = false;
+      if (result.itemId === "flashlight") {
+        acquireFlashlight(1);
+        if (Number.isFinite(result.data?.battery)) {
+          flashlightBattery = Math.max(0, Math.min(FLASHLIGHT_BATTERY_MAX, result.data.battery));
+        }
+        added = true;
+      } else if (result.itemId === "detector") {
+        acquireDetector(1);
+        if (Number.isFinite(result.data?.activeTimer)) detectorActiveTimer = Math.max(0, result.data.activeTimer);
+        if (Number.isFinite(result.data?.cooldownTimer)) detectorCooldownTimer = Math.max(0, result.data.cooldownTimer);
+        added = true;
+      } else if (result.itemId === "compass") {
+        acquireCompass(1);
+        added = true;
+      } else if (result.itemId === "silence-liquid") {
+        acquireSilenceLiquid(1);
+        added = true;
+      } else {
+        added = addInventory(result.itemId);
+      }
+      if (!added) return;
+      const definition = getWorldItemDefinition(result.itemId);
+      const localized = definition?.i18n?.[currentLanguage] ?? definition?.i18n?.en;
+      pickupFlashText = localized?.name ?? result.itemId.toUpperCase();
+      pickupFlashUntil = clock.elapsedTime + 1.5;
+      renderInventoryBar();
+      markDirty();
+      return;
+    }
+  }
   const liveTarget = world.getPickupTarget
     ? world.getPickupTarget(world.camera.position)
     : findNearestPickupable(lastMetrics);
@@ -2797,15 +3137,31 @@ function usePickup() {
   if (!pickup?.pickedUp) {
     if (openExitDoor()) return;
     if (lastMetrics?.focusInteraction?.available) {
-      const interaction = world.interact?.(world.camera.position);
+      const interaction = world.interact?.(world.camera.position, {
+        hasLevelKey: (targetLevel) => getLevelKeyTarget(getEquipped()?.id) === targetLevel,
+        consumeLevelKey: (targetLevel) => {
+          const keyId = `level-key-${targetLevel}`;
+          if (getEquipped()?.id !== keyId || !removeInventory(keyId)) return false;
+          renderInventoryBar();
+          markDirty();
+          return true;
+        },
+      });
       if (interaction?.interacted) {
         const localized = getLocalizedText(INTERACTION_TEXT, interaction.id);
-        pickupFlashText = localized.response ?? localized.name ?? "INTERACTION";
+        const embedded = interaction.i18n?.[currentLanguage] ?? interaction.i18n?.en ?? {};
+        pickupFlashText = localized.response ?? localized.name ?? embedded.response ?? embedded.name ?? "INTERACTION";
         pickupFlashUntil = clock.elapsedTime + 1.9;
         useButton?.classList.add("is-active");
         window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
         canvas.dataset.lastInteraction = interaction.id;
         canvas.dataset.lastInteractionCount = String(interaction.count ?? 1);
+        return;
+      }
+      if (interaction?.locked) {
+        const embedded = interaction.i18n?.[currentLanguage] ?? interaction.i18n?.en ?? {};
+        pickupFlashText = embedded.response ?? embedded.effect ?? "LEVEL KEY REQUIRED";
+        pickupFlashUntil = clock.elapsedTime + 1.7;
         return;
       }
     }
@@ -2953,6 +3309,8 @@ function updateHud(metrics, controlState, elapsed) {
   statusText.textContent =
     elapsed < pickupFlashUntil
       ? pickupFlashText
+      : world?.exitMode === "fall" && exitDistance <= EXIT_DOOR_INTERACT_RADIUS * 1.35
+        ? formatLocalizedStatus("exitFallNearby")
       : exitDoorOpen && exitDistance <= EXIT_DOOR_INTERACT_RADIUS
         ? formatLocalizedStatus("exitDoorReady")
       : hudMetrics.focusInteraction?.id === "exit-elevator-door"
@@ -3010,11 +3368,6 @@ function applyEntityContactDamage(delta, metrics) {
   else if (id.includes("hound")) damage = HOUND_DAMAGE;
   else damage = BACTERIA_DAMAGE;
   const killed = controls.applyDamage(damage);
-  const slowCleanseActive = (controls.getState?.().damageSlowCleanseRemaining ?? 0) > 0;
-  if (id.includes("hound") && !slowCleanseActive) {
-    controls.houndSlowTimer = HOUND_SLOW_DURATION;
-    controls.syncCameraState?.();
-  }
   triggerDamageFlash();
   playerHealthCooldown = DAMAGE_COOLDOWN_S;
   markDirty();
@@ -3061,19 +3414,31 @@ function animate() {
     pickupFlashUntil = clock.elapsedTime + 1.2;
     lastDrinkCancelledUntil = clock.elapsedTime + 1.4;
   }
-  const metrics = world.update(delta, elapsed, world.camera.position, {
+  let metrics = world.update(delta, elapsed, world.camera.position, {
     entityRepelActive: Boolean(controlState.silenceLiquidActive),
     repelRadius: SILENCE_LIQUID_REPEL_RADIUS,
     repelSpeedMultiplier: SILENCE_LIQUID_REPEL_SPEED_MULTIPLIER,
+    equippedLevelKey: getLevelKeyTarget(getEquipped()?.id),
   });
+  const looseItems = worldItems?.update(world.camera.position) ?? [];
+  const looseItemFocus = worldItems?.inspect(world.camera) ?? null;
+  metrics = {
+    ...metrics,
+    pickups: [...(metrics.pickups ?? []), ...looseItems],
+    focusItem:
+      looseItemFocus && (!metrics.focusItem || looseItemFocus.distance < metrics.focusItem.distance)
+        ? looseItemFocus
+        : metrics.focusItem,
+  };
   lastMetrics = metrics;
   canvas.dataset.viewModel = world.viewModelName ?? "NONE";
   updateFlashlight(delta);
   updateDetector(delta, metrics);
   applyEntityContactDamage(delta, metrics);
   if (shouldEnterExit(metrics) && !gameFailed && !exitComplete && !levelTransition) {
-    if (world.nextLevel !== null && world.nextLevel !== undefined) {
-      beginLevelTransition(world.nextLevel);
+    const nextLevel = metrics.nextLevel ?? world.nextLevel;
+    if (nextLevel !== null && nextLevel !== undefined) {
+      beginLevelTransition(nextLevel);
     } else {
       expireCompassAtExit();
       exitComplete = true;
@@ -3116,6 +3481,13 @@ function onUseKeyDown(event) {
     }
     return;
   }
+  if (isMainMenuVisible()) {
+    if (event.code === "Escape") {
+      event.preventDefault();
+      setMainMenuSettingsOpen(false);
+    }
+    return;
+  }
   if (gameFailed) {
     if (event.code === "Escape") event.preventDefault();
     return;
@@ -3131,6 +3503,11 @@ function onUseKeyDown(event) {
   if (event.code === "KeyF") {
     event.preventDefault();
     usePickup();
+    return;
+  }
+  if (event.code === "KeyQ") {
+    event.preventDefault();
+    if (!event.repeat) dropEquippedItem();
     return;
   }
   if (event.code === "KeyE") {
@@ -3302,6 +3679,24 @@ pauseTutorialButton?.addEventListener("pointerdown", (event) => {
   event.stopPropagation();
   handlePauseTutorial();
 });
+pauseSettingsButton?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  setPauseSettingsOpen(pauseSettingsPanel?.hasAttribute("hidden"));
+});
+pauseSettingsClose?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  setPauseSettingsOpen(false);
+  pauseSettingsButton?.focus();
+});
+[pauseLanguageZh, pauseLanguageEn].forEach((button) => {
+  button?.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setLanguage(button.dataset.language);
+  });
+});
 pauseResetButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
@@ -3412,8 +3807,7 @@ function populateSavePrompt(save) {
     } else {
       const counts = save.inventory
         .map((entry) => {
-          const localized = getLocalizedText(STATUS_TEXT, entry.id);
-          const name = localized || entry.id;
+          const name = getInventoryItemLabel(entry.id);
           return `${name} ×${entry.count}`;
         })
         .join(currentLanguage === "en" ? " · " : " · ");
@@ -3547,7 +3941,7 @@ function showSavePromptLevels() {
 function populateSavePromptLevels() {
   if (!savePromptLevelsList) return;
   savePromptLevelsList.replaceChildren();
-  for (let lv = 0; lv <= 7; lv += 1) {
+  for (let lv = 0; lv <= 8; lv += 1) {
     const info = getBackroomsLevelInfo(lv);
     const reached = reachedLevels.has(lv);
     const li = document.createElement("li");
@@ -3597,7 +3991,7 @@ function handleSavePromptContinue(save) {
   // honour the URL — the player asked for that level. Save state (inventory,
   // flashlight, detector) is still applied so they keep their items.
   const targetLevel = urlLevel > 0 && urlLevel !== saveLevel ? urlLevel : saveLevel;
-  bootstrapWorld(targetLevel, save);
+  beginGameSession(targetLevel, save);
 }
 
 function handleSavePromptRestart(save) {
@@ -3609,11 +4003,11 @@ function handleSavePromptRestart(save) {
     // and resume the save at its actual level. URL is rewritten so refreshes
     // go to the same place.
     updateLevelUrl(saveLevel);
-    bootstrapWorld(saveLevel, save);
+    beginGameSession(saveLevel, save);
     return;
   }
   clearSave();
-  bootstrapWorld(getInitialLevel(), null);
+  beginGameSession(getInitialLevel(), null);
 }
 
 function handleSavePromptJumpToLevel(targetLevel, save) {
@@ -3625,7 +4019,7 @@ function handleSavePromptJumpToLevel(targetLevel, save) {
   reachedLevels.add(targetLevel);
   saveIntegerSet(REACHED_KEY, reachedLevels);
   updateLevelUrl(targetLevel);
-  bootstrapWorld(targetLevel, save);
+  beginGameSession(targetLevel, save);
 }
 
 savePromptContinue?.addEventListener("pointerdown", (event) => {
@@ -3662,22 +4056,36 @@ savePromptOverlay?.addEventListener("pointerdown", (event) => {
   }
 });
 
+mainMenuStart?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  handleMainMenuStart();
+});
+
+mainMenuSettings?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  setMainMenuSettingsOpen(mainMenuSettingsPanel?.hasAttribute("hidden"));
+});
+
+mainMenuSettingsClose?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  setMainMenuSettingsOpen(false);
+  mainMenuSettings?.focus();
+});
+
+[mainMenuLanguageZh, mainMenuLanguageEn].forEach((button) => {
+  button?.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setLanguage(button.dataset.language);
+  });
+});
+
 let pendingSaveForPrompt = null;
 
-const initialSave = (() => {
-  try {
-    return hasSavedGame() ? loadSave() : null;
-  } catch {
-    return null;
-  }
-})();
-
-if (initialSave) {
-  pendingSaveForPrompt = initialSave;
-  showSavePrompt(initialSave);
-} else {
-  bootstrapWorld(getInitialLevel(), null);
-}
+showMainMenu();
 
 window.setInterval(() => {
   if (!isResettingProgress && world && !gameFailed) {
@@ -3713,9 +4121,10 @@ if (typeof window !== "undefined") {
   };
 }
 
-// Show tutorial on first launch (after a short delay so loading overlay has time to settle)
-window.setTimeout(() => {
-  if (!gameStarted || isPaused || exitComplete) return;
+// Show tutorial after a new session has had time to finish loading.
+function scheduleTutorial() {
+  window.setTimeout(() => {
+    if (!gameStarted || isPaused || exitComplete) return;
   let seen = false;
   try {
     seen = window.localStorage?.getItem(TUTORIAL_SEEN_KEY) === "true";
@@ -3723,4 +4132,5 @@ window.setTimeout(() => {
     seen = false;
   }
   if (!seen) showTutorial();
-}, 600);
+  }, 600);
+}

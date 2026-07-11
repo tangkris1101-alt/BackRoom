@@ -1,4 +1,5 @@
 # External Model Assets
 
-- `gloved-hand-j-toastie.glb` and `gloved-hand-j-toastie.glb.b64`: "Gloved Hand" by J-Toastie, downloaded from Poly Pizza. Licensed under Creative Commons Attribution 3.0.
-  Source: https://poly.pizza/m/MTB4egc4Vh
+- `fps-arms-para.fbx`: "fps arms (rigged only)" by para, downloaded from OpenGameArt. Licensed under CC0.
+  Source: https://opengameart.org/content/fps-arms-rigged-only
+- `fps-arm-para-baked.bin` and `fps-arm-para-baked.bin.b64`: generated from `fps-arms-para.fbx` with `npm run bake:arms`. The game runtime imports the baked base64 file only, keeping the full FBX parser out of the shipped scene.

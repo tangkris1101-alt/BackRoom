@@ -16,14 +16,22 @@ import {
   createLevelZeroCarpetTexture,
   createLevelZeroCeilingTexture,
 } from "./textures.js";
-import { createLights, addExitSign, addMoodZones, collectWallTransforms } from "./world.js";
+import {
+  createLights,
+  addExitSign,
+  addExitHole,
+  addMoodZones,
+  collectWallTransforms,
+  createFloorGeometryWithHole,
+} from "./world.js";
 import {
   cellCenter,
   isOpenCell,
   worldToCell,
   START_CELL,
   EXIT_CELL,
-  EXIT_TRIGGER_RADIUS,
+  EXIT_HOLE_RADIUS,
+  EXIT_FALL_TRIGGER_Y,
   COLS,
   ROWS,
 } from "./layout.js";
@@ -93,7 +101,12 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   ];
 
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(COLS * CELL_SIZE, ROWS * CELL_SIZE),
+    createFloorGeometryWithHole(
+      COLS * CELL_SIZE,
+      ROWS * CELL_SIZE,
+      exitPosition,
+      EXIT_HOLE_RADIUS,
+    ),
     floorMaterial,
   );
   floor.rotation.x = -Math.PI / 2;
@@ -133,6 +146,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     dimBelow: 0.5,
     normalAbove: 0.66,
   });
+  addExitHole(scene, exitPosition, EXIT_HOLE_RADIUS);
   addExitSign(scene, exitPosition);
   addMoodZones(scene);
   const almondWater = createAlmondWaterPickup(scene, {
@@ -194,6 +208,11 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     });
   }
 
+  function getFloorHeight(x, z) {
+    const exitDistance = Math.hypot(x - exitPosition.x, z - exitPosition.z);
+    return exitDistance < EXIT_HOLE_RADIUS - 0.12 ? null : 0;
+  }
+
   function update(delta, elapsed, playerPosition) {
     let lightTotal = 0;
     fixtures.forEach((fixture) => {
@@ -210,7 +229,10 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       playerPosition.x - exitPosition.x,
       playerPosition.z - exitPosition.z,
     );
-    if (exitDistance < EXIT_TRIGGER_RADIUS) {
+    const fallingIntoExit =
+      exitDistance < EXIT_HOLE_RADIUS - 0.06 &&
+      playerPosition.y < EXIT_FALL_TRIGGER_Y;
+    if (fallingIntoExit) {
       exitReached = true;
     }
     scene.fog.density = 0.0095 + (1 - flicker) * 0.004;
@@ -224,6 +246,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     return {
       exitDistance: Math.round(exitDistance),
       exitReached,
+      fallingIntoExit,
       flicker,
       lightState: updateLightState(delta, flicker),
       focusItem: getFocusedItem(
@@ -248,11 +271,17 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       return getViewModelName(viewModel);
     },
     nextLevel: 1,
+    exitMode: "fall",
     scene,
     camera,
     spawn,
     targetPosition: exitPosition,
     isWalkable,
+    getFloorHeight,
+    decorativeItemSpawns: [
+      { id: "rusted-key", position: { ...cellCenter(3, 18), y: 0.08 }, rotation: 0.6, tiltZ: 0.05 },
+      { id: "crumpled-note", position: { ...cellCenter(10, 21), y: 0.07 }, rotation: -0.35, tiltX: 0.04 },
+    ],
     update,
     getPickupTarget: (playerPosition) =>
       getPickupTarget(playerPosition, superAlmondWater, compass, flashlight, almondWater),

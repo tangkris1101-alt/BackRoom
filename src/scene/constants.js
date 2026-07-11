@@ -56,6 +56,7 @@ const LEVEL_INFOS = new Map([
   [5, { level: 5, levelLabel: "LEVEL 5", levelName: "TERROR HOTEL" }],
   [6, { level: 6, levelLabel: "LEVEL 6", levelName: "LIGHTS OUT" }],
   [7, { level: 7, levelLabel: "LEVEL 7", levelName: "THALASSOPHOBIA" }],
+  [8, { level: 8, levelLabel: "THE HUB", levelName: "NEXUS TUNNELS" }],
 ]);
 
 export function getBackroomsLevelInfo(level = 0) {
