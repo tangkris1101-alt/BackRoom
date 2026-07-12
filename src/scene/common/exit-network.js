@@ -145,6 +145,12 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
     route.model = createRouteModel(scene, route);
     return route;
   });
+  scene.userData.exitRoutes = routes.map((route) => ({
+    id: route.id,
+    label: route.label ?? route.targetLabel ?? "EXIT",
+    targetLabel: route.targetLabel ?? "EXIT",
+    position: { x: route.position.x, z: route.position.z },
+  }));
 
   function updateModel(route, delta) {
     const target = route.opened ? 1 : 0;

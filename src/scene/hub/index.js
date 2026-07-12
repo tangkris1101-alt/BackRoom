@@ -191,7 +191,7 @@ export function createHubScene({ initialState = null } = {}) {
       pickups: [],
       entities: [],
       focusInteraction: exitNetwork.inspect(playerPosition, {
-        hasLevelKey: (targetLevel) => equippedLevelKey === targetLevel,
+        hasLevelKey: (targetLevel) => Boolean(effects.debugBypassLevelKeys) || equippedLevelKey === targetLevel,
       }),
       statusText: "THE HUB",
     };
@@ -218,6 +218,15 @@ export function createHubScene({ initialState = null } = {}) {
     decorativeItemSpawns: [
       { id: "concrete-chip", position: { x: 1.4, y: 0.24, z: 25 }, rotation: 0.4, tiltX: 0.1 },
     ],
+    worldItemOptions: {
+      minimumLevelKeys: 1,
+      levelKeyAnchors: [
+        { position: { x: -7.6, z: -41 } },
+        { position: { x: 6.9, z: -6 } },
+        { position: { x: -6.7, z: 38 } },
+        { position: { x: 7.3, z: 56 } },
+      ],
+    },
     getSnapshot() {
       return {
         pickups: {},

@@ -363,6 +363,10 @@ export function createLevelSevenScene({ initialState = null } = {}) {
   );
 
   scene.add(new THREE.HemisphereLight(0x5b7780, 0x071316, 0.92));
+  // A faint, cool daylight wash suggests distant surface light without lifting the flooded maze too far.
+  const naturalLight = new THREE.DirectionalLight(0x9bbcc5, 0.16);
+  naturalLight.position.set(-24, CEILING_Y + 18, -32);
+  scene.add(naturalLight);
   const cameraMistLight = new THREE.PointLight(0xa7e4ec, 0.42, 7.4, 2.05);
   cameraMistLight.position.set(0, 0.1, -0.5);
   camera.add(cameraMistLight);

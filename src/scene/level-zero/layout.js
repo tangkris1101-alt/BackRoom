@@ -1,5 +1,11 @@
 import { CELL_SIZE, LAYOUT_COLS, LAYOUT_ROWS } from "../constants.js";
 
+const LEGACY_COLS = 31;
+const LEGACY_ROWS = 27;
+
+export const MANILA_ROOM = { col: 34, row: 26, width: 5, height: 5 };
+export const MANILA_ROOM_ENTRANCE = { col: MANILA_ROOM.col, row: MANILA_ROOM.row + 2 };
+
 export function createLayout() {
   const grid = Array.from({ length: LAYOUT_ROWS }, () =>
     Array.from({ length: LAYOUT_COLS }, () => "#"),
@@ -50,6 +56,13 @@ export function createLayout() {
     { col: 22, row: 12, width: 6, height: 4 },
     { col: 19, row: 1, width: 10, height: 7 },
     { col: 24, row: 20, width: 5, height: 4 },
+    { col: 31, row: 17, width: 8, height: 6 },
+    MANILA_ROOM,
+    { col: 39, row: 9, width: 5, height: 7 },
+    { col: 39, row: 19, width: 4, height: 5 },
+    { col: 29, row: 31, width: 8, height: 5 },
+    { col: 13, row: 28, width: 10, height: 7 },
+    { col: 5, row: 30, width: 6, height: 5 },
   ];
   rooms.forEach((room) => carveRoom(room.col, room.row, room.width, room.height));
 
@@ -69,6 +82,18 @@ export function createLayout() {
   carveHorizontal(8, 12, 4, 1);
   carveHorizontal(17, 22, 4, 1);
 
+  // The newer southern/eastern wing makes Level 0 substantially larger while
+  // leaving the original layout coordinates untouched for existing saves.
+  carveHorizontal(28, 34, 21, 1);
+  carveVertical(34, 21, 28, 1);
+  carveHorizontal(31, MANILA_ROOM_ENTRANCE.col, MANILA_ROOM_ENTRANCE.row, 1);
+  carveHorizontal(34, 40, 21, 1);
+  carveVertical(40, 14, 21, 1);
+  carveVertical(34, 30, 32, 1);
+  carveHorizontal(21, 34, 32, 1);
+  carveVertical(6, 24, 32, 1);
+  carveHorizontal(6, 13, 32, 1);
+
   const pillars = [
     [13, 12],
     [15, 12],
@@ -80,6 +105,9 @@ export function createLayout() {
     [16, 20],
     [20, 20],
     [5, 10],
+    [35, 20],
+    [32, 32],
+    [18, 31],
   ];
   pillars.forEach(([col, row]) => {
     grid[row][col] = "#";
@@ -93,8 +121,14 @@ export const MAP = createLayout();
 
 export const ROWS = MAP.length;
 export const COLS = MAP[0].length;
-export const ORIGIN_X = -(COLS * CELL_SIZE) / 2;
-export const ORIGIN_Z = -(ROWS * CELL_SIZE) / 2;
+// Preserve the old 31 x 27 origin so previously saved player and item
+// positions continue to point into the same rooms after the map expands.
+export const ORIGIN_X = -(LEGACY_COLS * CELL_SIZE) / 2;
+export const ORIGIN_Z = -(LEGACY_ROWS * CELL_SIZE) / 2;
+export const MAP_CENTER = {
+  x: ORIGIN_X + (COLS * CELL_SIZE) / 2,
+  z: ORIGIN_Z + (ROWS * CELL_SIZE) / 2,
+};
 
 export const START_CELL = { col: 3, row: 23, yaw: -Math.PI * 0.48 };
 export const EXIT_CELL = { col: 27, row: 3 };

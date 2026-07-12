@@ -16,6 +16,7 @@ import {
   createLevelZeroCarpetTexture,
   createLevelZeroCeilingTexture,
 } from "./textures.js";
+import { createManilaRoom } from "./manila-room.js";
 import {
   createLights,
   addExitSign,
@@ -34,6 +35,8 @@ import {
   EXIT_FALL_TRIGGER_Y,
   COLS,
   ROWS,
+  MAP_CENTER,
+  MANILA_ROOM,
 } from "./layout.js";
 import { createAlmondWaterPickup, createFlashlightPickup, createCompassPickup } from "../items/index.js";
 import { getPickupTarget, tryPickupItems, getFocusedItem } from "../entities/index.js";
@@ -104,13 +107,16 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     createFloorGeometryWithHole(
       COLS * CELL_SIZE,
       ROWS * CELL_SIZE,
-      exitPosition,
+      {
+        x: exitPosition.x - MAP_CENTER.x,
+        z: exitPosition.z - MAP_CENTER.z,
+      },
       EXIT_HOLE_RADIUS,
     ),
     floorMaterial,
   );
   floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, 0, 0);
+  floor.position.set(MAP_CENTER.x, 0, MAP_CENTER.z);
   scene.add(floor);
 
   const ceiling = new THREE.Mesh(
@@ -118,7 +124,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     ceilingMaterial,
   );
   ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(0, CEILING_Y, 0);
+  ceiling.position.set(MAP_CENTER.x, CEILING_Y, MAP_CENTER.z);
   scene.add(ceiling);
 
   const { northSouth, eastWest, fixturePositions } = collectWallTransforms();
@@ -149,6 +155,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   addExitHole(scene, exitPosition, EXIT_HOLE_RADIUS);
   addExitSign(scene, exitPosition);
   addMoodZones(scene);
+  const manilaRoom = createManilaRoom(scene, MANILA_ROOM, cellCenter);
   const almondWater = createAlmondWaterPickup(scene, {
     cols: COLS,
     rows: ROWS,
@@ -224,6 +231,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       lightTotal += pulse;
     });
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.9;
+    const manilaBlackout = manilaRoom.update(elapsed);
 
     const exitDistance = Math.hypot(
       playerPosition.x - exitPosition.x,
@@ -248,6 +256,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       exitReached,
       fallingIntoExit,
       flicker,
+      manilaBlackout,
       lightState: updateLightState(delta, flicker),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),

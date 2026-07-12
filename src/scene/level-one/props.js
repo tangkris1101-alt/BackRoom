@@ -314,6 +314,7 @@ export function addLevelOneParkingMarks(scene) {
 export function addLevelOneWallSigns(scene) {
   const signs = [
     { col: 12, row: 7, text: "M.E.G. BASE", bg: "#101f1a", fg: "#c9ffd5" },
+    { col: 11, row: 10, text: "CORRIDORS", bg: "#28302d", fg: "#dde5d8" },
     { col: 25, row: 17, text: "SUPPLY", bg: "#263022", fg: "#e9ffbd" },
     { col: 30, row: 4, text: "ELEVATOR AHEAD", bg: "#101f1a", fg: "#9dffbe" },
     { col: 7, row: 18, text: "NO ENTRY", bg: "#221814", fg: "#ffd1a1" },

@@ -76,6 +76,7 @@ export class FirstPersonControls {
     this.silenceLiquidTimer = 0;
     this.isSprinting = false;
     this.sprintExhausted = false;
+    this.unlimitedStamina = false;
     this.isDrinking = false;
     this.drinkTimer = 0;
     this.drinkItemId = null;
@@ -645,6 +646,11 @@ export class FirstPersonControls {
     this.updateStaminaEffects(delta);
     this.updateHealthEffects(delta);
     this.updateDrinking(delta);
+    if (this.unlimitedStamina) {
+      this.stamina = this.staminaMax;
+      this.staminaRecoveryDelay = 0;
+      this.sprintExhausted = false;
+    }
     let inputX = this.joystickInput.x;
     let inputY = this.joystickInput.y;
     this.isSprinting = false;
@@ -675,23 +681,29 @@ export class FirstPersonControls {
       const wantsJoystickSprint =
         this.joystickPointerId !== null && this.joystickInput.y > 0.88;
       const wantsSprint = wantsKeyboardSprint || wantsJoystickSprint;
-      const sprintResumeStamina = this.staminaMax * SPRINT_EXHAUSTED_RESUME_RATIO;
-      if (!wantsSprint || this.stamina >= sprintResumeStamina) {
-        this.sprintExhausted = false;
-      }
-      if (wantsSprint && this.stamina <= MIN_SPRINT_STAMINA) {
-        this.sprintExhausted = true;
-      }
-
-      this.isSprinting =
-        wantsSprint &&
-        !this.sprintExhausted &&
-        this.stamina > MIN_SPRINT_STAMINA;
-      if (this.isSprinting) {
-        this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN_RATE * delta);
-        this.staminaRecoveryDelay = STAMINA_RECOVERY_DELAY;
-        if (this.stamina <= MIN_SPRINT_STAMINA) {
+      if (this.unlimitedStamina) {
+        this.isSprinting = wantsSprint;
+        this.stamina = this.staminaMax;
+        this.staminaRecoveryDelay = 0;
+      } else {
+        const sprintResumeStamina = this.staminaMax * SPRINT_EXHAUSTED_RESUME_RATIO;
+        if (!wantsSprint || this.stamina >= sprintResumeStamina) {
+          this.sprintExhausted = false;
+        }
+        if (wantsSprint && this.stamina <= MIN_SPRINT_STAMINA) {
           this.sprintExhausted = true;
+        }
+
+        this.isSprinting =
+          wantsSprint &&
+          !this.sprintExhausted &&
+          this.stamina > MIN_SPRINT_STAMINA;
+        if (this.isSprinting) {
+          this.stamina = Math.max(0, this.stamina - STAMINA_DRAIN_RATE * delta);
+          this.staminaRecoveryDelay = STAMINA_RECOVERY_DELAY;
+          if (this.stamina <= MIN_SPRINT_STAMINA) {
+            this.sprintExhausted = true;
+          }
         }
       }
 
@@ -716,7 +728,7 @@ export class FirstPersonControls {
       this.camera.position.z = resolved.z;
     }
 
-    if (!this.isSprinting) {
+    if (!this.isSprinting && !this.unlimitedStamina) {
       this.staminaRecoveryDelay = Math.max(0, this.staminaRecoveryDelay - delta);
       if (this.staminaRecoveryDelay === 0) {
         const recoveryRate =
@@ -899,6 +911,16 @@ export class FirstPersonControls {
     this.health = Math.max(0, Math.min(this.healthMax, this.health - amount));
     this.syncCameraState();
     return this.health <= 0 && previous > 0;
+  }
+
+  setDebugUnlimitedStamina(enabled) {
+    this.unlimitedStamina = Boolean(enabled);
+    if (this.unlimitedStamina) {
+      this.stamina = this.staminaMax;
+      this.staminaRecoveryDelay = 0;
+      this.sprintExhausted = false;
+    }
+    this.syncCameraState();
   }
 
   applyHeal(amount) {

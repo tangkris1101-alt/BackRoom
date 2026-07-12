@@ -10,6 +10,7 @@ import {
 const PICKUP_RADIUS = 3;
 const INSPECT_DISTANCE = 7;
 const LEVEL_KEY_SPAWN_CHANCE = 0.14;
+const HUB_BONUS_LEVEL_KEY_ROLLS = 2;
 
 export const LEVEL_KEY_IDS = Object.freeze(Array.from({ length: 8 }, (_, level) => `level-key-${level}`));
 
@@ -37,6 +38,22 @@ export const DECORATIVE_ITEM_DEFS = {
     i18n: {
       "zh-CN": { name: "皱折便签", effect: "墨迹已经无法辨认", action: "F / 按钮拾取" },
       en: { name: "CRUMPLED NOTE", effect: "THE INK IS NO LONGER LEGIBLE", action: "F / BUTTON PICK UP" },
+    },
+  },
+  "level-one-file": {
+    color: 0xd8d2ad,
+    shape: "file",
+    i18n: {
+      "zh-CN": {
+        name: "M.E.G. 层级档案：Level 1",
+        effect: "来自 M.E.G. 基地的生存概括",
+        action: "F / 按钮拾取 · 选中后按 E 查看",
+      },
+      en: {
+        name: "M.E.G. LEVEL 1 FILE",
+        effect: "A SURVIVAL BRIEF FROM THE M.E.G. BASE",
+        action: "F / BUTTON PICK UP · EQUIP AND PRESS E TO READ",
+      },
     },
   },
   "empty-can": {
@@ -166,6 +183,38 @@ function createNoteFaceMaterial(color) {
   return new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9, metalness: 0 });
 }
 
+function createLevelFileFaceMaterial() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 400;
+  canvas.height = 300;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#d8d2ad";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = "#31443a";
+  context.lineWidth = 10;
+  context.strokeRect(13, 13, canvas.width - 26, canvas.height - 26);
+  context.fillStyle = "#31443a";
+  context.textAlign = "center";
+  context.font = "bold 56px Arial, sans-serif";
+  context.fillText("M.E.G.", canvas.width / 2, 92);
+  context.font = "bold 32px Arial, sans-serif";
+  context.fillText("LEVEL 1", canvas.width / 2, 145);
+  context.font = "22px Arial, sans-serif";
+  context.fillText("HABITABLE ZONE", canvas.width / 2, 184);
+  context.strokeStyle = "rgba(49, 68, 58, 0.48)";
+  context.lineWidth = 4;
+  for (let y = 212; y < 268; y += 17) {
+    context.beginPath();
+    context.moveTo(56, y);
+    context.lineTo(344, y);
+    context.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 3;
+  return new THREE.MeshStandardMaterial({ map: texture, roughness: 0.88, metalness: 0 });
+}
+
 export function createWorldItemModel(id) {
   const toolModelFactories = {
     flashlight: createFlashlightModel,
@@ -206,6 +255,15 @@ export function createWorldItemModel(id) {
     inkedFace.rotation.x = -Math.PI / 2;
     inkedFace.position.y = 0.014;
     group.add(inkedFace);
+  } else if (definition.shape === "file") {
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.035, 0.44), material));
+    const cover = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.59, 0.41),
+      createLevelFileFaceMaterial(),
+    );
+    cover.rotation.x = -Math.PI / 2;
+    cover.position.y = 0.02;
+    group.add(cover);
   } else if (definition.shape === "badge") {
     group.add(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.025, 0.34), material));
   } else if (definition.shape === "can") {
@@ -234,15 +292,33 @@ export function createWorldItemModel(id) {
   return group;
 }
 
-export function createWorldItemManager(scene, defaultSpawns = [], initialState = null) {
+export function createWorldItemManager(scene, defaultSpawns = [], initialState = null, options = {}) {
   const savedItems = Array.isArray(initialState) ? initialState : null;
   const sourceItems = savedItems ? [...savedItems] : [...defaultSpawns];
-  const hasLevelKey = sourceItems.some((item) => isLevelKeyId(item?.id));
-  if (!hasLevelKey && defaultSpawns.length > 0 && Math.random() < LEVEL_KEY_SPAWN_CHANCE) {
-    const anchor = defaultSpawns[Math.floor(Math.random() * defaultSpawns.length)];
-    const targetLevel = Math.floor(Math.random() * LEVEL_KEY_IDS.length);
+  // Preserve existing save state, but introduce explicitly flagged authored
+  // items to older saves without reviving previously picked up world items.
+  if (savedItems) {
+    for (const spawn of defaultSpawns) {
+      if (spawn.ensureOnExistingSave && !sourceItems.some((item) => item?.id === spawn.id)) {
+        sourceItems.push(spawn);
+      }
+    }
+  }
+  const levelKeyAnchors = options.levelKeyAnchors?.length ? options.levelKeyAnchors : defaultSpawns;
+  const usedLevelKeyIds = new Set(
+    sourceItems.filter((item) => isLevelKeyId(item?.id)).map((item) => item.id),
+  );
+  const activeLevelKeyCount = sourceItems.filter(
+    (item) => isLevelKeyId(item?.id) && item.active !== false,
+  ).length;
+
+  function addLevelKey() {
+    const candidates = LEVEL_KEY_IDS.filter((id) => !usedLevelKeyIds.has(id));
+    if (candidates.length === 0 || levelKeyAnchors.length === 0) return false;
+    const anchor = levelKeyAnchors[Math.floor(Math.random() * levelKeyAnchors.length)];
+    const id = candidates[Math.floor(Math.random() * candidates.length)];
     sourceItems.push({
-      id: LEVEL_KEY_IDS[targetLevel],
+      id,
       active: true,
       position: {
         x: anchor.position.x + (Math.random() - 0.5) * 1.2,
@@ -253,6 +329,21 @@ export function createWorldItemManager(scene, defaultSpawns = [], initialState =
       tiltX: (Math.random() - 0.5) * 0.16,
       tiltZ: (Math.random() - 0.5) * 0.16,
     });
+    usedLevelKeyIds.add(id);
+    return true;
+  }
+
+  const minimumLevelKeys = Math.max(0, Math.floor(options.minimumLevelKeys ?? 0));
+  for (let count = activeLevelKeyCount; count < minimumLevelKeys; count += 1) {
+    if (!addLevelKey()) break;
+  }
+
+  if (!savedItems && minimumLevelKeys > 0) {
+    for (let roll = 0; roll < HUB_BONUS_LEVEL_KEY_ROLLS; roll += 1) {
+      if (Math.random() < LEVEL_KEY_SPAWN_CHANCE) addLevelKey();
+    }
+  } else if (minimumLevelKeys === 0 && activeLevelKeyCount === 0 && Math.random() < LEVEL_KEY_SPAWN_CHANCE) {
+    addLevelKey();
   }
   const items = [];
 

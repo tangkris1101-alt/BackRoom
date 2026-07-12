@@ -174,6 +174,21 @@ export function createLevelFourScene({ initialState = null } = {}) {
     blockedAabbs: propColliders,
     initialState: pickupInitial["almond-water"] ?? null,
   });
+  // Level 4 is supply-rich: retain the guaranteed bottle and add a separate
+  // cache that returns quickly, without changing other levels' item economy.
+  const almondWaterReserve = createAlmondWaterPickup(scene, {
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    respawnMin: 18,
+    respawnVariance: 12,
+    initialSpawnChance: 0.75,
+    respawnChance: 0.85,
+    initialState: pickupInitial["almond-water-reserve"] ?? null,
+  });
   const superAlmondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_ONE_COLS,
     rows: LEVEL_ONE_ROWS,
@@ -284,6 +299,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
     scene.fog.density = 0.0086 + (1 - flicker) * 0.006;
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
+    const almondWaterReserveState = almondWaterReserve.update(delta, elapsed, playerPosition);
     const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
     const flashlightState = flashlight.update(delta, elapsed, playerPosition);
     const detectorState = detector.update(delta, elapsed, playerPosition);
@@ -291,7 +307,15 @@ export function createLevelFourScene({ initialState = null } = {}) {
     const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
     const houndState = hound.update(delta, elapsed, playerPosition, effects);
     const entities = [houndState];
-    const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
+    const pickups = [
+      almondWaterState,
+      almondWaterReserveState,
+      superAlmondWaterState,
+      silenceLiquidState,
+      compassState,
+      detectorState,
+      flashlightState,
+    ];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -300,6 +324,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
       entityContact: entities.some((entity) => entity.contact),
       flicker,
       almondWater: almondWaterState,
+      almondWaterReserve: almondWaterReserveState,
       superAlmondWater: superAlmondWaterState,
       flashlight: flashlightState,
       detector: detectorState,
@@ -311,6 +336,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
       focusInteraction: exitNetwork.inspect(playerPosition) ?? getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
+        almondWaterReserve.inspect(camera),
         superAlmondWater.inspect(camera),
         silenceLiquid.inspect(camera),
         compass.inspect(camera),
@@ -347,9 +373,9 @@ export function createLevelFourScene({ initialState = null } = {}) {
     ],
     update,
     getPickupTarget: (playerPosition) =>
-      getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
+      getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWaterReserve, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
+      tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWaterReserve, almondWater),
     interact: (playerPosition) => exitNetwork.interact(playerPosition) ?? tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
@@ -359,6 +385,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
           compass: compass.getState(),
           "silence-liquid": silenceLiquid.getState(),
           "almond-water": almondWater.getState(),
+          "almond-water-reserve": almondWaterReserve.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },
         interactions: {

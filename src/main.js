@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import "./styles.css";
 import { createAmbientHum } from "./ambient-audio.js";
+import { DebugMode, DEBUG_PLAYABLE_LEVELS } from "./debug-mode.js";
 import { createBackroomsScene, getBackroomsLevelInfo } from "./scene.js";
 import { FirstPersonControls } from "./first-person-controls.js";
 import { syncFirstPersonHeldItem } from "./scene/common/view-model.js";
-import { HUB_LEVEL } from "./scene/constants.js";
+import { BACTERIA_CONTACT_RADIUS, HOUND_CONTACT_RADIUS, HUB_LEVEL } from "./scene/constants.js";
 import {
   hasSavedGame,
   loadSave,
@@ -12,7 +13,19 @@ import {
   clearSave,
   getInitialLevelFromSave,
 } from "./save.js";
-import { BACTERIA_CONTACT_RADIUS, HOUND_CONTACT_RADIUS } from "./scene/constants.js";
+import {
+  BUFF_TEXT,
+  ENTITY_TEXT,
+  INTERACTION_TEXT,
+  ITEM_TEXT,
+  LEVEL_DOCUMENTS,
+  MAIN_MENU_TEXT,
+  STATUS_TEXT,
+} from "./ui/text.js";
+import {
+  getLevelDangerInfo as resolveLevelDangerInfo,
+  setLevelDangerIndicator as renderLevelDangerIndicator,
+} from "./ui/level-danger.js";
 import {
   createWorldItemManager,
   DECORATIVE_ITEM_DEFS,
@@ -83,15 +96,28 @@ const exitOverlayTime = document.querySelector("#exit-overlay-time");
 const exitOverlayRestart = document.querySelector("#exit-overlay-restart");
 const exitOverlayRestartLabel = document.querySelector("#exit-overlay-restart-label");
 const exitOverlayRestartHint = document.querySelector("#exit-overlay-restart-hint");
+const exitOverlayContinue = document.querySelector("#exit-overlay-continue");
+const exitOverlayContinueLabel = document.querySelector("#exit-overlay-continue-label");
+const exitOverlayContinueHint = document.querySelector("#exit-overlay-continue-hint");
+const exitOverlayDanger = document.querySelector("#exit-overlay-danger");
 const loadingLevelLabel = loadingOverlay?.querySelector(".loading-overlay__panel span");
+const loadingDanger = document.querySelector("#loading-danger");
 const timerReadout = document.querySelector("#timer-readout");
 const timerReadoutValue = timerReadout?.querySelector(".timer-readout__value");
 const itemInfo = document.querySelector("#item-info");
 const itemInfoName = document.querySelector("#item-info-name");
 const itemInfoEffect = document.querySelector("#item-info-effect");
 const itemInfoAction = document.querySelector("#item-info-action");
+const documentReader = document.querySelector("#document-reader");
+const documentReaderEyebrow = document.querySelector("#document-reader-eyebrow");
+const documentReaderTitle = document.querySelector("#document-reader-title");
+const documentReaderBody = document.querySelector("#document-reader-body");
+const documentReaderHint = document.querySelector("#document-reader-hint");
+const documentReaderClose = document.querySelector("#document-reader-close");
+let documentReaderId = null;
 const buffList = document.querySelector("#buff-list");
 const entityMarkers = document.querySelector("#entity-markers");
+const debugExitMarkers = document.querySelector("#debug-exit-markers");
 const pauseOverlay = document.querySelector("#pause-overlay");
 const pauseTitle = document.querySelector("#pause-title");
 const pauseSubtitle = document.querySelector("#pause-subtitle");
@@ -191,685 +217,7 @@ const DAMAGE_FLASH_MS = 600;
 const EXIT_DOOR_INTERACT_RADIUS = 4.2;
 const EXIT_ELEVATOR_ENTER_RADIUS = 1.65;
 const ALMOND_WATER_HEAL_DURATION = 5;
-const SUPER_ALMOND_WATER_HEAL_DURATION = 6;
-const SILENCE_LIQUID_DURATION = 12;
-const SILENCE_LIQUID_REPEL_RADIUS = 18;
-const SILENCE_LIQUID_REPEL_SPEED_MULTIPLIER = 1.55;
-
-const ITEM_TEXT = {
-  "zh-CN": {
-    "almond-water": {
-      name: "杏仁水",
-      effect: "+50 体力上限 / 持续回血",
-      action: "F / 按钮拾取并饮用",
-    },
-    "super-almond-water": {
-      name: "超级杏仁水",
-      effect: "上限 250 / 恢复 x2 / 移速 x1.5 / 强力持续回血",
-      action: "F / 按钮拾取并饮用",
-    },
-    flashlight: {
-      name: "手电筒",
-      effect: "照亮前方 / 最多堆叠 3 / 电量耗尽自动换新",
-      action: "F / 按钮拾取 · 拾取后按 E 开关",
-    },
-    detector: {
-      name: "实体探测仪",
-      effect: "标记大范围实体 / 5秒扫描",
-      action: "F / 按钮拾取 · 拾取后按 R 扫描",
-    },
-    "silence-liquid": {
-      name: "寂静液体",
-      effect: "驱散实体，使其 12 秒内不敢靠近",
-      action: "F / 按钮拾取 · 选中后按 E 使用",
-    },
-    compass: {
-      name: "出口指南针",
-      effect: "只在当前层级有效，抵达出口后会消失",
-      action: "F / 按钮拾取 · 选中后查看方向",
-    },
-  },
-  en: {
-    "almond-water": {
-      name: "ALMOND WATER",
-      effect: "+50 STAMINA CAP / HEALTH REGEN",
-      action: "F / BUTTON PICK UP",
-    },
-    "super-almond-water": {
-      name: "SUPER ALMOND WATER",
-      effect: "250 CAP / RECOVERY x2 / SPEED x1.5 / STRONG HEALTH REGEN",
-      action: "F / BUTTON DRINK",
-    },
-    flashlight: {
-      name: "FLASHLIGHT",
-      effect: "FORWARD BEAM / STACK x3 / AUTO-RESTOCK ON DEPLETE",
-      action: "F / BUTTON PICK UP · E TO TOGGLE AFTER PICKUP",
-    },
-    detector: {
-      name: "ENTITY DETECTOR",
-      effect: "WIDE ENTITY PING / 5s SCAN",
-      action: "F / BUTTON PICK UP · R TO SCAN AFTER PICKUP",
-    },
-    "silence-liquid": {
-      name: "SILENCE LIQUID",
-      effect: "REPELS ENTITIES FOR 12s",
-      action: "F / BUTTON PICK UP · E TO USE",
-    },
-    compass: {
-      name: "EXIT COMPASS",
-      effect: "CURRENT LEVEL ONLY; VANISHES AT THE EXIT",
-      action: "F / BUTTON PICK UP · EQUIP TO READ",
-    },
-  },
-};
-
-const ENTITY_TEXT = {
-  "zh-CN": {
-    bacteria: {
-      name: "\u7ec6\u83cc\u5b9e\u4f53",
-      marker: "\u7ec6\u83cc",
-      effect: "\u9ad8\u7626\u9ed1\u5f71\uff1b\u4f1a\u7ed5\u969c\u8ffd\u51fb\uff0c\u63a5\u89e6\u5371\u9669",
-      action: "\u4fdd\u6301\u8ddd\u79bb",
-      failSubtitle: "\u63a5\u89e6\u7ec6\u83cc\u5b9e\u4f53",
-    },
-    "super-bacteria": {
-      name: "\u8d85\u7ea7\u7ec6\u83cc",
-      marker: "\u8d85\u7ea7\u7ec6\u83cc",
-      effect: "\u66f4\u9ad8\u7684\u7535\u7ad9\u9ed1\u5f71\uff1b\u8ffd\u51fb\u66f4\u7a33\uff0c\u63a5\u89e6\u5371\u9669",
-      action: "\u4fdd\u6301\u8ddd\u79bb",
-      failSubtitle: "\u63a5\u89e6\u8d85\u7ea7\u7ec6\u83cc\u5b9e\u4f53",
-    },
-    hound: {
-      name: "\u730e\u72ac\u5b9e\u4f53",
-      marker: "\u730e\u72ac",
-      effect: "\u56db\u8db3\u8ffd\u51fb\uff1b\u901f\u5ea6\u6bd4\u7ec6\u83cc\u66f4\u5feb",
-      action: "\u907f\u5f00\u76f4\u7ebf\u8ddd\u79bb",
-      failSubtitle: "\u88ab\u730e\u72ac\u5b9e\u4f53\u6355\u83b7",
-    },
-    "ambush-hound": {
-      name: "\u4f0f\u51fb\u730e\u72ac",
-      marker: "\u4f0f\u51fb\u730e\u72ac",
-      effect: "\u9760\u8fd1\u540e\u82cf\u9192\u5e76\u9ad8\u901f\u8ffd\u51fb",
-      action: "\u62c9\u5f00\u8ddd\u79bb",
-      failSubtitle: "\u88ab\u4f0f\u51fb\u730e\u72ac\u6355\u83b7",
-    },
-    "level-seven-thing": {
-      name: "\u6df1\u6c34\u5f02\u5f62",
-      marker: "\u6df1\u6c34\u5f02\u5f62",
-      effect: "\u4f34\u968f\u6c34\u9762\u79fb\u52a8\uff1b\u63a5\u89e6\u4f1a\u9020\u6210\u81f4\u547d\u4f24\u5bb3",
-      action: "\u8fdc\u79bb\u6df1\u8272\u6c34\u57df",
-      failSubtitle: "\u88ab\u6df1\u6c34\u5f02\u5f62\u62d6\u5165\u6c34\u4e0b",
-    },
-  },
-  en: {
-    bacteria: {
-      name: "BACTERIA ENTITY",
-      marker: "BACTERIA",
-      effect: "Tall black pursuer; routes around obstacles; contact is dangerous.",
-      action: "KEEP DISTANCE",
-      failSubtitle: "BACTERIA CONTACT",
-    },
-    "super-bacteria": {
-      name: "SUPER BACTERIA",
-      marker: "SUPER BACTERIA",
-      effect: "Stronger station variant; steadier pursuit; contact is dangerous.",
-      action: "KEEP DISTANCE",
-      failSubtitle: "SUPER BACTERIA CONTACT",
-    },
-    hound: {
-      name: "HOUND",
-      marker: "HOUND",
-      effect: "Quadruped pursuer; faster than Bacteria.",
-      action: "BREAK LINE OF SIGHT",
-      failSubtitle: "HOUND CONTACT",
-    },
-    "ambush-hound": {
-      name: "AMBUSH HOUND",
-      marker: "AMBUSH HOUND",
-      effect: "Wakes at close range and sprints after you.",
-      action: "MAKE DISTANCE",
-      failSubtitle: "AMBUSH HOUND CONTACT",
-    },
-    "level-seven-thing": {
-      name: "THE THING ON LEVEL 7",
-      marker: "THE THING",
-      effect: "Moves with the water surface; contact is lethal.",
-      action: "AVOID DARK WATER",
-      failSubtitle: "DRAGGED UNDERWATER",
-    },
-  },
-};
-
-const INTERACTION_TEXT = {
-  "zh-CN": {
-    "exit-elevator-door": {
-      name: "\u51fa\u53e3\u7535\u68af\u95e8",
-      effect: "\u95e8\u540e\u7684\u7a7a\u95f4\u4fe1\u53f7\u4ecd\u5728\u7a33\u5b9a",
-      action: "F / \u6309\u94ae\u6253\u5f00",
-      response: "\u7535\u68af\u95e8\u6253\u5f00\uff0c\u6307\u5357\u9488\u5931\u53bb\u54cd\u5e94",
-    },
-    "exit-elevator-door-open": {
-      name: "\u51fa\u53e3\u7535\u68af",
-      effect: "\u95e8\u5df2\u6253\u5f00\uff0c\u8d70\u5165\u7535\u68af\u533a\u57df\u8fdb\u5165\u4e0b\u4e00\u5c42",
-      action: "\u5411\u524d\u8d70\u5165",
-      response: "\u7535\u68af\u4fdd\u6301\u6253\u5f00",
-    },
-    "level-one-elevator-panel": {
-      name: "\u7535\u68af\u9762\u677f",
-      effect: "\u663e\u793a\u51fa\u53e3\u540c\u6b65\u72b6\u6001",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u7535\u68af\u8fd8\u5728\u7b49\u5f85\u7a33\u5b9a\u4fe1\u53f7",
-    },
-    "level-two-valve": {
-      name: "\u538b\u529b\u9600",
-      effect: "\u7ba1\u9053\u538b\u529b\u4e0d\u7a33\u5b9a",
-      action: "F / \u6309\u94ae\u8f6c\u52a8",
-      response: "\u9600\u95e8\u53ea\u662f\u53d1\u51fa\u7a7a\u6d1e\u7684\u6469\u64e6\u58f0",
-    },
-    "level-two-service-door": {
-      name: "\u7ef4\u4fee\u95e8",
-      effect: "\u95e8\u9501\u88ab\u7ba1\u9053\u70ed\u6c14\u5361\u4f4f",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u95e8\u540e\u4f20\u6765\u4f4e\u9891\u7ba1\u9053\u58f0",
-    },
-    "level-three-breaker": {
-      name: "\u65ad\u8def\u5668",
-      effect: "\u51fa\u53e3\u4f9b\u7535\u70b9",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u7535\u5f27\u95ea\u8fc7\uff0c\u51fa\u53e3\u4fe1\u53f7\u77ed\u6682\u589e\u5f3a",
-    },
-    "level-three-generator": {
-      name: "\u53d1\u7535\u673a",
-      effect: "\u58f0\u97f3\u4e0d\u7a33\uff0c\u4f46\u4ecd\u5728\u8fd0\u884c",
-      action: "F / \u6309\u94ae\u503e\u542c",
-      response: "\u53d1\u7535\u673a\u8282\u594f\u5ffd\u7136\u4e71\u4e86\u4e00\u62cd",
-    },
-    "level-four-terminal": {
-      name: "\u529e\u516c\u7ec8\u7aef",
-      effect: "\u5c4f\u5e55\u53ea\u5269\u4e00\u884c\u8b66\u544a",
-      action: "F / \u6309\u94ae\u9605\u8bfb",
-      response: "\u7ec8\u7aef\u663e\u793a\uff1a\u4e0d\u8981\u76f8\u4fe1\u7a97\u5916\u7684\u5149",
-    },
-    "level-four-files": {
-      name: "\u6587\u4ef6\u5806",
-      effect: "\u4e0a\u9762\u53ea\u6709\u91cd\u590d\u7684\u697c\u5c42\u56fe",
-      action: "F / \u6309\u94ae\u7ffb\u770b",
-      response: "\u6bcf\u5f20\u56fe\u7684\u51fa\u53e3\u90fd\u88ab\u624b\u5199\u5708\u6389",
-    },
-    "level-four-vending": {
-      name: "\u81ea\u52a8\u552e\u8d27\u673a",
-      effect: "\u5df2\u65e0\u8d27\uff0c\u4ecd\u5728\u8f7b\u58f0\u8fd0\u8f6c",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u9000\u5e01\u53e3\u91cc\u53ea\u6709\u7070\u5c18",
-    },
-    "level-four-water-cooler": {
-      name: "\u996e\u6c34\u673a",
-      effect: "\u6846\u4f53\u6e29\u51b7\uff0c\u6c34\u6876\u5df2\u7a7a",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u6c34\u6ce1\u58f0\u505c\u4e86\uff0c\u50cf\u662f\u6709\u4eba\u5728\u542c",
-    },
-    "level-four-stair-door": {
-      name: "\u697c\u68af\u95e8",
-      effect: "\u901a\u5f80\u66f4\u6df1\u7684\u529e\u516c\u533a",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u95e8\u628a\u624b\u5f88\u51b7\uff0c\u697c\u68af\u95f4\u91cc\u6ca1\u6709\u56de\u58f0",
-    },
-    "level-five-beverly-table": {
-      name: "\u8d1d\u5f17\u5229\u623f\u95f4\u684c",
-      effect: "\u9152\u676f\u548c\u9ebb\u5c06\u724c\u50cf\u662f\u521a\u88ab\u79fb\u52a8\u8fc7",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u4e00\u679a\u724c\u7ffb\u5230\u80cc\u9762\uff0c\u58f0\u97f3\u6765\u81ea\u4f60\u80cc\u540e",
-    },
-    "level-five-portrait-a": {
-      name: "\u8001\u5f0f\u8096\u50cf",
-      effect: "\u773c\u775b\u7684\u65b9\u5411\u4e0d\u592a\u5bf9",
-      action: "F / \u6309\u94ae\u89c2\u5bdf",
-      response: "\u753b\u6846\u5185\u4f20\u6765\u5f88\u8f7b\u7684\u547c\u5438\u58f0",
-    },
-    "level-five-portrait-b": {
-      name: "\u8001\u5f0f\u8096\u50cf",
-      effect: "\u773c\u775b\u7684\u65b9\u5411\u4e0d\u592a\u5bf9",
-      action: "F / \u6309\u94ae\u89c2\u5bdf",
-      response: "\u753b\u6846\u5185\u4f20\u6765\u5f88\u8f7b\u7684\u547c\u5438\u58f0",
-    },
-    "level-five-portrait-c": {
-      name: "\u8001\u5f0f\u8096\u50cf",
-      effect: "\u773c\u775b\u7684\u65b9\u5411\u4e0d\u592a\u5bf9",
-      action: "F / \u6309\u94ae\u89c2\u5bdf",
-      response: "\u753b\u6846\u5185\u4f20\u6765\u5f88\u8f7b\u7684\u547c\u5438\u58f0",
-    },
-    "level-five-boiler-valve": {
-      name: "\u9505\u7089\u9600\u95e8",
-      effect: "\u7ba1\u9053\u91cc\u6709\u674f\u4ec1\u6c34\u7684\u6e17\u6f0f\u58f0",
-      action: "F / \u6309\u94ae\u8f6c\u52a8",
-      response: "\u70ed\u6c14\u9876\u4f4f\u9600\u95e8\uff0c\u4f60\u53ea\u542c\u5230\u66f4\u8fd1\u7684\u722a\u58f0",
-    },
-    "level-five-dining-cart": {
-      name: "\u9910\u8f66",
-      effect: "\u5e72\u51c0\u5f97\u8fc7\u5206\uff0c\u50cf\u662f\u6bcf\u5206\u949f\u90fd\u88ab\u64e6\u62ed",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u94f6\u76d8\u4e0a\u53ea\u6709\u4e00\u6ef4\u51b0\u51b7\u7684\u6c34",
-    },
-    "level-five-staff-door": {
-      name: "STAFF ONLY",
-      effect: "\u901a\u5f80\u9505\u7089\u533a\u7684\u5458\u5de5\u95e8",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u95e8\u724c\u8f7b\u8f7b\u6643\u52a8\uff0c\u4f46\u8d70\u5eca\u6ca1\u6709\u98ce",
-    },
-    "level-five-boiler-exit": {
-      name: "\u9505\u7089\u51fa\u53e3",
-      effect: "\u91d1\u5c5e\u95e8\u540e\u662f\u66f4\u6df1\u7684\u70ed\u6c14",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u8def\u5f84\u88ab\u6807\u8bb0\uff0c\u4f46\u4e0d\u5efa\u8bae\u7ee7\u7eed\u6df1\u5165",
-    },
-    "level-six-scratch": {
-      name: "\u5899\u9762\u6293\u75d5",
-      effect: "\u75d5\u8ff9\u88ab\u51b7\u6c14\u51dd\u5728\u5899\u9762",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u75d5\u8ff9\u4e0b\u9762\u5199\u7740\uff1a\u522b\u6570\u79d2",
-    },
-    "level-six-cold-wall": {
-      name: "\u51b0\u51b7\u5899\u9762",
-      effect: "\u5899\u4f53\u50cf\u5438\u6536\u4e86\u6240\u6709\u58f0\u97f3",
-      action: "F / \u6309\u94ae\u89e6\u78b0",
-      response: "\u624b\u5957\u4e0a\u51fa\u73b0\u4e00\u5c42\u8584\u971c",
-    },
-    "level-six-exit": {
-      name: "NO LIGHT",
-      effect: "\u51fa\u53e3\u6807\u8bb0\u51e0\u4e4e\u4e0d\u53d1\u5149",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u9ed1\u6697\u5728\u95e8\u540e\u9762\u53d8\u5f97\u66f4\u6df1",
-    },
-    "level-seven-room": {
-      name: "\u5165\u53e3\u623f\u95f4",
-      effect: "\u5730\u9762\u4e0b\u65b9\u5168\u662f\u51b0\u51b7\u7684\u6c34",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u6c34\u9762\u7684\u53cd\u5149\u6bd4\u5929\u82b1\u677f\u66f4\u9ed1",
-    },
-    "level-seven-waterline": {
-      name: "\u6c34\u7ebf",
-      effect: "\u6c34\u6df1\u770b\u4e0d\u89c1\u5e95",
-      action: "F / \u6309\u94ae\u89c2\u5bdf",
-      response: "\u6d9f\u6f2a\u5411\u4f60\u8fd9\u8fb9\u9760\u8fd1\uff0c\u7136\u540e\u6d88\u5931",
-    },
-    "level-seven-buoy": {
-      name: "\u6f02\u6d6e\u6d6e\u6807",
-      effect: "\u88ab\u6d77\u6c34\u6ce1\u5f97\u5f88\u91cd",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u7ef3\u5b50\u4e00\u76f4\u5ef6\u4f38\u5230\u770b\u4e0d\u89c1\u7684\u4e0b\u65b9",
-    },
-    "level-seven-exit": {
-      name: "SURFACE",
-      effect: "\u8fdc\u5904\u7684\u6d6e\u8231\u4f20\u6765\u5f31\u4fe1\u53f7",
-      action: "F / \u6309\u94ae\u68c0\u67e5",
-      response: "\u51fa\u53e3\u4fe1\u53f7\u6d6e\u5728\u6c34\u9762\u4e0a",
-    },
-  },
-  en: {
-    "exit-elevator-door": {
-      name: "EXIT ELEVATOR DOOR",
-      effect: "The space behind it is still stabilizing.",
-      action: "F / BUTTON OPEN",
-      response: "Elevator door opened; the compass goes quiet.",
-    },
-    "exit-elevator-door-open": {
-      name: "EXIT ELEVATOR",
-      effect: "Door open. Step into the elevator zone to enter the next level.",
-      action: "WALK INSIDE",
-      response: "The elevator remains open.",
-    },
-    "level-one-elevator-panel": {
-      name: "ELEVATOR PANEL",
-      effect: "Shows unstable exit synchronization.",
-      action: "F / BUTTON INSPECT",
-      response: "The elevator is still waiting for a stable signal.",
-    },
-    "level-two-valve": {
-      name: "PRESSURE VALVE",
-      effect: "Pipe pressure is unstable.",
-      action: "F / BUTTON TURN",
-      response: "The valve answers with a hollow scrape.",
-    },
-    "level-two-service-door": {
-      name: "SERVICE DOOR",
-      effect: "Heat and pressure have jammed the lock.",
-      action: "F / BUTTON INSPECT",
-      response: "A low pipe drone leaks through the door.",
-    },
-    "level-three-breaker": {
-      name: "BREAKER",
-      effect: "Exit power junction.",
-      action: "F / BUTTON INSPECT",
-      response: "An arc snaps across the breaker; the exit signal spikes.",
-    },
-    "level-three-generator": {
-      name: "GENERATOR",
-      effect: "Unsteady, but still running.",
-      action: "F / BUTTON LISTEN",
-      response: "The generator rhythm skips for one beat.",
-    },
-    "level-four-terminal": {
-      name: "OFFICE TERMINAL",
-      effect: "Only one warning line remains.",
-      action: "F / BUTTON READ",
-      response: "Terminal: DO NOT TRUST THE LIGHT OUTSIDE.",
-    },
-    "level-four-files": {
-      name: "FILE STACK",
-      effect: "Repeated floor plans with no dates.",
-      action: "F / BUTTON READ",
-      response: "Every printed exit is circled by hand.",
-    },
-    "level-four-vending": {
-      name: "VENDING MACHINE",
-      effect: "Empty, still humming.",
-      action: "F / BUTTON INSPECT",
-      response: "Only dust sits in the coin return.",
-    },
-    "level-four-water-cooler": {
-      name: "WATER COOLER",
-      effect: "Cold frame, empty bottle.",
-      action: "F / BUTTON INSPECT",
-      response: "The bubbling stops, as if something is listening.",
-    },
-    "level-four-stair-door": {
-      name: "STAIR DOOR",
-      effect: "Leads deeper into the office level.",
-      action: "F / BUTTON INSPECT",
-      response: "The handle is cold; no echo comes back.",
-    },
-    "level-five-beverly-table": {
-      name: "BEVERLY ROOM TABLE",
-      effect: "Glasses and Mahjong tiles look recently moved.",
-      action: "F / BUTTON INSPECT",
-      response: "A tile flips face-down; the sound comes from behind you.",
-    },
-    "level-five-portrait-a": {
-      name: "AGED PORTRAIT",
-      effect: "The eyes are not pointing where they should.",
-      action: "F / BUTTON OBSERVE",
-      response: "A faint breath comes from inside the frame.",
-    },
-    "level-five-portrait-b": {
-      name: "AGED PORTRAIT",
-      effect: "The eyes are not pointing where they should.",
-      action: "F / BUTTON OBSERVE",
-      response: "A faint breath comes from inside the frame.",
-    },
-    "level-five-portrait-c": {
-      name: "AGED PORTRAIT",
-      effect: "The eyes are not pointing where they should.",
-      action: "F / BUTTON OBSERVE",
-      response: "A faint breath comes from inside the frame.",
-    },
-    "level-five-boiler-valve": {
-      name: "BOILER VALVE",
-      effect: "Almond Water leaks somewhere inside the pipes.",
-      action: "F / BUTTON TURN",
-      response: "Heat locks the valve; the only answer is closer clawing.",
-    },
-    "level-five-dining-cart": {
-      name: "DINING CART",
-      effect: "Too clean, as if wiped every minute.",
-      action: "F / BUTTON INSPECT",
-      response: "Only one cold drop of water sits on the silver tray.",
-    },
-    "level-five-staff-door": {
-      name: "STAFF ONLY",
-      effect: "A staff route into the boiler area.",
-      action: "F / BUTTON INSPECT",
-      response: "The placard sways slightly, but there is no draft.",
-    },
-    "level-five-boiler-exit": {
-      name: "BOILER EXIT",
-      effect: "Hot air waits behind the metal door.",
-      action: "F / BUTTON INSPECT",
-      response: "Route marked. Proceeding deeper is not advised.",
-    },
-    "level-six-scratch": {
-      name: "WALL SCRATCHES",
-      effect: "Frozen into the wall by the cold air.",
-      action: "F / BUTTON INSPECT",
-      response: "Under the marks: DO NOT COUNT SECONDS.",
-    },
-    "level-six-cold-wall": {
-      name: "COLD WALL",
-      effect: "The wall seems to swallow sound.",
-      action: "F / BUTTON TOUCH",
-      response: "A thin frost blooms across your glove.",
-    },
-    "level-six-exit": {
-      name: "NO LIGHT",
-      effect: "The exit marker barely emits light.",
-      action: "F / BUTTON INSPECT",
-      response: "The dark behind the door looks deeper.",
-    },
-    "level-seven-room": {
-      name: "THE ROOM",
-      effect: "Cold water waits below the floor line.",
-      action: "F / BUTTON INSPECT",
-      response: "The water reflects less light than the ceiling.",
-    },
-    "level-seven-waterline": {
-      name: "WATERLINE",
-      effect: "No bottom is visible.",
-      action: "F / BUTTON OBSERVE",
-      response: "Ripples approach you, then vanish.",
-    },
-    "level-seven-buoy": {
-      name: "FLOATING BUOY",
-      effect: "Waterlogged and heavier than it should be.",
-      action: "F / BUTTON INSPECT",
-      response: "The rope continues into unseen depth.",
-    },
-    "level-seven-exit": {
-      name: "SURFACE",
-      effect: "A weak signal floats near the hatch.",
-      action: "F / BUTTON INSPECT",
-      response: "The exit signal sits on top of the water.",
-    },
-  },
-};
-
-const BUFF_TEXT = {
-  "zh-CN": {
-    "almond-water": {
-      name: "杏仁水",
-      detail: "+50 体力上限",
-    },
-    "super-almond-water": {
-      name: "超级杏仁水",
-      detail: "体力上限 250 · 恢复 x2",
-    },
-    "health-regen": {
-      name: "生命恢复",
-      detail: "血量持续恢复中",
-    },
-    "silence-liquid": {
-      name: "寂静液体",
-      detail: "实体短时间内不敢靠近",
-    },
-  },
-  en: {
-    "almond-water": {
-      name: "ALMOND WATER",
-      detail: "+50 STAMINA CAP",
-    },
-    "super-almond-water": {
-      name: "SUPER ALMOND WATER",
-      detail: "250 STAMINA CAP · RECOVERY x2",
-    },
-    "health-regen": {
-      name: "HEALTH REGEN",
-      detail: "RECOVERING HEALTH OVER TIME",
-    },
-    "silence-liquid": {
-      name: "SILENCE LIQUID",
-      detail: "ENTITIES KEEP THEIR DISTANCE",
-    },
-  },
-};
-
-const STATUS_TEXT = {
-  "zh-CN": {
-    "almond-water": "杏仁水",
-    "super-almond-water": "超级杏仁水",
-    flashlight: "手电筒",
-    detector: "探测仪",
-    "silence-liquid": "寂静液体",
-    compass: "指南针",
-    flashlightAcquired: "已获得手电筒",
-    flashlightRestocked: "手电筒 +1",
-    flashlightFull: "手电筒已达上限",
-    flashlightRefilled: "手电筒电量已满",
-    detectorAcquired: "探测仪已激活",
-    silenceLiquidAcquired: "已获得寂静液体",
-    silenceLiquidUsed: "寂静液体扩散 {seconds}秒",
-    compassAcquired: "已获得指南针",
-    compassReady: "指南针正在指向出口",
-    detectorReady: "就绪",
-    detectorReadyHint: "按 E 使用",
-    detectorScan: "扫描 {seconds}秒",
-    detectorCharge: "充能 {seconds}秒",
-    bacteriaMarker: "细菌实体",
-    bacteriaFailTitle: "失联",
-    bacteriaFailSubtitle: "接触细菌实体",
-    superBacteriaMarker: "超级细菌",
-    superBacteriaFailSubtitle: "接触超级细菌实体",
-    almondWaterUsed: "杏仁水 {seconds}秒",
-    superAlmondWaterUsed: "超级杏仁水 {seconds}秒",
-    almondWaterDrinking: "饮用中",
-    almondWaterCancelled: "饮用取消",
-    pauseTitle: "已暂停",
-    pauseSubtitle: "按 ESC 或点击继续",
-    pauseTutorialLabel: "查看教程",
-    pauseTutorialHint: "重新阅读操作说明",
-    pauseElapsedLabel: "当前耗时",
-    pauseSettingsLabel: "设置",
-    pauseSettingsHint: "语言",
-    pauseSettingsTitle: "语言",
-    pauseSettingsClose: "关闭设置",
-    pauseResetLabel: "重置进度",
-    pauseResetHint: "清空所有存档并回到 L0",
-    pauseResetArmedLabel: "再次按下以确认",
-    pauseResetArmedHint: "⚠ 所有进度将被清除且不可撤销",
-    inventoryHint: "← → / 滚轮切换 · E 使用 · Q 丢弃",
-    inventoryEmpty: "背包为空",
-    pickupEmpty: "无物品可拾取",
-    exitDoorOpened: "\u7535\u68af\u95e8\u5df2\u6253\u5f00",
-    exitDoorReady: "\u8d70\u5165\u7535\u68af",
-    exitDoorNearby: "\u6309 F \u6253\u5f00\u7535\u68af\u95e8",
-    exitFallNearby: "\u8df3\u5165\u9ed1\u6d1e\u8fdb\u5165 LEVEL 1",
-    compassExpired: "\u6307\u5357\u9488\u5df2\u5728\u672c\u5c42\u51fa\u53e3\u5931\u6548",
-    failureRestartLabel: "\u91cd\u65b0\u5f00\u59cb",
-    failureRestartHint: "\u6e05\u7a7a\u8fdb\u5ea6\u5e76\u56de\u5230 Level 0",
-    exitTotalTime: "总用时 {time}",
-    levelTransitionHint: "\u6b63\u5728\u8fdb\u5165\u4e0b\u4e00\u5c42",
-    levelTransitionReady: "\u7a7a\u95f4\u7a33\u5b9a\u5b8c\u6210",
-    levelLocked: "未解锁",
-    levelLockedHint: "该层级尚未解锁",
-    levelCleared: "已通关",
-    levelCurrent: "当前",
-    levelVisited: "已到达",
-    itemDropped: "已丢弃 {item}",
-    savePromptJumpLabel: "前往其他层级",
-    savePromptJumpHint: "选择已解锁的层级开始",
-    savePromptLevelsTitle: "选择层级",
-    savePromptLevelsBack: "返回",
-    savePromptLevelReady: "可进入",
-  },
-  en: {
-    "almond-water": "ALMOND WATER",
-    "super-almond-water": "SUPER ALMOND WATER",
-    flashlight: "FLASHLIGHT",
-    detector: "DETECTOR",
-    "silence-liquid": "SILENCE LIQUID",
-    compass: "COMPASS",
-    flashlightAcquired: "FLASHLIGHT ACQUIRED",
-    flashlightRestocked: "FLASHLIGHT +1",
-    flashlightFull: "FLASHLIGHT STACK FULL",
-    detectorAcquired: "DETECTOR ONLINE",
-    silenceLiquidAcquired: "SILENCE LIQUID ACQUIRED",
-    silenceLiquidUsed: "SILENCE LIQUID {seconds}s",
-    compassAcquired: "COMPASS ACQUIRED",
-    compassReady: "COMPASS POINTING TO EXIT",
-    detectorReady: "READY",
-    detectorReadyHint: "PRESS E TO USE",
-    detectorScan: "SCAN {seconds}s",
-    detectorCharge: "CHARGE {seconds}s",
-    bacteriaMarker: "BACTERIA",
-    bacteriaFailTitle: "SIGNAL LOST",
-    bacteriaFailSubtitle: "BACTERIA CONTACT",
-    superBacteriaMarker: "SUPER BACTERIA",
-    superBacteriaFailSubtitle: "SUPER BACTERIA CONTACT",
-    almondWaterUsed: "ALMOND WATER {seconds}s",
-    superAlmondWaterUsed: "SUPER ALMOND WATER {seconds}s",
-    almondWaterDrinking: "DRINKING",
-    almondWaterCancelled: "DRINK CANCELLED",
-    pauseTitle: "PAUSED",
-    pauseSubtitle: "ESC / TAP TO RESUME",
-    pauseTutorialLabel: "VIEW TUTORIAL",
-    pauseTutorialHint: "RE-READ THE CONTROLS",
-    pauseElapsedLabel: "CURRENT TIME",
-    pauseSettingsLabel: "SETTINGS",
-    pauseSettingsHint: "LANGUAGE",
-    pauseSettingsTitle: "LANGUAGE",
-    pauseSettingsClose: "CLOSE SETTINGS",
-    pauseResetLabel: "RESET PROGRESS",
-    pauseResetHint: "WIPE SAVE · RESTART AT L0",
-    pauseResetArmedLabel: "TAP AGAIN TO CONFIRM",
-    pauseResetArmedHint: "⚠ ALL PROGRESS WILL BE LOST",
-    inventoryHint: "← → / WHEEL SWITCH · E USE · Q DROP",
-    inventoryEmpty: "INVENTORY EMPTY",
-    pickupEmpty: "NO ITEM IN RANGE",
-    exitDoorOpened: "ELEVATOR DOOR OPEN",
-    exitDoorReady: "ENTER THE ELEVATOR",
-    exitDoorNearby: "PRESS F TO OPEN ELEVATOR DOOR",
-    exitFallNearby: "DROP INTO THE VOID TO ENTER LEVEL 1",
-    compassExpired: "COMPASS EXPIRED AT THIS LEVEL EXIT",
-    failureRestartLabel: "RESTART",
-    failureRestartHint: "CLEAR PROGRESS AND RETURN TO LEVEL 0",
-    exitTotalTime: "TOTAL TIME {time}",
-    levelTransitionHint: "ENTERING NEXT LEVEL",
-    levelTransitionReady: "SPACE STABILIZED",
-    levelLocked: "LOCKED",
-    levelLockedHint: "LEVEL NOT YET UNLOCKED",
-    levelCleared: "CLEARED",
-    levelCurrent: "CURRENT",
-    levelVisited: "VISITED",
-    itemDropped: "DROPPED {item}",
-    savePromptJumpLabel: "CHOOSE LEVEL",
-    savePromptJumpHint: "PICK AN UNLOCKED LEVEL",
-    savePromptLevelsTitle: "SELECT LEVEL",
-    savePromptLevelsBack: "BACK",
-    savePromptLevelReady: "READY",
-  },
-};
-
-const MAIN_MENU_TEXT = {
-  "zh-CN": {
-    eyebrow: "LEVEL 0 · NOCLIP ZONE",
-    subtitle: "你不该来到这里。",
-    start: "开始游戏",
-    startHint: "进入 LEVEL 0",
-    settings: "设置",
-    settingsHint: "语言",
-    language: "语言",
-    close: "关闭设置",
-  },
-  en: {
-    eyebrow: "LEVEL 0 · NOCLIP ZONE",
-    subtitle: "YOU ARE NOT SUPPOSED TO BE HERE.",
-    start: "START GAME",
-    startHint: "ENTER LEVEL 0",
-    settings: "SETTINGS",
-    settingsHint: "LANGUAGE",
-    language: "LANGUAGE",
-    close: "CLOSE SETTINGS",
-  },
-};
-
-const gameplayUiElements = [
+const SElements = [
   hud,
   joystick,
   jumpButton,
@@ -890,6 +238,7 @@ function showGameplayUi() {
 function hideGameplayUi() {
   gameplayUiElements.forEach((element) => element?.setAttribute("hidden", ""));
   exitOverlay?.setAttribute("hidden", "");
+  closeDocumentReader();
 }
 
 hideGameplayUi();
@@ -910,10 +259,32 @@ flashlightLight.position.set(0.18, -0.12, -0.16);
 flashlightLight.name = "player-flashlight";
 const flashlightTarget = new THREE.Object3D();
 flashlightTarget.position.set(0, -0.16, -1);
+const debugMode = new DebugMode({
+  canvas,
+  onSync(active) {
+    controls?.setDebugUnlimitedStamina?.(active);
+    if (!active) clearDebugExitMarkers();
+  },
+});
+
+function isDebugFeaturesActive() {
+  return debugMode.isActive();
+}
+
+function syncDebugState() {
+  debugMode.sync();
+}
+
+function toggleDebugFeatures() {
+  const active = debugMode.toggle();
+  pickupFlashText = formatLocalizedStatus(active ? "debugEnabled" : "debugDisabled");
+  pickupFlashUntil = clock.elapsedTime + 1.4;
+}
 
 function getInitialLevel() {
   const level = Number(new URLSearchParams(window.location.search).get("level"));
   const requested = getBackroomsLevelInfo(level).level;
+  if (debugMode.queryEnabled && DEBUG_PLAYABLE_LEVELS.has(requested)) return requested;
   if (requested === 0) return 0;
   try {
     const reached = JSON.parse(window.localStorage?.getItem(REACHED_KEY) ?? "[]");
@@ -936,6 +307,10 @@ function attachFlashlightToCamera(camera) {
   camera.add(flashlightLight);
   camera.add(flashlightTarget);
   flashlightLight.target = flashlightTarget;
+}
+
+function attachDebugAreaLightToCamera(camera) {
+  debugMode.attachAreaLight(camera);
 }
 const ambientHum = createAmbientHum();
 
@@ -966,6 +341,7 @@ let loadingComplete = false;
 let exitComplete = false;
 let gameFailed = false;
 let levelTransition = null;
+let levelBriefingTimer = 0;
 let exitDoorOpen = false;
 let exitOverlayHideTimer = 0;
 let runTime = 0;
@@ -980,6 +356,7 @@ let detectorCooldownTimer = 0;
 let currentLanguage = "zh-CN";
 const detectorProjection = new THREE.Vector3();
 const compassToExit = new THREE.Vector3();
+const debugExitProjection = new THREE.Vector3();
 let lastMetrics = null;
 
 const INVENTORY_ORDER = [
@@ -987,6 +364,7 @@ const INVENTORY_ORDER = [
   "detector",
   "silence-liquid",
   "compass",
+  "level-one-file",
   ...LEVEL_KEY_IDS,
   "almond-water",
   "super-almond-water",
@@ -1020,6 +398,7 @@ const INVENTORY_DEFS = {
       { id, type: "decorative", unique: false, stackable: true, maxStack: 9 },
     ]),
   ),
+  "level-one-file": { id: "level-one-file", type: "document", unique: true, stackable: false },
 };
 
 const ITEM_ICON_SVG = {
@@ -1165,6 +544,13 @@ const ITEM_ICON_SVG = {
     <path d="M22 20 L72 15 L82 32 L77 82 L28 87 L17 68 Z" fill="#d8cfaa" stroke="#6f664e" stroke-width="2" stroke-linejoin="round"/>
     <path d="M25 42 Q39 33 54 42 T76 40 M27 55 Q42 47 57 56 T75 54 M31 68 Q43 60 55 68" fill="none" stroke="#30384e" stroke-width="3" stroke-linecap="round" opacity="0.82"/>
     <path d="M22 20 L31 35 L17 68 M72 15 L65 33 L82 32 M77 82 L61 72 L28 87" fill="none" stroke="#8c8266" stroke-width="1.5" opacity="0.75"/>`,
+
+  "level-one-file": `
+    <path d="M24 16 L72 16 L80 28 L76 86 L24 86 L18 72 L18 28 Z" fill="#d8d2ad" stroke="#31443a" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M24 16 L24 30 L39 30" fill="none" stroke="#31443a" stroke-width="3" stroke-linejoin="round"/>
+    <text x="50" y="49" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="15" fill="#31443a">M.E.G.</text>
+    <text x="50" y="64" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#31443a">LEVEL 1</text>
+    <path d="M30 72 L70 72 M30 78 L64 78" stroke="#5d725f" stroke-width="2" opacity="0.72"/>`,
 
   "rusted-key": `
     <circle cx="28" cy="43" r="15" fill="none" stroke="#9a7043" stroke-width="8"/>
@@ -1317,6 +703,7 @@ function setLanguage(nextLanguage) {
     if (pauseSubtitle) pauseSubtitle.textContent = formatLocalizedStatus("pauseSubtitle");
     updatePauseOverlay();
   }
+  if (documentReaderId) renderDocumentReader();
   try {
     window.localStorage?.setItem(LANGUAGE_STORAGE_KEY, currentLanguage);
   } catch {
@@ -1382,6 +769,74 @@ let pickedUpItems = loadStringSet(PICKED_UP_KEY);
 
 function getLocalizedText(collection, id) {
   return collection[currentLanguage]?.[id] ?? collection.en?.[id] ?? collection["zh-CN"]?.[id] ?? {};
+}
+
+function getLevelDangerInfo(levelOrInfo) {
+  return resolveLevelDangerInfo(levelOrInfo, currentLanguage, getBackroomsLevelInfo);
+}
+
+function setLevelDangerIndicator(element, levelOrInfo, { hidden = false } = {}) {
+  renderLevelDangerIndicator(element, levelOrInfo, {
+    hidden,
+    language: currentLanguage,
+    getLevelInfo: getBackroomsLevelInfo,
+  });
+}
+
+function getLevelDocument(id) {
+  const documentData = LEVEL_DOCUMENTS[id];
+  if (!documentData) return null;
+  return documentData[currentLanguage] ?? documentData.en ?? null;
+}
+
+function renderDocumentReader() {
+  const documentData = getLevelDocument(documentReaderId);
+  if (!documentData || !documentReaderBody) return;
+  if (documentReaderEyebrow) documentReaderEyebrow.textContent = documentData.eyebrow;
+  if (documentReaderTitle) documentReaderTitle.textContent = documentData.title;
+  if (documentReaderHint) documentReaderHint.textContent = documentData.hint;
+  if (documentReaderClose) documentReaderClose.setAttribute("aria-label", documentData.hint);
+
+  const fragment = document.createDocumentFragment();
+  documentData.sections.forEach((section) => {
+    const block = window.document.createElement("section");
+    const heading = window.document.createElement("h3");
+    const text = window.document.createElement("p");
+    heading.textContent = section.heading;
+    text.textContent = section.text;
+    block.append(heading, text);
+    fragment.append(block);
+  });
+  documentReaderBody.replaceChildren(fragment);
+}
+
+function openDocumentReader(id) {
+  if (!getLevelDocument(id) || !documentReader) return false;
+  documentReaderId = id;
+  renderDocumentReader();
+  documentReader.removeAttribute("hidden");
+  canvas.dataset.documentReader = id;
+  if (document.pointerLockElement === canvas && document.exitPointerLock) {
+    try {
+      document.exitPointerLock();
+    } catch {
+      // Reading remains available when pointer lock cleanup is unavailable.
+    }
+  }
+  window.requestAnimationFrame(() => documentReader.classList.add("is-visible"));
+  return true;
+}
+
+function closeDocumentReader() {
+  if (!documentReaderId && documentReader?.hasAttribute("hidden")) return;
+  documentReaderId = null;
+  canvas.dataset.documentReader = "";
+  documentReader?.classList.remove("is-visible");
+  documentReader?.setAttribute("hidden", "");
+}
+
+function isDocumentReaderOpen() {
+  return Boolean(documentReaderId && documentReader && !documentReader.hasAttribute("hidden"));
 }
 
 function getInventoryItemLabel(id) {
@@ -1466,7 +921,7 @@ function removeInventory(id) {
 }
 
 function dropEquippedItem() {
-  if (!world || !worldItems || exitComplete || gameFailed || levelTransition || isPaused) return false;
+  if (!world || !worldItems || exitComplete || gameFailed || levelTransition || isPaused || isDocumentReaderOpen()) return false;
   if (controls?.getState?.().isDrinking) return false;
   const equipped = getEquipped();
   const droppedState = equipped?.id === "flashlight"
@@ -1725,6 +1180,7 @@ function chooseLevel(nextLevel) {
   canvas.dataset.gameFailed = "false";
   hideExitOverlay();
   loadLevel(nextLevel, { updateUrl: true });
+  showLevelDangerBriefing(getBackroomsLevelInfo(nextLevel));
 }
 
 let levelPickerActivationAt = -Infinity;
@@ -1766,8 +1222,10 @@ function handleLevelPickerOptionActivation(event) {
 function syncLevelHud() {
   syncLevelPicker();
   if (loadingLevelLabel) loadingLevelLabel.textContent = world.levelLabel;
+  setLevelDangerIndicator(loadingDanger, world.level);
   canvas.dataset.level = String(world.level);
   canvas.dataset.levelName = world.levelName;
+  canvas.dataset.levelDanger = getLevelDangerInfo(world.level).danger;
   canvas.dataset.viewModel = world.viewModelName ?? "NONE";
   canvas.dataset.colliderCount = String(world.colliderCount ?? 0);
   canvas.dataset.reachedLevels = [...reachedLevels].sort((a, b) => a - b).join(",");
@@ -1911,19 +1369,28 @@ function loadLevel(level, { updateUrl = false } = {}) {
     world.scene,
     world.decorativeItemSpawns ?? [],
     save?.worldItems?.[level] ?? null,
+    world.worldItemOptions,
   );
   attachFlashlightToCamera(world.camera);
+  attachDebugAreaLightToCamera(world.camera);
   controls.setWorld({
     camera: world.camera,
     isWalkable: world.isWalkable,
     getFloorHeight: world.getFloorHeight,
     spawn: world.spawn,
   });
-  if (save && save.player && save.player.level === level) {
+  syncDebugState();
+  if (
+    save &&
+    save.player &&
+    save.player.level === level &&
+    (world.isWalkable?.(save.player.position.x, save.player.position.z) ?? true)
+  ) {
     const pos = save.player.position;
     world.camera.position.set(pos.x, pos.y, pos.z);
     controls.applyState(save.player);
   }
+  syncDebugState();
   exitComplete = false;
   gameFailed = false;
   playerHealthCooldown = 0;
@@ -1945,8 +1412,10 @@ function bootstrapWorld(level, save) {
     world.scene,
     world.decorativeItemSpawns ?? [],
     save?.worldItems?.[level] ?? null,
+    world.worldItemOptions,
   );
   attachFlashlightToCamera(world.camera);
+  attachDebugAreaLightToCamera(world.camera);
   controls = new FirstPersonControls({
     camera: world.camera,
     canvas,
@@ -1957,11 +1426,17 @@ function bootstrapWorld(level, save) {
     spawn: world.spawn,
   });
   controls.notifyDrinkComplete = handleDrinkComplete;
-  if (save && save.player && save.player.level === level) {
+  if (
+    save &&
+    save.player &&
+    save.player.level === level &&
+    (world.isWalkable?.(save.player.position.x, save.player.position.z) ?? true)
+  ) {
     const pos = save.player.position;
     world.camera.position.set(pos.x, pos.y, pos.z);
     controls.applyState(save.player);
   }
+  syncDebugState();
   exitComplete = false;
   gameFailed = false;
   playerHealthCooldown = 0;
@@ -2007,6 +1482,16 @@ function beginGameSession(level, save) {
 
 function handleMainMenuStart() {
   startAudioOnce();
+  if (debugMode.queryEnabled) {
+    let debugSave = null;
+    try {
+      debugSave = hasSavedGame() ? loadSave() : null;
+    } catch {
+      debugSave = null;
+    }
+    beginGameSession(getInitialLevel(), debugSave);
+    return;
+  }
   let save = null;
   try {
     save = hasSavedGame() ? loadSave() : null;
@@ -2054,6 +1539,15 @@ function updateFailureRestartButton() {
   }
 }
 
+function updateExitOverlayContinueButton() {
+  if (exitOverlayContinueLabel) {
+    exitOverlayContinueLabel.textContent = formatLocalizedStatus("exitContinueLabel");
+  }
+  if (exitOverlayContinueHint) {
+    exitOverlayContinueHint.textContent = formatLocalizedStatus("exitContinueHint");
+  }
+}
+
 function setExitOverlayFailureState(failed) {
   exitOverlay?.classList.toggle("is-failed", failed);
   if (failed) {
@@ -2068,6 +1562,23 @@ function setExitOverlayFailureState(failed) {
     }
   } else {
     exitOverlayRestart?.setAttribute("hidden", "");
+  }
+}
+
+function setExitOverlayCompletionState(completed) {
+  exitOverlay?.classList.toggle("is-complete", completed);
+  if (completed) {
+    updateExitOverlayContinueButton();
+    exitOverlayContinue?.removeAttribute("hidden");
+    if (document.pointerLockElement === canvas && document.exitPointerLock) {
+      try {
+        document.exitPointerLock();
+      } catch {
+        // ignore pointer lock cleanup failures
+      }
+    }
+  } else {
+    exitOverlayContinue?.setAttribute("hidden", "");
   }
 }
 
@@ -2097,7 +1608,7 @@ function setPauseSettingsOpen(open) {
   if (nextOpen) pauseSettingsClose?.focus();
 }
 
-function showExitOverlay(title, subtitle, { showTime = true, variantClass = "", failed = false } = {}) {
+function showExitOverlay(title, subtitle, { showTime = true, variantClass = "", failed = false, complete = false } = {}) {
   setExitOverlayText(title, subtitle);
   if (showTime) {
     setExitOverlayTime();
@@ -2108,9 +1619,10 @@ function showExitOverlay(title, subtitle, { showTime = true, variantClass = "", 
     window.clearTimeout(exitOverlayHideTimer);
     exitOverlayHideTimer = 0;
   }
-  exitOverlay?.classList.remove("is-level-transition", "is-level-loaded", "is-failed");
+  exitOverlay?.classList.remove("is-level-transition", "is-level-loaded", "is-failed", "is-complete");
   if (variantClass) exitOverlay?.classList.add(variantClass);
   setExitOverlayFailureState(failed);
+  setExitOverlayCompletionState(complete);
   exitOverlay?.removeAttribute("hidden");
   window.requestAnimationFrame(() => exitOverlay?.classList.add("is-visible"));
 }
@@ -2120,11 +1632,13 @@ function hideExitOverlay() {
     ? LEVEL_TRANSITION_FADE_OUT_MS
     : OVERLAY_FADE_MS;
   exitOverlay?.classList.remove("is-visible");
+  exitOverlayDanger?.setAttribute("hidden", "");
   setExitOverlayFailureState(false);
+  setExitOverlayCompletionState(false);
   if (exitOverlayHideTimer) window.clearTimeout(exitOverlayHideTimer);
   exitOverlayHideTimer = window.setTimeout(() => {
     exitOverlay?.setAttribute("hidden", "");
-    exitOverlay?.classList.remove("is-level-transition", "is-level-loaded", "is-failed");
+    exitOverlay?.classList.remove("is-level-transition", "is-level-loaded", "is-failed", "is-complete");
     hideExitOverlayTime();
     exitOverlayHideTimer = 0;
   }, hideDelay);
@@ -2133,13 +1647,32 @@ function hideExitOverlay() {
 function updateLevelTransitionOverlayText(transition = levelTransition) {
   if (!transition?.nextLevelInfo) return;
   setExitOverlayText(transition.nextLevelInfo.levelLabel, transition.nextLevelInfo.levelName);
+  setLevelDangerIndicator(exitOverlayDanger, transition.nextLevelInfo);
   setExitOverlayDetail(
     formatLocalizedStatus(transition.loaded ? "levelTransitionReady" : "levelTransitionHint"),
   );
 }
 
+function showLevelDangerBriefing(levelInfo) {
+  if (!levelInfo) return;
+  if (levelBriefingTimer) window.clearTimeout(levelBriefingTimer);
+  showExitOverlay(levelInfo.levelLabel, levelInfo.levelName, {
+    showTime: false,
+    variantClass: "is-level-transition",
+  });
+  setLevelDangerIndicator(exitOverlayDanger, levelInfo);
+  levelBriefingTimer = window.setTimeout(() => {
+    levelBriefingTimer = 0;
+    hideExitOverlay();
+  }, 1100);
+}
+
 function beginLevelTransition(nextLevel) {
   const nextLevelInfo = getBackroomsLevelInfo(nextLevel);
+  if (levelBriefingTimer) {
+    window.clearTimeout(levelBriefingTimer);
+    levelBriefingTimer = 0;
+  }
   expireCompassAtExit();
   completedLevels.add(world.level);
   reachedLevels.add(nextLevelInfo.level);
@@ -2181,6 +1714,17 @@ function updateLevelTransition(delta) {
   canvas.dataset.transitioning = "false";
   canvas.dataset.transitionPhase = "";
   canvas.dataset.exitReached = "false";
+}
+
+function continueExploringFromExit() {
+  if (!world || !controls || !exitComplete || gameFailed || levelTransition) return;
+  expireCompassAtExit({ silent: true });
+  writeSaveSnapshot();
+  exitComplete = false;
+  canvas.dataset.exitReached = "false";
+  hideExitOverlay();
+  loadLevel(HUB_LEVEL, { updateUrl: true });
+  writeSaveSnapshot();
 }
 
 levelPickerButton?.addEventListener("pointerdown", handleLevelPickerButtonActivation);
@@ -2551,6 +2095,10 @@ function clearEntityMarkers() {
   entityMarkers?.replaceChildren();
 }
 
+function clearDebugExitMarkers() {
+  debugExitMarkers?.replaceChildren();
+}
+
 function updateEntityMarkers(metrics) {
   const entityList = metrics.entities ?? [];
   const nearestDistance = entityList
@@ -2563,13 +2111,17 @@ function updateEntityMarkers(metrics) {
     : "";
   canvas.dataset.entityContact = String(Boolean(metrics.entityContact));
 
-  if (!entityMarkers || !detectorOwned || detectorActiveTimer <= 0) {
+  const debugActive = isDebugFeaturesActive();
+  if (!entityMarkers || (!debugActive && (!detectorOwned || detectorActiveTimer <= 0))) {
     clearEntityMarkers();
     return;
   }
 
   const entities = entityList.filter(
-    (entity) => entity?.active && Number.isFinite(entity.distance) && entity.distance <= DETECTOR_RANGE,
+    (entity) =>
+      entity?.active &&
+      Number.isFinite(entity.distance) &&
+      (debugActive || entity.distance <= DETECTOR_RANGE),
   );
   entityMarkers.replaceChildren(
     ...entities
@@ -2592,6 +2144,41 @@ function updateEntityMarkers(metrics) {
         marker.style.left = `${x}px`;
         marker.style.top = `${y}px`;
         marker.append(name, distance);
+        return marker;
+      })
+      .filter(Boolean),
+  );
+}
+
+function updateDebugExitMarkers() {
+  if (!debugExitMarkers || !isDebugFeaturesActive() || !world?.camera) {
+    clearDebugExitMarkers();
+    return;
+  }
+  const routeList = Array.isArray(world.scene?.userData?.exitRoutes) && world.scene.userData.exitRoutes.length > 0
+    ? world.scene.userData.exitRoutes
+    : world.targetPosition
+      ? [{ id: "primary-exit", label: "EXIT", targetLabel: "EXIT", position: world.targetPosition }]
+      : [];
+  debugExitMarkers.replaceChildren(
+    ...routeList
+      .map((route) => {
+        const position = route?.position;
+        if (!Number.isFinite(position?.x) || !Number.isFinite(position?.z)) return null;
+        debugExitProjection.set(position.x, 1.65, position.z).project(world.camera);
+        if (debugExitProjection.z < -1 || debugExitProjection.z > 1) return null;
+        const x = (debugExitProjection.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-debugExitProjection.y * 0.5 + 0.5) * window.innerHeight;
+        if (x < -80 || x > window.innerWidth + 80 || y < -80 || y > window.innerHeight + 80) return null;
+        const marker = document.createElement("div");
+        marker.className = "debug-exit-marker";
+        const label = document.createElement("strong");
+        label.textContent = "EXIT";
+        const destination = document.createElement("span");
+        destination.textContent = route.label ?? route.targetLabel ?? "EXIT";
+        marker.style.left = `${x}px`;
+        marker.style.top = `${y}px`;
+        marker.append(label, destination);
         return marker;
       })
       .filter(Boolean),
@@ -3179,8 +2766,11 @@ function usePickup() {
     if (openExitDoor()) return;
     if (lastMetrics?.focusInteraction?.available) {
       const interaction = world.interact?.(world.camera.position, {
-        hasLevelKey: (targetLevel) => getLevelKeyTarget(getEquipped()?.id) === targetLevel,
+        hasLevelKey: (targetLevel) =>
+          (isDebugFeaturesActive() && world.level === HUB_LEVEL) ||
+          getLevelKeyTarget(getEquipped()?.id) === targetLevel,
         consumeLevelKey: (targetLevel) => {
+          if (isDebugFeaturesActive() && world.level === HUB_LEVEL) return true;
           const keyId = `level-key-${targetLevel}`;
           if (getEquipped()?.id !== keyId || !removeInventory(keyId)) return false;
           renderInventoryBar();
@@ -3197,6 +2787,7 @@ function usePickup() {
         window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
         canvas.dataset.lastInteraction = interaction.id;
         canvas.dataset.lastInteractionCount = String(interaction.count ?? 1);
+        writeSaveSnapshot();
         return;
       }
       if (interaction?.locked) {
@@ -3245,10 +2836,14 @@ function usePickup() {
 }
 
 function useEquippedShortPress() {
-  if (!controls || exitComplete || gameFailed || levelTransition || isPaused) return;
+  if (!controls || exitComplete || gameFailed || levelTransition || isPaused || isDocumentReaderOpen()) return;
   const equipped = getEquipped();
   if (!equipped) return;
-  if (equipped.id === "flashlight") {
+  if (LEVEL_DOCUMENTS[equipped.id]) {
+    openDocumentReader(equipped.id);
+    actionButton?.classList.add("is-active");
+    window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
+  } else if (equipped.id === "flashlight") {
     toggleFlashlight();
     actionButton?.classList.add("is-active");
     window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
@@ -3386,6 +2981,7 @@ function updateHud(metrics, controlState, elapsed) {
 let playerHealthCooldown = 0;
 
 function applyEntityContactDamage(delta, metrics) {
+  if (isDebugFeaturesActive()) return;
   if (gameFailed || exitComplete || levelTransition) return;
   if (!controls || !metrics) return;
   if (controls.health <= 0) return;
@@ -3430,7 +3026,7 @@ function animate() {
     return;
   }
   const rawDelta = clock.getDelta();
-  if (isPaused) {
+  if (isPaused || isDocumentReaderOpen()) {
     tickLongPressProgress();
     requestAnimationFrame(animate);
     return;
@@ -3461,6 +3057,7 @@ function animate() {
     repelRadius: SILENCE_LIQUID_REPEL_RADIUS,
     repelSpeedMultiplier: SILENCE_LIQUID_REPEL_SPEED_MULTIPLIER,
     equippedLevelKey: getLevelKeyTarget(getEquipped()?.id),
+    debugBypassLevelKeys: isDebugFeaturesActive() && world.level === HUB_LEVEL,
   });
   const looseItems = worldItems?.update(world.camera.position) ?? [];
   const looseItemFocus = worldItems?.inspect(world.camera) ?? null;
@@ -3476,6 +3073,7 @@ function animate() {
   canvas.dataset.viewModel = world.viewModelName ?? "NONE";
   updateFlashlight(delta);
   updateDetector(delta, metrics);
+  updateDebugExitMarkers();
   applyEntityContactDamage(delta, metrics);
   if (shouldEnterExit(metrics) && !gameFailed && !exitComplete && !levelTransition) {
     const nextLevel = metrics.nextLevel ?? world.nextLevel;
@@ -3486,7 +3084,7 @@ function animate() {
       exitComplete = true;
       completedLevels.add(world.level);
       saveIntegerSet(COMPLETED_KEY, completedLevels);
-      showExitOverlay("EXIT STABILIZED", `${world.levelLabel} SIGNAL LOST`);
+      showExitOverlay("EXIT STABILIZED", `${world.levelLabel} SIGNAL LOST`, { complete: true });
       canvas.dataset.exitReached = "true";
     }
   }
@@ -3530,6 +3128,13 @@ function onUseKeyDown(event) {
     }
     return;
   }
+  if (isDocumentReaderOpen()) {
+    if (event.code === "KeyE" || event.code === "Escape") {
+      event.preventDefault();
+      closeDocumentReader();
+    }
+    return;
+  }
   if (gameFailed) {
     if (event.code === "Escape") event.preventDefault();
     return;
@@ -3542,6 +3147,11 @@ function onUseKeyDown(event) {
     return;
   }
   if (isTypingTarget(event.target)) return;
+  if (event.code === "KeyX" && debugMode.queryEnabled) {
+    event.preventDefault();
+    if (!event.repeat) toggleDebugFeatures();
+    return;
+  }
   if (event.code === "KeyF") {
     event.preventDefault();
     usePickup();
@@ -3588,6 +3198,10 @@ function onUseKeyDown(event) {
 }
 
 function onUseKeyUp(event) {
+  if (isDocumentReaderOpen() && event.code === "KeyE") {
+    event.preventDefault();
+    return;
+  }
   if (event.code === "KeyE") {
     event.preventDefault();
     endEPress();
@@ -3622,7 +3236,7 @@ function onCanvasTapPointerUp(event) {
   if (!tapActive) return;
   tapActive = false;
   if (event.pointerType !== "touch") return;
-  if (isPaused) return;
+  if (isPaused || isDocumentReaderOpen()) return;
   const elapsed = performance.now() - tapStartTime;
   if (elapsed > TAP_MAX_DURATION_MS) return;
   event.preventDefault();
@@ -3631,7 +3245,7 @@ function onCanvasTapPointerUp(event) {
 }
 
 function onWheelCycleInventory(event) {
-  if (isPaused) return;
+  if (isPaused || isDocumentReaderOpen()) return;
   if (isTypingTarget(event.target) || event.target?.tagName === "SELECT") return;
   if (inventory.length === 0) return;
   const direction = event.deltaY > 0 ? 1 : -1;
@@ -3683,6 +3297,14 @@ actionButton?.addEventListener("pointercancel", (event) => {
 });
 actionButton?.addEventListener("pointerleave", (event) => {
   if (ePressActive) endEPress();
+});
+documentReaderClose?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  closeDocumentReader();
+});
+documentReader?.addEventListener("pointerdown", (event) => {
+  if (event.target === documentReader) closeDocumentReader();
 });
 inventoryPrev?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
@@ -3755,6 +3377,11 @@ exitOverlayRestart?.addEventListener("pointerdown", (event) => {
   event.stopPropagation();
   if (!gameFailed) return;
   resetAllProgress();
+});
+exitOverlayContinue?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  continueExploringFromExit();
 });
 flashlightButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();

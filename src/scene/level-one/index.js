@@ -63,6 +63,7 @@ import { createExitNetwork } from "../common/exit-network.js";
 
 const LEVEL_ONE_DOORWAY_WIDTH = 2.7;
 const LEVEL_ONE_DOORWAY_HEIGHT = 2.56;
+const LEVEL_ONE_EXIT_ACTIVITY_RADIUS = CELL_SIZE * 6;
 
 function addLevelOneDoorwayWall(scene, mount, material) {
   const sideWidth = (CELL_SIZE - LEVEL_ONE_DOORWAY_WIDTH) / 2;
@@ -285,18 +286,26 @@ export function createLevelOneScene({ initialState = null } = {}) {
     },
   ];
   const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
+  const bacteriaSpawn = chooseBacteriaSpawn({
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    targetPosition,
+    spawnPosition: spawnCell,
+  }).find((candidate) =>
+    Math.hypot(candidate.x - targetPosition.x, candidate.z - targetPosition.z) <= LEVEL_ONE_EXIT_ACTIVITY_RADIUS,
+  ) ?? targetPosition;
+  const savedBacteria = entityInitial.find((entity) => entity.type === "bacteria") ?? null;
+  const bacteriaInitial = savedBacteria &&
+    Math.hypot(savedBacteria.position.x - targetPosition.x, savedBacteria.position.z - targetPosition.z) <= LEVEL_ONE_EXIT_ACTIVITY_RADIUS
+    ? savedBacteria
+    : null;
   const bacteria = createBacteriaEntity(scene, {
-    spawnPosition: chooseBacteriaSpawn({
-      cols: LEVEL_ONE_COLS,
-      rows: LEVEL_ONE_ROWS,
-      isCellOpen: isLevelOneOpenCell,
-      getCellCenter: levelOneCellCenter,
-      targetPosition,
-      spawnPosition: spawnCell,
-    })[0] ?? spawnCell,
+    spawnPosition: bacteriaSpawn,
     isWalkable,
     speed: 1.16,
-    initialState: entityInitial.find((entity) => entity.type === "bacteria") ?? null,
+    initialState: bacteriaInitial,
     cols: LEVEL_ONE_COLS,
     rows: LEVEL_ONE_ROWS,
     isCellOpen: isLevelOneOpenCell,
@@ -355,7 +364,21 @@ export function createLevelOneScene({ initialState = null } = {}) {
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const compassState = compass.update(delta, elapsed, playerPosition);
     const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
-    const bacteriaState = bacteria.update(delta, elapsed, playerPosition, effects);
+    const playerNearExit = Math.hypot(
+      playerPosition.x - targetPosition.x,
+      playerPosition.z - targetPosition.z,
+    ) <= LEVEL_ONE_EXIT_ACTIVITY_RADIUS;
+    const bacteriaMoveTarget = playerNearExit ? playerPosition : targetPosition;
+    const bacteriaMoveState = bacteria.update(delta, elapsed, bacteriaMoveTarget, effects);
+    const bacteriaDistance = Math.hypot(
+      playerPosition.x - bacteriaMoveState.x,
+      playerPosition.z - bacteriaMoveState.z,
+    );
+    const bacteriaState = {
+      ...bacteriaMoveState,
+      distance: bacteriaDistance,
+      contact: playerNearExit && bacteriaMoveState.contact,
+    };
     const entities = [bacteriaState];
     const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
 
@@ -410,6 +433,13 @@ export function createLevelOneScene({ initialState = null } = {}) {
     decorativeItemSpawns: [
       { id: "empty-can", position: { ...levelOneCellCenter(10, 20), y: 0.2 }, rotation: 0.7, tiltZ: 0.12 },
       { id: "crumpled-note", position: { ...levelOneCellCenter(27, 18), y: 0.08 }, rotation: -0.35, tiltX: 0.04 },
+      {
+        id: "level-one-file",
+        position: { ...levelOneCellCenter(12, 8), y: 0.08 },
+        rotation: -0.18,
+        tiltX: 0.025,
+        ensureOnExistingSave: true,
+      },
     ],
     update,
     getPickupTarget: (playerPosition) =>

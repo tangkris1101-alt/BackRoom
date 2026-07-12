@@ -171,3 +171,42 @@ export function createLevelZeroCeilingTexture() {
   );
 }
 
+export function createManilaWallpaperTexture() {
+  return makeTexture(
+    512,
+    (context, size) => {
+      context.fillStyle = "#bca989";
+      context.fillRect(0, 0, size, size);
+
+      for (let x = 0; x <= size; x += 76) {
+        context.fillStyle = "rgba(91, 76, 54, 0.12)";
+        context.fillRect(x, 0, 2, size);
+        context.fillStyle = "rgba(241, 228, 198, 0.1)";
+        context.fillRect(x + 3, 0, 1, size);
+      }
+
+      context.strokeStyle = "rgba(104, 86, 62, 0.09)";
+      context.lineWidth = 1.2;
+      for (let y = 34; y < size; y += 64) {
+        for (let x = 38; x < size; x += 76) {
+          context.beginPath();
+          context.arc(x, y, 17, 0, Math.PI * 2);
+          context.stroke();
+          context.beginPath();
+          context.arc(x, y, 7, 0, Math.PI * 2);
+          context.stroke();
+        }
+      }
+
+      const age = context.createLinearGradient(0, size, 0, size * 0.52);
+      age.addColorStop(0, "rgba(73, 58, 42, 0.2)");
+      age.addColorStop(1, "rgba(73, 58, 42, 0)");
+      context.fillStyle = age;
+      context.fillRect(0, size * 0.5, size, size * 0.5);
+      drawSpeckles(context, size, 210, 0.08, "76,62,43");
+    },
+    1.42,
+    1.05,
+  );
+}
+

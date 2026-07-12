@@ -11,6 +11,7 @@ export const LEVEL_ONE_MIN_FIXTURE_DISTANCE = CELL_SIZE * 4.15;
 
 export const LEVEL_ONE_DARK_ZONES = [
   { col: 1, row: 16, width: 8, height: 5 },
+  { col: 2, row: 6, width: 10, height: 9 },
   { col: 23, row: 11, width: 10, height: 6 },
   { col: 9, row: 19, width: 8, height: 4 },
   { col: 18, row: 4, width: 6, height: 5 },
@@ -35,6 +36,28 @@ export function createLevelOneLayout() {
   const carveRoom = (col, row, width, height) => {
     for (let y = row; y < row + height; y += 1) {
       for (let x = col; x < col + width; x += 1) carveCell(x, y);
+    }
+  };
+
+  const blockRoom = (col, row, width, height) => {
+    for (let y = row; y < row + height; y += 1) {
+      for (let x = col; x < col + width; x += 1) {
+        if (y > 0 && y < LEVEL_ONE_ROWS - 1 && x > 0 && x < LEVEL_ONE_COLS - 1) {
+          grid[y][x] = "#";
+        }
+      }
+    }
+  };
+
+  const carveHorizontal = (fromCol, toCol, row, width = 1) => {
+    for (let col = Math.min(fromCol, toCol); col <= Math.max(fromCol, toCol); col += 1) {
+      for (let offset = 0; offset < width; offset += 1) carveCell(col, row + offset);
+    }
+  };
+
+  const carveVertical = (col, fromRow, toRow, width = 1) => {
+    for (let row = Math.min(fromRow, toRow); row <= Math.max(fromRow, toRow); row += 1) {
+      for (let offset = 0; offset < width; offset += 1) carveCell(col + offset, row);
     }
   };
 
@@ -72,6 +95,16 @@ export function createLevelOneLayout() {
       }
     }
   });
+
+  // A dim, non-anomalous corridor annex: one doorway from the halls leads to
+  // narrow turns, small side rooms, and a loop that can be retraced safely.
+  blockRoom(2, 6, 10, 9);
+  carveVertical(3, 7, 13, 2);
+  carveHorizontal(3, 8, 7, 2);
+  carveHorizontal(4, 9, 11, 2);
+  carveVertical(8, 7, 13, 2);
+  carveHorizontal(8, 11, 10, 1);
+  carveRoom(5, 12, 3, 2);
 
   return grid.map((row) => row.join(""));
 }
