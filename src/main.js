@@ -217,7 +217,7 @@ const DAMAGE_FLASH_MS = 600;
 const EXIT_DOOR_INTERACT_RADIUS = 4.2;
 const EXIT_ELEVATOR_ENTER_RADIUS = 1.65;
 const ALMOND_WATER_HEAL_DURATION = 5;
-const SElements = [
+const gameplayUiElements = [
   hud,
   joystick,
   jumpButton,
