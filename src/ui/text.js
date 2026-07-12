@@ -738,16 +738,3 @@ export const LEVEL_DOCUMENTS = {
     },
   },
 };
-
-const gameplayUiElements = [
-  hud,
-  joystick,
-  jumpButton,
-  useButton,
-  actionButton,
-  flashlightButton,
-  detectorButton,
-  pauseButton,
-  loadingOverlay,
-  inventoryBar,
-];

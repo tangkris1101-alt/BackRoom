@@ -66,7 +66,6 @@ const levelPickerMenu = document.querySelector("#level-picker-menu");
 const distanceReadout = document.querySelector("#distance-readout");
 const lightReadout = document.querySelector("#light-readout");
 const fpsReadout = document.querySelector("#fps-readout");
-const hud = document.querySelector(".hud");
 const staminaMeter = document.querySelector(".stamina-meter");
 const staminaFill = document.querySelector("#stamina-fill");
 const staminaReadout = document.querySelector("#stamina-readout");
@@ -218,7 +217,7 @@ const EXIT_DOOR_INTERACT_RADIUS = 4.2;
 const EXIT_ELEVATOR_ENTER_RADIUS = 1.65;
 const ALMOND_WATER_HEAL_DURATION = 5;
 const gameplayUiElements = [
-  hud,
+  document.querySelector(".hud"),
   joystick,
   jumpButton,
   useButton,
