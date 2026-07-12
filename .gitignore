@@ -9,9 +9,6 @@ vite-dev.log
 vite-dev.err.log
 dev.log
 
-backrooms.html
-backrooms-version.json
-
 .env
 .env.*
 .DS_Store
