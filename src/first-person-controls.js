@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { SILENCE_LIQUID_DURATION } from "./scene/constants.js";
 
 const PLAYER_RADIUS = 0.36;
 const GRAVITY = 11.5;
@@ -21,7 +22,6 @@ const DRINK_MOVE_MULTIPLIER = 0.5;
 const DRINK_ON_COMPLETE_EVENT = "backrooms:drink-complete";
 const HEALTH_MAX = 100;
 const DEFAULT_HEALTH_REGEN_DURATION = 5;
-const SILENCE_LIQUID_DURATION = 12;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));

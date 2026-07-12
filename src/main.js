@@ -5,7 +5,14 @@ import { DebugMode, DEBUG_PLAYABLE_LEVELS } from "./debug-mode.js";
 import { createBackroomsScene, getBackroomsLevelInfo } from "./scene.js";
 import { FirstPersonControls } from "./first-person-controls.js";
 import { syncFirstPersonHeldItem } from "./scene/common/view-model.js";
-import { BACTERIA_CONTACT_RADIUS, HOUND_CONTACT_RADIUS, HUB_LEVEL } from "./scene/constants.js";
+import {
+  BACTERIA_CONTACT_RADIUS,
+  HOUND_CONTACT_RADIUS,
+  HUB_LEVEL,
+  SILENCE_LIQUID_DURATION,
+  SILENCE_LIQUID_REPEL_RADIUS,
+  SILENCE_LIQUID_REPEL_SPEED_MULTIPLIER,
+} from "./scene/constants.js";
 import {
   hasSavedGame,
   loadSave,
@@ -313,7 +320,14 @@ function attachDebugAreaLightToCamera(camera) {
 }
 const ambientHum = createAmbientHum();
 
-const clock = new THREE.Clock();
+class GameTimer extends THREE.Timer {
+  get elapsedTime() {
+    return this.getElapsed();
+  }
+}
+
+const clock = new GameTimer();
+clock.connect(document);
 
 function handleDrinkComplete(itemId) {
   if (itemId === "almond-water") {
@@ -3019,7 +3033,8 @@ function applyEntityContactDamage(delta, metrics) {
   }
 }
 
-function animate() {
+function animate(timestamp) {
+  clock.update(timestamp);
   if (!gameStarted || !world || !controls) {
     requestAnimationFrame(animate);
     return;
