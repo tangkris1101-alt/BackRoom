@@ -294,6 +294,7 @@ export function addLevelOneFloorZones(scene) {
 }
 
 export function addLevelOneCorridorDetails(scene) {
+  const colliders = [];
   const doorMaterial = new THREE.MeshStandardMaterial({
     color: 0x364047,
     emissive: 0x11191d,
@@ -357,25 +358,56 @@ export function addLevelOneCorridorDetails(scene) {
     scene.add(sign);
   });
 
-  const benches = [
+  const workbenches = [
     { col: 5, row: 8, rotation: Math.PI / 2 },
     { col: 7, row: 12, rotation: 0 },
   ];
-  benches.forEach((entry) => {
+  workbenches.forEach((entry) => {
     const center = levelOneCellCenter(entry.col, entry.row);
     const group = new THREE.Group();
     group.position.set(center.x, 0, center.z);
     group.rotation.y = entry.rotation;
-    const top = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 0.62), benchMaterial);
-    top.position.y = 0.88;
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.13, 0.78), benchMaterial);
+    top.position.y = 0.91;
     group.add(top);
-    for (const x of [-0.66, 0.66]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.84, 0.08), benchMaterial);
-      leg.position.set(x, 0.42, 0);
-      group.add(leg);
+    const lowerShelf = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.07, 0.62), benchMaterial);
+    lowerShelf.position.y = 0.28;
+    group.add(lowerShelf);
+    for (const x of [-0.82, 0.82]) {
+      for (const z of [-0.3, 0.3]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.88, 0.1), benchMaterial);
+        leg.position.set(x, 0.44, z);
+        group.add(leg);
+      }
     }
+    for (let drawerIndex = -1; drawerIndex <= 1; drawerIndex += 1) {
+      const drawer = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.2, 0.06), frameMaterial);
+      drawer.position.set(drawerIndex * 0.53, 0.64, 0.4);
+      group.add(drawer);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.035, 0.04), doorMaterial);
+      handle.position.set(drawerIndex * 0.53, 0.64, 0.45);
+      group.add(handle);
+    }
+    const toolbox = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.24, 0.34), doorMaterial);
+    toolbox.position.set(-0.42, 1.1, 0.02);
+    group.add(toolbox);
+    const vice = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.2), frameMaterial);
+    vice.position.set(0.58, 1.08, -0.08);
+    group.add(vice);
     scene.add(group);
+
+    const rotated = Math.abs(Math.sin(entry.rotation)) > 0.5;
+    const halfX = (rotated ? 0.78 : 1.9) / 2;
+    const halfZ = (rotated ? 1.9 : 0.78) / 2;
+    colliders.push({
+      minX: center.x - halfX,
+      maxX: center.x + halfX,
+      minZ: center.z - halfZ,
+      maxZ: center.z + halfZ,
+    });
   });
+
+  return colliders;
 }
 
 export function addLevelOneParkingMarks(scene) {

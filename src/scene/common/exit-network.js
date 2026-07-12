@@ -7,20 +7,33 @@ const ENTER_RADIUS = 1.25;
 
 function createRouteText(route) {
   const target = route.targetLabel ?? `LEVEL ${route.targetLevel}`;
-  const kindZh = route.kind === "elevator" ? "电梯" : route.kind === "stair" ? "楼梯门" : "出口门";
-  const kindEn = route.kind === "elevator" ? "ELEVATOR" : route.kind === "stair" ? "STAIR DOOR" : "EXIT DOOR";
+  const kindZh = route.kind === "elevator"
+    ? "电梯"
+    : route.kind === "cabinet"
+      ? "储物柜"
+      : route.kind === "stair"
+        ? "楼梯门"
+        : "出口门";
+  const kindEn = route.kind === "elevator"
+    ? "ELEVATOR"
+    : route.kind === "cabinet"
+      ? "STORAGE CABINET"
+      : route.kind === "stair"
+        ? "STAIR DOOR"
+        : "EXIT DOOR";
+  const isCabinet = route.kind === "cabinet";
   return {
     "zh-CN": {
-      name: route.hidden ? "异常混凝土门" : `${target} ${kindZh}`,
-      effect: route.hidden ? "门框后的空间信号无法识别" : `通往 ${target}`,
+      name: isCabinet ? "普通储物柜" : route.hidden ? "异常混凝土门" : `${target} ${kindZh}`,
+      effect: isCabinet ? `柜内存在通往 ${target} 的异常空间` : route.hidden ? "门框后的空间信号无法识别" : `通往 ${target}`,
       action: "F / 按钮打开",
-      response: `${target} 出口已打开`,
+      response: isCabinet ? "柜门已打开" : `${target} 出口已打开`,
     },
     en: {
-      name: route.hidden ? "ANOMALOUS CONCRETE DOOR" : `${target} ${kindEn}`,
-      effect: route.hidden ? "THE SIGNAL BEHIND THE FRAME IS UNREADABLE" : `ROUTE TO ${target}`,
+      name: isCabinet ? "ORDINARY STORAGE CABINET" : route.hidden ? "ANOMALOUS CONCRETE DOOR" : `${target} ${kindEn}`,
+      effect: isCabinet ? `AN ANOMALOUS SPACE LEADS TO ${target}` : route.hidden ? "THE SIGNAL BEHIND THE FRAME IS UNREADABLE" : `ROUTE TO ${target}`,
       action: "F / BUTTON OPEN",
-      response: `${target} ROUTE OPEN`,
+      response: isCabinet ? "CABINET OPEN" : `${target} ROUTE OPEN`,
     },
   };
 }
@@ -64,17 +77,80 @@ function createRouteModel(scene, route) {
   });
   const portalMaterial = new THREE.MeshBasicMaterial({ color: route.hidden ? 0x030403 : 0x090a08 });
 
+  if (route.kind === "cabinet") {
+    const cabinetMaterial = new THREE.MeshStandardMaterial({
+      color: 0x6e756f,
+      emissive: 0x1d2422,
+      emissiveIntensity: 0.14,
+      roughness: 0.74,
+      metalness: 0.24,
+    });
+    const cabinetInteriorMaterial = new THREE.MeshStandardMaterial({
+      color: 0x1d2424,
+      emissive: 0x06100e,
+      emissiveIntensity: 0.3,
+      roughness: 0.9,
+    });
+    const cabinetDoorMaterial = new THREE.MeshStandardMaterial({
+      color: 0x828982,
+      emissive: 0x242b28,
+      emissiveIntensity: 0.16,
+      roughness: 0.7,
+      metalness: 0.18,
+    });
+    const cabinetBody = new THREE.Group();
+    const back = new THREE.Mesh(new THREE.BoxGeometry(2.06, 2.48, 0.08), cabinetInteriorMaterial);
+    back.position.set(0, 1.24, -0.48);
+    const leftSide = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.5, 0.56), cabinetMaterial);
+    leftSide.position.set(-1.03, 1.25, -0.24);
+    const rightSide = leftSide.clone();
+    rightSide.position.x = 1.03;
+    const top = new THREE.Mesh(new THREE.BoxGeometry(2.16, 0.12, 0.58), cabinetMaterial);
+    top.position.set(0, 2.47, -0.24);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(2.16, 0.12, 0.58), cabinetMaterial);
+    base.position.set(0, 0.06, -0.24);
+    const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.07, 0.47), cabinetMaterial);
+    shelf.position.set(0, 1.3, -0.27);
+    cabinetBody.add(back, leftSide, rightSide, top, base, shelf);
+    group.add(cabinetBody);
+
+    const portal = new THREE.Mesh(new THREE.PlaneGeometry(1.88, 2.3), portalMaterial);
+    portal.position.set(0, 1.2, -0.43);
+    group.add(portal);
+
+    const makeDoor = (side) => {
+      const hinge = new THREE.Group();
+      hinge.position.set(side * 0.98, 0, 0.04);
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.96, 2.3, 0.07), cabinetDoorMaterial);
+      door.position.set(-side * 0.48, 1.18, 0);
+      hinge.add(door);
+      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.32, 0.02), frameMaterial);
+      vent.position.set(-side * 0.48, 1.8, side * 0.045);
+      hinge.add(vent);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.36, 0.08), frameMaterial);
+      handle.position.set(side * -0.13, 1.17, side * 0.055);
+      hinge.add(handle);
+      group.add(hinge);
+      return hinge;
+    };
+
+    const leftHinge = makeDoor(-1);
+    const rightHinge = makeDoor(1);
+    scene.add(group);
+    return { group, portal, leftHinge, rightHinge };
+  }
+
   const portal = new THREE.Mesh(new THREE.PlaneGeometry(2.35, 2.4), portalMaterial);
   portal.position.set(0, 1.2, -0.055);
   group.add(portal);
 
   if (route.kind === "elevator") {
     const cabinMaterial = new THREE.MeshStandardMaterial({
-      color: 0x27302e,
-      emissive: 0x07110d,
-      emissiveIntensity: 0.26,
-      roughness: 0.68,
-      metalness: 0.22,
+      color: 0x52605e,
+      emissive: 0x172522,
+      emissiveIntensity: 0.32,
+      roughness: 0.62,
+      metalness: 0.3,
     });
     const cabinBack = new THREE.Mesh(new THREE.BoxGeometry(2.26, 2.36, 0.12), cabinMaterial);
     cabinBack.position.set(0, 1.2, -1.12);
@@ -84,7 +160,40 @@ function createRouteModel(scene, route) {
     cabinRight.position.x = 1.07;
     const cabinCeiling = new THREE.Mesh(new THREE.BoxGeometry(2.26, 0.1, 1.18), cabinMaterial);
     cabinCeiling.position.set(0, 2.36, -0.58);
-    group.add(cabinBack, cabinLeft, cabinRight, cabinCeiling);
+    const cabinFloor = new THREE.Mesh(new THREE.BoxGeometry(2.26, 0.1, 1.18), new THREE.MeshStandardMaterial({
+      color: 0x27302f,
+      emissive: 0x0b1011,
+      emissiveIntensity: 0.16,
+      roughness: 0.82,
+      metalness: 0.18,
+    }));
+    cabinFloor.position.set(0, 0.05, -0.58);
+    const ceilingLampMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe9f5ee,
+      emissive: 0xe9f5ee,
+      emissiveIntensity: 1.45,
+      roughness: 0.3,
+    });
+    const ceilingLamp = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.035, 0.3), ceilingLampMaterial);
+    ceilingLamp.position.set(0, 2.29, -0.58);
+    const controlPanel = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.68, 0.06), new THREE.MeshStandardMaterial({
+      color: 0x1d2927,
+      emissive: 0x0c2820,
+      emissiveIntensity: 0.32,
+      roughness: 0.56,
+      metalness: 0.38,
+    }));
+    controlPanel.position.set(0.94, 1.25, -0.57);
+    const buttonMaterial = new THREE.MeshBasicMaterial({ color: 0xa4ffd0 });
+    for (let buttonIndex = 0; buttonIndex < 3; buttonIndex += 1) {
+      const button = new THREE.Mesh(new THREE.CircleGeometry(0.045, 12), buttonMaterial);
+      button.position.set(0.94, 1.43 - buttonIndex * 0.18, -0.607);
+      button.rotation.y = Math.PI;
+      group.add(button);
+    }
+    const cabinLight = new THREE.PointLight(0xdaf7e7, 0.75, 4.8, 2.1);
+    cabinLight.position.set(0, 2.08, -0.54);
+    group.add(cabinBack, cabinLeft, cabinRight, cabinCeiling, cabinFloor, ceilingLamp, controlPanel, cabinLight);
   }
 
   const leftPanel = new THREE.Mesh(new THREE.BoxGeometry(1.12, 2.35, 0.12), panelMaterial);
@@ -131,7 +240,7 @@ function createRouteModel(scene, route) {
   }
 
   scene.add(group);
-  return { group, leftPanel, rightPanel };
+  return { group, portal, leftPanel, rightPanel };
 }
 
 export function createExitNetwork(scene, camera, routeDefinitions, initialState = {}) {
@@ -155,20 +264,34 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
   function updateModel(route, delta) {
     const target = route.opened ? 1 : 0;
     route.openProgress += (target - route.openProgress) * Math.min(1, delta * 4.8);
+    if (route.kind === "cabinet") {
+      const swing = route.openProgress * Math.PI * 0.58;
+      route.model.leftHinge.rotation.y = swing;
+      route.model.rightHinge.rotation.y = -swing;
+      return;
+    }
     const slide = route.openProgress * 1.08;
     route.model.leftPanel.position.x = -0.57 - slide;
     route.model.rightPanel.position.x = 0.57 + slide;
+    if (route.kind === "elevator" && route.model.portal) {
+      route.model.portal.visible = route.openProgress < 0.3;
+    }
   }
 
   function distanceTo(route, playerPosition) {
     return Math.hypot(playerPosition.x - route.position.x, playerPosition.z - route.position.z);
   }
 
+  function distanceToEntry(route, playerPosition) {
+    const position = route.entryPosition ?? route.position;
+    return Math.hypot(playerPosition.x - position.x, playerPosition.z - position.z);
+  }
+
   function update(delta, playerPosition) {
     let entered = null;
     for (const route of routes) {
       updateModel(route, delta);
-      const distance = distanceTo(route, playerPosition);
+      const distance = distanceToEntry(route, playerPosition);
       if (route.opened && route.openProgress > 0.72 && distance <= (route.enterRadius ?? ENTER_RADIUS)) {
         entered = route;
       }

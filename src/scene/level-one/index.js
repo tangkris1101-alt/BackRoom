@@ -98,6 +98,14 @@ function addLevelOneDoorwayWall(scene, mount, material) {
   scene.add(lintel);
 }
 
+function getEntryPosition(mount) {
+  const rotation = mount.rotation ?? 0;
+  return {
+    x: mount.x + Math.sin(rotation) * 1.05,
+    z: mount.z + Math.cos(rotation) * 1.05,
+  };
+}
+
 export function createLevelOneScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
   const FOG_COLOR = 0x8c988e;
@@ -280,7 +288,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
   addLevelOneFloorZones(scene);
   addLevelOneParkingMarks(scene);
   addLevelOneWallSigns(scene);
-  addLevelOneCorridorDetails(scene);
+  propColliders = propColliders.concat(addLevelOneCorridorDetails(scene));
   const almondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_ONE_COLS,
     rows: LEVEL_ONE_ROWS,
@@ -348,15 +356,17 @@ export function createLevelOneScene({ initialState = null } = {}) {
       label: "ELEVATOR",
       kind: "elevator",
       position: elevatorMount,
+      entryPosition: getEntryPosition(elevatorMount),
       rotation: elevatorMount.rotation,
     },
     {
       id: "level-one-hidden-hub-door",
       targetLevel: HUB_LEVEL,
       targetLabel: "THE HUB",
-      kind: "door",
-      hidden: true,
+      kind: "cabinet",
+      noSign: true,
       position: hubMount,
+      entryPosition: getEntryPosition(hubMount),
       rotation: hubMount.rotation,
     },
   ];
