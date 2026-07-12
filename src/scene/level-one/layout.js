@@ -8,6 +8,12 @@ export const LEVEL_ONE_START_CELL = { col: 4, row: 22, yaw: -Math.PI * 0.18 };
 export const LEVEL_ONE_TARGET_CELL = { col: 31, row: 1 };
 export const LEVEL_ONE_MAX_POINT_LIGHTS = 10;
 export const LEVEL_ONE_MIN_FIXTURE_DISTANCE = CELL_SIZE * 4.15;
+export const LEVEL_ONE_CORRIDOR_BOUNDS = { col: 2, row: 6, width: 10, height: 9 };
+export const LEVEL_ONE_CORRIDOR_FIXTURES = [
+  { col: 3, row: 8, rotation: Math.PI / 2 },
+  { col: 8, row: 8, rotation: Math.PI / 2 },
+  { col: 6, row: 12, rotation: 0 },
+];
 
 export const LEVEL_ONE_DARK_ZONES = [
   { col: 1, row: 16, width: 8, height: 5 },
@@ -96,9 +102,14 @@ export function createLevelOneLayout() {
     }
   });
 
-  // A dim, non-anomalous corridor annex: one doorway from the halls leads to
-  // narrow turns, small side rooms, and a loop that can be retraced safely.
-  blockRoom(2, 6, 10, 9);
+  // A concrete service wing branches from the main hall. Its narrow route
+  // opens into two small rooms before reconnecting, so it remains explorable.
+  blockRoom(
+    LEVEL_ONE_CORRIDOR_BOUNDS.col,
+    LEVEL_ONE_CORRIDOR_BOUNDS.row,
+    LEVEL_ONE_CORRIDOR_BOUNDS.width,
+    LEVEL_ONE_CORRIDOR_BOUNDS.height,
+  );
   carveVertical(3, 7, 13, 2);
   carveHorizontal(3, 8, 7, 2);
   carveHorizontal(4, 9, 11, 2);
@@ -121,6 +132,10 @@ export function isLevelOneOpenCell(col, row) {
     col < LEVEL_ONE_COLS &&
     LEVEL_ONE_MAP[row][col] === "."
   );
+}
+
+export function isLevelOneCorridorCell(col, row) {
+  return isLevelOneOpenCell(col, row) && isInRect(col, row, LEVEL_ONE_CORRIDOR_BOUNDS);
 }
 
 export function levelOneCellCenter(col, row) {

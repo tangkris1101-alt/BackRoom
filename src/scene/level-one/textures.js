@@ -1,5 +1,9 @@
 import { createSeededRandom, makeTexture, drawSpeckles, clampColor, tileNoise } from "../common/texture-utils.js";
 
+const CORRIDOR_FLOOR_SEED = 0x1e1e13;
+const CORRIDOR_WALL_SEED = 0x1e1e14;
+const CORRIDOR_CEILING_SEED = 0x1e1e15;
+
 export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, contrast = 1) {
   const random = createSeededRandom(seed);
   return makeTexture(
@@ -27,6 +31,9 @@ export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, cont
       const isFloor = seed === 0x1e1e10;
       const isWall = seed === 0x1e1e11;
       const isCeiling = seed === 0x1e1e12;
+      const isCorridorFloor = seed === CORRIDOR_FLOOR_SEED;
+      const isCorridorWall = seed === CORRIDOR_WALL_SEED;
+      const isCorridorCeiling = seed === CORRIDOR_CEILING_SEED;
       if (isFloor) {
         context.strokeStyle = "rgba(20,23,21,0.24)";
         context.lineWidth = 2;
@@ -61,6 +68,43 @@ export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, cont
         context.strokeStyle = "rgba(22,27,24,0.22)";
         context.lineWidth = 2;
         for (let x = 0; x <= size; x += 128) {
+          context.beginPath();
+          context.moveTo(x, 0);
+          context.lineTo(x, size);
+          context.stroke();
+        }
+      } else if (isCorridorFloor) {
+        context.strokeStyle = "rgba(70,79,82,0.24)";
+        context.lineWidth = 2;
+        for (let i = 0; i < 7; i += 1) {
+          const y = 36 + random() * (size - 72);
+          context.beginPath();
+          context.moveTo(-24, y);
+          context.bezierCurveTo(size * 0.28, y + random() * 16, size * 0.68, y - random() * 20, size + 24, y + random() * 8);
+          context.stroke();
+        }
+      } else if (isCorridorWall) {
+        context.strokeStyle = "rgba(83,94,98,0.2)";
+        context.lineWidth = 2;
+        const brickHeight = 58;
+        const brickWidth = 124;
+        for (let y = 0; y <= size; y += brickHeight) {
+          context.beginPath();
+          context.moveTo(0, y);
+          context.lineTo(size, y);
+          context.stroke();
+          const offset = Math.floor(y / brickHeight) % 2 === 0 ? 0 : brickWidth / 2;
+          for (let x = -offset; x <= size; x += brickWidth) {
+            context.beginPath();
+            context.moveTo(x, y);
+            context.lineTo(x, y + brickHeight);
+            context.stroke();
+          }
+        }
+      } else if (isCorridorCeiling) {
+        context.strokeStyle = "rgba(78,89,92,0.18)";
+        context.lineWidth = 1.5;
+        for (let x = 0; x <= size; x += 96) {
           context.beginPath();
           context.moveTo(x, 0);
           context.lineTo(x, size);
@@ -107,5 +151,17 @@ export function createLevelOneCeilingTexture() {
   const texture = createLevelOneConcreteTexture(0x1e1e12, 10, 7, [76, 80, 77], 0.82);
   texture.needsUpdate = true;
   return texture;
+}
+
+export function createLevelOneCorridorFloorTexture() {
+  return createLevelOneConcreteTexture(CORRIDOR_FLOOR_SEED, 6.2, 5.2, [118, 124, 124], 0.72);
+}
+
+export function createLevelOneCorridorWallTexture() {
+  return createLevelOneConcreteTexture(CORRIDOR_WALL_SEED, 4.8, 1.25, [190, 199, 201], 0.58);
+}
+
+export function createLevelOneCorridorCeilingTexture() {
+  return createLevelOneConcreteTexture(CORRIDOR_CEILING_SEED, 8.4, 6.4, [181, 190, 193], 0.52);
 }
 

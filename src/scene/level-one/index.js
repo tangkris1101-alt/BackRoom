@@ -18,6 +18,7 @@ import {
   LEVEL_ONE_ROWS,
   LEVEL_ONE_START_CELL,
   LEVEL_ONE_TARGET_CELL,
+  LEVEL_ONE_CORRIDOR_BOUNDS,
   isLevelOneOpenCell,
   levelOneCellCenter,
   levelOneWorldToCell,
@@ -27,6 +28,9 @@ import {
   createLevelOneFloorTexture,
   createLevelOneWallTexture,
   createLevelOneCeilingTexture,
+  createLevelOneCorridorFloorTexture,
+  createLevelOneCorridorWallTexture,
+  createLevelOneCorridorCeilingTexture,
 } from "./textures.js";
 import {
   createLevelOneLights,
@@ -37,6 +41,7 @@ import {
   addLevelOneParkingMarks,
   addLevelOneWallSigns,
   addLevelOneSupplyShelves,
+  addLevelOneCorridorDetails,
   collectLevelOneTransforms,
 } from "./props.js";
 import {
@@ -143,6 +148,27 @@ export function createLevelOneScene({ initialState = null } = {}) {
     emissiveIntensity: 0.34,
     roughness: 0.9,
   });
+  const corridorFloorMaterial = new THREE.MeshStandardMaterial({
+    map: createLevelOneCorridorFloorTexture(),
+    color: 0xd2dadb,
+    emissive: 0x49575b,
+    emissiveIntensity: 0.3,
+    roughness: 0.95,
+  });
+  const corridorWallMaterial = new THREE.MeshStandardMaterial({
+    map: createLevelOneCorridorWallTexture(),
+    color: 0xf0f5f5,
+    emissive: 0x697d83,
+    emissiveIntensity: 0.34,
+    roughness: 0.9,
+  });
+  const corridorCeilingMaterial = new THREE.MeshStandardMaterial({
+    map: createLevelOneCorridorCeilingTexture(),
+    color: 0xe7eeee,
+    emissive: 0x6d7f84,
+    emissiveIntensity: 0.3,
+    roughness: 0.9,
+  });
   const wallCapMaterial = new THREE.MeshStandardMaterial({
     color: 0x777f76,
     emissive: 0x252d28,
@@ -156,6 +182,20 @@ export function createLevelOneScene({ initialState = null } = {}) {
     wallCapMaterial,
     wallMaterial,
     wallMaterial,
+  ];
+  const corridorWallCapMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb6c0c2,
+    emissive: 0x3c4b4f,
+    emissiveIntensity: 0.18,
+    roughness: 0.94,
+  });
+  const corridorWallMaterials = [
+    corridorWallMaterial,
+    corridorWallMaterial,
+    corridorWallCapMaterial,
+    corridorWallCapMaterial,
+    corridorWallMaterial,
+    corridorWallMaterial,
   ];
 
   const floor = new THREE.Mesh(
@@ -173,7 +213,29 @@ export function createLevelOneScene({ initialState = null } = {}) {
   ceiling.position.set(0, CEILING_Y, 0);
   scene.add(ceiling);
 
-  const { northSouth, eastWest, fixturePositions } = collectLevelOneTransforms({
+  const corridorWidth = LEVEL_ONE_CORRIDOR_BOUNDS.width * CELL_SIZE;
+  const corridorDepth = LEVEL_ONE_CORRIDOR_BOUNDS.height * CELL_SIZE;
+  const corridorCenter = levelOneCellCenter(
+    LEVEL_ONE_CORRIDOR_BOUNDS.col + LEVEL_ONE_CORRIDOR_BOUNDS.width / 2 - 0.5,
+    LEVEL_ONE_CORRIDOR_BOUNDS.row + LEVEL_ONE_CORRIDOR_BOUNDS.height / 2 - 0.5,
+  );
+  const corridorFloor = new THREE.Mesh(
+    new THREE.PlaneGeometry(corridorWidth, corridorDepth),
+    corridorFloorMaterial,
+  );
+  corridorFloor.rotation.x = -Math.PI / 2;
+  corridorFloor.position.set(corridorCenter.x, 0.012, corridorCenter.z);
+  scene.add(corridorFloor);
+
+  const corridorCeiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(corridorWidth, corridorDepth),
+    corridorCeilingMaterial,
+  );
+  corridorCeiling.rotation.x = Math.PI / 2;
+  corridorCeiling.position.set(corridorCenter.x, CEILING_Y - 0.012, corridorCenter.z);
+  scene.add(corridorCeiling);
+
+  const { northSouth, eastWest, corridorNorthSouth, corridorEastWest, fixturePositions } = collectLevelOneTransforms({
     openings: [elevatorMount, hubMount],
   });
   addInstancedBoxes(
@@ -187,6 +249,18 @@ export function createLevelOneScene({ initialState = null } = {}) {
     new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
     wallMaterials,
     eastWest,
+  );
+  addInstancedBoxes(
+    scene,
+    new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
+    corridorWallMaterials,
+    corridorNorthSouth,
+  );
+  addInstancedBoxes(
+    scene,
+    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
+    corridorWallMaterials,
+    corridorEastWest,
   );
   addLevelOneDoorwayWall(scene, elevatorMount, wallMaterials);
   addLevelOneDoorwayWall(scene, hubMount, wallMaterials);
@@ -206,6 +280,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
   addLevelOneFloorZones(scene);
   addLevelOneParkingMarks(scene);
   addLevelOneWallSigns(scene);
+  addLevelOneCorridorDetails(scene);
   const almondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_ONE_COLS,
     rows: LEVEL_ONE_ROWS,

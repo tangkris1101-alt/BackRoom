@@ -18,9 +18,11 @@ import {
   LEVEL_ONE_MAX_POINT_LIGHTS,
   LEVEL_ONE_ORIGIN_X,
   LEVEL_ONE_ORIGIN_Z,
+  LEVEL_ONE_CORRIDOR_FIXTURES,
 } from "./layout.js";
 import {
   isLevelOneOpenCell,
+  isLevelOneCorridorCell,
   levelOneCellCenter,
   isInAnyLevelOneZone,
   countLevelOneOpenNeighbors,
@@ -38,6 +40,7 @@ export function createLevelOneLights(scene, fixturePositions) {
   );
   const tubeGeometry = new THREE.BoxGeometry(1, 0.04, 0.34);
   const mountGeometry = new THREE.BoxGeometry(1, 0.04, 0.48);
+  const cableGeometry = new THREE.CylinderGeometry(0.012, 0.012, 1, 6);
   const mountMaterial = new THREE.MeshStandardMaterial({
     color: 0x56605b,
     emissive: 0x1d2421,
@@ -45,10 +48,18 @@ export function createLevelOneLights(scene, fixturePositions) {
     roughness: 0.72,
     metalness: 0.22,
   });
+  const cableMaterial = new THREE.MeshStandardMaterial({
+    color: 0x283034,
+    roughness: 0.78,
+    metalness: 0.16,
+  });
 
   fixturePositions.forEach((fixture, index) => {
+    const drop = fixture.drop ?? 0.12;
+    const tubeY = CEILING_Y - drop;
+    const mountY = tubeY + 0.045;
     const mount = new THREE.Mesh(mountGeometry, mountMaterial);
-    mount.position.set(fixture.x, CEILING_Y - 0.075, fixture.z);
+    mount.position.set(fixture.x, mountY, fixture.z);
     mount.rotation.y = fixture.rotation;
     mount.scale.x = fixture.panelWidth + 0.32;
     scene.add(mount);
@@ -60,14 +71,22 @@ export function createLevelOneLights(scene, fixturePositions) {
       roughness: 0.22,
     });
     const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
-    tube.position.set(fixture.x, CEILING_Y - 0.12, fixture.z);
+    tube.position.set(fixture.x, tubeY, fixture.z);
     tube.rotation.y = fixture.rotation;
     tube.scale.x = fixture.panelWidth;
     scene.add(tube);
 
+    if (fixture.suspended) {
+      const cableLength = Math.max(0.08, CEILING_Y - 0.035 - (mountY + 0.02));
+      const cable = new THREE.Mesh(cableGeometry, cableMaterial);
+      cable.position.set(fixture.x, mountY + 0.02 + cableLength / 2, fixture.z);
+      cable.scale.y = cableLength;
+      scene.add(cable);
+    }
+
     let light = null;
     if (fixture.hasPointLight && pointLightIndexes.has(index)) {
-      light = createFixturePointLight(fixture, CEILING_Y - 0.32, {
+      light = createFixturePointLight(fixture, tubeY - 0.2, {
         rangeScale: 1.52,
         intensityScale: 1.2,
       });
@@ -274,6 +293,91 @@ export function addLevelOneFloorZones(scene) {
   LEVEL_ONE_SUPPLY_ZONES.forEach((zone) => addTint(zone, supplyMaterial, 0.02));
 }
 
+export function addLevelOneCorridorDetails(scene) {
+  const doorMaterial = new THREE.MeshStandardMaterial({
+    color: 0x364047,
+    emissive: 0x11191d,
+    emissiveIntensity: 0.18,
+    roughness: 0.7,
+    metalness: 0.22,
+  });
+  const frameMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb7c1c3,
+    emissive: 0x35454a,
+    emissiveIntensity: 0.16,
+    roughness: 0.82,
+    metalness: 0.1,
+  });
+  const benchMaterial = new THREE.MeshStandardMaterial({
+    color: 0x677178,
+    emissive: 0x20292d,
+    emissiveIntensity: 0.12,
+    roughness: 0.86,
+    metalness: 0.18,
+  });
+  const doorGeometry = new THREE.BoxGeometry(2.18, 2.26, 0.07);
+  const frameGeometry = new THREE.BoxGeometry(2.46, 2.54, 0.08);
+
+  const serviceDoors = [
+    { col: 6, row: 7, side: "north", label: "STORAGE" },
+    { col: 6, row: 13, side: "south", label: "UTILITY" },
+  ];
+  serviceDoors.forEach((entry) => {
+    const center = levelOneCellCenter(entry.col, entry.row);
+    const isNorthSouth = entry.side === "north" || entry.side === "south";
+    const direction = entry.side === "north" || entry.side === "west" ? -1 : 1;
+    const position = {
+      x: center.x + (isNorthSouth ? 0 : direction * (CELL_SIZE / 2 + 0.02)),
+      z: center.z + (isNorthSouth ? direction * (CELL_SIZE / 2 + 0.02) : 0),
+      rotation: isNorthSouth ? (entry.side === "north" ? 0 : Math.PI) : entry.side === "west" ? Math.PI / 2 : -Math.PI / 2,
+    };
+    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+    frame.position.set(position.x, 1.28, position.z);
+    frame.rotation.y = position.rotation;
+    scene.add(frame);
+
+    const door = new THREE.Mesh(doorGeometry, doorMaterial);
+    door.position.set(position.x, 1.18, position.z + (isNorthSouth ? -direction * 0.045 : 0));
+    door.rotation.y = position.rotation;
+    scene.add(door);
+
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.52, 0.3),
+      new THREE.MeshStandardMaterial({
+        map: createWideSignTexture(entry.label, "#223139", "#e0f4ff"),
+        color: 0xffffff,
+        emissive: 0x4e7688,
+        emissiveIntensity: 0.32,
+        roughness: 0.56,
+        side: THREE.DoubleSide,
+      }),
+    );
+    sign.position.set(position.x, 2.55, position.z + (isNorthSouth ? -direction * 0.055 : 0));
+    sign.rotation.y = position.rotation;
+    scene.add(sign);
+  });
+
+  const benches = [
+    { col: 5, row: 8, rotation: Math.PI / 2 },
+    { col: 7, row: 12, rotation: 0 },
+  ];
+  benches.forEach((entry) => {
+    const center = levelOneCellCenter(entry.col, entry.row);
+    const group = new THREE.Group();
+    group.position.set(center.x, 0, center.z);
+    group.rotation.y = entry.rotation;
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 0.62), benchMaterial);
+    top.position.y = 0.88;
+    group.add(top);
+    for (const x of [-0.66, 0.66]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.84, 0.08), benchMaterial);
+      leg.position.set(x, 0.42, 0);
+      group.add(leg);
+    }
+    scene.add(group);
+  });
+}
+
 export function addLevelOneParkingMarks(scene) {
   const lineMaterial = new THREE.MeshBasicMaterial({
     color: 0xd7dec8,
@@ -414,6 +518,8 @@ export function addLevelOneSupplyShelves(scene) {
 export function collectLevelOneTransforms({ openings = [] } = {}) {
   const northSouth = [];
   const eastWest = [];
+  const corridorNorthSouth = [];
+  const corridorEastWest = [];
   const fixtureCandidates = [];
   const hasOpeningAt = (x, z) => openings.some(
     (opening) => Math.abs(opening.x - x) < 0.01 && Math.abs(opening.z - z) < 0.01,
@@ -426,25 +532,34 @@ export function collectLevelOneTransforms({ openings = [] } = {}) {
       const center = levelOneCellCenter(col, row);
       const isDarkZone = isInAnyLevelOneZone(col, row, LEVEL_ONE_DARK_ZONES);
       const isSupplyZone = isInAnyLevelOneZone(col, row, LEVEL_ONE_SUPPLY_ZONES);
+      const isCorridor = isLevelOneCorridorCell(col, row);
       const openNeighborCount = countLevelOneOpenNeighbors(col, row);
       const isOpenHall = openNeighborCount >= 3;
 
       if (!isLevelOneOpenCell(col, row - 1) && !hasOpeningAt(center.x, center.z - CELL_SIZE / 2)) {
-        northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2));
+        (isCorridor ? corridorNorthSouth : northSouth).push(
+          new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2),
+        );
       }
       if (!isLevelOneOpenCell(col, row + 1) && !hasOpeningAt(center.x, center.z + CELL_SIZE / 2)) {
-        northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2));
+        (isCorridor ? corridorNorthSouth : northSouth).push(
+          new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2),
+        );
       }
       if (!isLevelOneOpenCell(col - 1, row) && !hasOpeningAt(center.x - CELL_SIZE / 2, center.z)) {
-        eastWest.push(new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+        (isCorridor ? corridorEastWest : eastWest).push(
+          new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z),
+        );
       }
       if (!isLevelOneOpenCell(col + 1, row) && !hasOpeningAt(center.x + CELL_SIZE / 2, center.z)) {
-        eastWest.push(new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+        (isCorridor ? corridorEastWest : eastWest).push(
+          new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z),
+        );
       }
 
       const fixtureGrid = col % 7 === 3 && row % 5 === 2;
       const corridorGrid = col % 9 === 5 && row % 6 === 4;
-      if ((fixtureGrid && !isDarkZone) || (corridorGrid && isOpenHall)) {
+      if (!isCorridor && ((fixtureGrid && !isDarkZone) || (corridorGrid && isOpenHall))) {
         fixtureCandidates.push({
           x: center.x,
           z: center.z,
@@ -500,6 +615,27 @@ export function collectLevelOneTransforms({ openings = [] } = {}) {
     },
   );
 
+  LEVEL_ONE_CORRIDOR_FIXTURES.forEach((fixture, index) => {
+    const center = levelOneCellCenter(fixture.col, fixture.row);
+    fixtureCandidates.push({
+      x: center.x,
+      z: center.z,
+      rotation: fixture.rotation,
+      phase: 2.2 + index * 1.37,
+      speed: 2.1 + index * 0.22,
+      weak: index === 1 ? 0.08 : 0.03,
+      broken: false,
+      range: 10.8,
+      baseIntensity: 1.36,
+      panelWidth: 2.25,
+      color: 0xe4efff,
+      hasPointLight: true,
+      priority: 6 - index * 0.1,
+      suspended: true,
+      drop: 0.52,
+    });
+  });
+
   fixtureCandidates
     .sort((a, b) => b.priority - a.priority)
     .forEach((candidate) => {
@@ -511,6 +647,6 @@ export function collectLevelOneTransforms({ openings = [] } = {}) {
       if (!tooClose) fixturePositions.push(candidate);
     });
 
-  return { northSouth, eastWest, fixturePositions };
+  return { northSouth, eastWest, corridorNorthSouth, corridorEastWest, fixturePositions };
 }
 
