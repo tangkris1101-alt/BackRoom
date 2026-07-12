@@ -1,4 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,6 +9,8 @@ const sourcePath = resolve(distDirectory, "app.html");
 const outputPath = resolve(projectRoot, "backrooms.html");
 const distOutputPath = resolve(distDirectory, "backrooms.html");
 const distIndexPath = resolve(distDirectory, "index.html");
+const versionManifestPath = resolve(projectRoot, "backrooms-version.json");
+const distVersionManifestPath = resolve(distDirectory, "backrooms-version.json");
 
 let html = await readFile(sourcePath, "utf8");
 
@@ -69,13 +72,37 @@ async function inlineCssAssets(source) {
 
 const inlineCss = (await inlineCssAssets(css)).replace(/<\/style/gi, "<\\/style");
 const inlineJavascript = javascript.replace(/<\/script/gi, "<\\/script");
+const buildId = createHash("sha256")
+  .update(inlineCss)
+  .update(inlineJavascript)
+  .digest("hex")
+  .slice(0, 12);
+const updateCheck = `<script>
+(() => {
+  const buildId = "${buildId}";
+  const manifest = new URL("./backrooms-version.json", window.location.href);
+  fetch(manifest, { cache: "no-store" })
+    .then((response) => (response.ok ? response.json() : null))
+    .then((latest) => {
+      if (!latest?.buildId || latest.buildId === buildId) return;
+      const next = new URL(window.location.href);
+      if (next.searchParams.get("v") === latest.buildId) return;
+      next.searchParams.set("v", latest.buildId);
+      window.location.replace(next);
+    })
+    .catch(() => {
+      // A standalone file can still run when no manifest is deployed.
+    });
+})();
+</script>`;
 
 html = html
+  .replace("</head>", () => `    <meta name="backrooms-build" content="${buildId}" />\n  </head>`)
   .replace(stylesheetMatch[0], () => `<style>${inlineCss}</style>`)
   .replace(scriptMatch[0], "")
   .replace(
     "</body>",
-    () => `    <script>${inlineJavascript}</script>\n  </body>`,
+    () => `    ${updateCheck}\n    <script>${inlineJavascript}</script>\n  </body>`,
   )
   .replace(
     "</head>",
@@ -86,6 +113,8 @@ await Promise.all([
   writeFile(outputPath, html, "utf8"),
   writeFile(distOutputPath, html, "utf8"),
   writeFile(distIndexPath, html, "utf8"),
+  writeFile(versionManifestPath, `${JSON.stringify({ buildId })}\n`, "utf8"),
+  writeFile(distVersionManifestPath, `${JSON.stringify({ buildId })}\n`, "utf8"),
 ]);
 
-console.log("Created standalone backrooms.html and dist/index.html");
+console.log(`Created standalone Backrooms build ${buildId}`);

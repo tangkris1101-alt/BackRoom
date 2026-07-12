@@ -3,7 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="refresh" content="0; url=./backrooms.html" />
     <title>Backrooms</title>
     <style>
       :root {
@@ -26,9 +25,23 @@
     </style>
   </head>
   <body>
-    <a href="./backrooms.html">进入 Backrooms</a>
+    <a id="backrooms-link" href="./backrooms.html">进入 Backrooms</a>
     <script>
-      window.location.replace("./backrooms.html");
+      const gameUrl = new URL("./backrooms.html", window.location.href);
+      const versionUrl = new URL("./backrooms-version.json", window.location.href);
+
+      fetch(versionUrl, { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((manifest) => {
+          if (manifest?.buildId) gameUrl.searchParams.set("v", manifest.buildId);
+        })
+        .catch(() => {
+          // The single-file distribution intentionally works without a manifest.
+        })
+        .finally(() => {
+          document.querySelector("#backrooms-link").href = gameUrl.href;
+          window.location.replace(gameUrl.href);
+        });
     </script>
   </body>
 </html>

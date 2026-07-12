@@ -88,8 +88,9 @@ npm run build
 
 ### 部署
 - **整站部署**：把 `dist/` 作为静态站点根目录
-- **单文件部署**：上传 `backrooms.html` 即可（适合 GitHub Pages / itch.io）
-- 仓库根目录的 `index.html` 自动跳转到 `backrooms.html`
+- **自动更新部署**：上传 `dist/`（其中的 `backrooms-version.json` 会让旧页面自动切换到新版本）
+- **单文件部署**：只上传 `backrooms.html` 仍可运行，但无法自动检测后续更新
+- 仓库根目录的 `index.html` 会读取版本清单后再跳转到 `backrooms.html`
 
 ---
 

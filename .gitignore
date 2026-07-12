@@ -10,6 +10,7 @@ vite-dev.err.log
 dev.log
 
 backrooms.html
+backrooms-version.json
 
 .env
 .env.*
