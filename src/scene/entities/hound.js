@@ -6,6 +6,7 @@ import { createEntityMover } from "./behavior.js";
 const HOUND_RECOMPUTE_INTERVAL = 0.42;
 const HOUND_STUCK_THRESHOLD = 0.58;
 const HOUND_DIRECT_CHASE_DISTANCE = 10.5;
+const HOUND_FLASH_STUN_DURATION = 1.5;
 
 export function createHoundModel() {
   const group = new THREE.Group();
@@ -115,8 +116,15 @@ export function createHoundEntity(
   group.rotation.y = Math.random() * Math.PI * 2;
   scene.add(group);
 
+  const stunLight = new THREE.PointLight(0xd9eeff, 0, 3.6, 2.1);
+  stunLight.position.set(0, 0.86, 0);
+  stunLight.visible = false;
+  group.add(stunLight);
+
   let contact = false;
   let isDormant = Boolean(dormant);
+  let stunnedUntil = 0;
+  let wasFlashlit = false;
   if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
     group.position.x = initialState.position.x;
     group.position.z = initialState.position.z;
@@ -138,6 +146,27 @@ export function createHoundEntity(
     turnRate: 10.5,
   });
 
+  function isFlashlightHit(effects) {
+    const beam = effects.flashlightBeam;
+    if (!beam?.active || !beam.origin || !beam.direction) return false;
+    const dx = group.position.x - beam.origin.x;
+    const dz = group.position.z - beam.origin.z;
+    const distance = Math.hypot(dx, dz);
+    if (distance < 0.2 || distance > beam.range) return false;
+    const directionLength = Math.hypot(beam.direction.x, beam.direction.z);
+    if (directionLength < 0.001) return false;
+    const dot = (dx * beam.direction.x + dz * beam.direction.z) / (distance * directionLength);
+    if (dot < (beam.minimumDot ?? 0.86)) return false;
+    if (!worldToCell || !isCellOpen) return true;
+    const samples = Math.max(2, Math.ceil(distance / 0.45));
+    for (let index = 1; index < samples; index += 1) {
+      const ratio = index / samples;
+      const cell = worldToCell(beam.origin.x + dx * ratio, beam.origin.z + dz * ratio);
+      if (!isCellOpen(cell.col, cell.row)) return false;
+    }
+    return true;
+  }
+
   return {
     getState() {
       return {
@@ -152,21 +181,36 @@ export function createHoundEntity(
       const dx = playerPosition.x - group.position.x;
       const dz = playerPosition.z - group.position.z;
       const distance = Math.hypot(dx, dz);
+      const flashlit = isFlashlightHit(effects);
+      if (flashlit && !wasFlashlit) {
+        stunnedUntil = Math.max(stunnedUntil, elapsed + HOUND_FLASH_STUN_DURATION);
+        mover.clearPath();
+      }
+      wasFlashlit = flashlit;
+      const stunned = elapsed < stunnedUntil;
       if (isDormant && dormantArmRadius > 0 && distance <= dormantArmRadius) {
         isDormant = false;
         mover.clearPath();
       }
       const closeSurge = distance < 8 ? 1.12 : 1;
       const stride = 0.96 + Math.sin(elapsed * 3.8) * 0.09;
-      const moveState = mover.update(delta, elapsed, playerPosition, effects, {
-        dormant: isDormant,
-        speedScale: closeSurge * stride,
-      });
-      contact = moveState.contact;
+      const moveState = stunned
+        ? { distance, contact: false }
+        : mover.update(delta, elapsed, playerPosition, effects, {
+            dormant: isDormant,
+            speedScale: closeSurge * stride,
+          });
+      contact = !stunned && moveState.contact;
 
       const gait = Math.sin(elapsed * 7.2) * 0.035;
-      group.position.y = isDormant ? 0.01 : Math.abs(Math.sin(elapsed * 5.4)) * 0.032;
-      group.rotation.z = isDormant ? Math.sin(elapsed * 0.9) * 0.012 : gait;
+      group.position.y = isDormant
+        ? 0.01
+        : stunned
+          ? 0.025 + Math.abs(Math.sin(elapsed * 19)) * 0.018
+          : Math.abs(Math.sin(elapsed * 5.4)) * 0.032;
+      group.rotation.z = isDormant ? Math.sin(elapsed * 0.9) * 0.012 : stunned ? Math.sin(elapsed * 27) * 0.085 : gait;
+      stunLight.visible = stunned;
+      stunLight.intensity = stunned ? 1.15 + Math.sin(elapsed * 18) * 0.35 : 0;
 
       return {
         id,
@@ -177,6 +221,8 @@ export function createHoundEntity(
         y: 0.9,
         z: group.position.z,
         dormant: isDormant,
+        stunned,
+        flashlit,
       };
     },
   };

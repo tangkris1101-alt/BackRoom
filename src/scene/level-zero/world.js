@@ -4,10 +4,7 @@ import {
   CEILING_Y,
   WALL_HEIGHT,
   WALL_THICKNESS,
-  MAX_POINT_LIGHTS,
-  MIN_FIXTURE_DISTANCE,
 } from "../constants.js";
-import { createFixturePointLight } from "../common/lighting.js";
 import { createWideSignTexture } from "../common/textures.js";
 import { isInAnyZone } from "../common/layout.js";
 import {
@@ -42,17 +39,18 @@ export const DARK_ZONES = [
 
 
 
+const ACTIVE_FIXTURE_LIGHTS = 8;
+const LEVEL_ZERO_MIN_FIXTURE_DISTANCE = CELL_SIZE * 1.86;
+
 export function createLights(scene, fixturePositions) {
   const fixtures = [];
-  const pointLightIndexes = new Set(
-    fixturePositions
-      .map((fixture, index) => ({ index, priority: fixture.priority }))
-      .sort((a, b) => b.priority - a.priority)
-      .slice(0, MAX_POINT_LIGHTS)
-      .map(({ index }) => index),
-  );
-  const panelGeometry = new THREE.BoxGeometry(1, 0.035, 0.36);
-  const trimGeometry = new THREE.BoxGeometry(1, 0.03, 0.52);
+  const activeLights = [];
+  const activeLightCount = Math.min(ACTIVE_FIXTURE_LIGHTS, fixturePositions.length);
+  let refreshTimer = 0;
+  let lastLightAnchor = null;
+  const panelSize = 1.42;
+  const panelGeometry = new THREE.BoxGeometry(1, 0.035, 1);
+  const trimGeometry = new THREE.BoxGeometry(1, 0.03, 1);
   const trimMaterial = new THREE.MeshStandardMaterial({
     color: 0x9d9258,
     emissive: 0x4a4020,
@@ -61,7 +59,7 @@ export function createLights(scene, fixturePositions) {
     metalness: 0.02,
   });
 
-  fixturePositions.forEach((fixture, index) => {
+  fixturePositions.forEach((fixture) => {
     const glowMaterial = new THREE.MeshStandardMaterial({
       color: fixture.color,
       emissive: fixture.color,
@@ -70,37 +68,73 @@ export function createLights(scene, fixturePositions) {
     });
     const trim = new THREE.Mesh(trimGeometry, trimMaterial);
     trim.position.set(fixture.x, CEILING_Y - 0.055, fixture.z);
-    trim.rotation.y = fixture.rotation;
-    trim.scale.x = fixture.panelWidth + 0.24;
+    trim.scale.set(panelSize + 0.24, 1, panelSize + 0.24);
     scene.add(trim);
 
     const panel = new THREE.Mesh(panelGeometry, glowMaterial);
     panel.position.set(fixture.x, CEILING_Y - 0.09, fixture.z);
-    panel.rotation.y = fixture.rotation;
-    panel.scale.x = fixture.panelWidth;
+    panel.scale.set(panelSize, 1, panelSize);
     scene.add(panel);
-
-    let light = null;
-    if (fixture.hasPointLight && pointLightIndexes.has(index)) {
-      light = createFixturePointLight(fixture, CEILING_Y - 0.25, {
-        rangeScale: 1.48,
-        intensityScale: 1.22,
-      });
-      scene.add(light);
-    }
 
     fixtures.push({
       panel,
       material: glowMaterial,
-      light,
+      x: fixture.x,
+      z: fixture.z,
+      color: fixture.color,
+      range: fixture.range,
       phase: fixture.phase,
       speed: fixture.speed,
       baseIntensity: fixture.baseIntensity,
       weak: fixture.weak,
+      pulse: fixture.baseIntensity,
     });
   });
 
-  return fixtures;
+  for (let index = 0; index < activeLightCount; index += 1) {
+    const light = new THREE.PointLight(0xfff9df, 0, 10, 2.05);
+    light.visible = false;
+    scene.add(light);
+    activeLights.push(light);
+  }
+
+  function refreshActiveLights(playerPosition) {
+    const closestFixtures = [...fixtures].sort(
+      (first, second) =>
+        (first.x - playerPosition.x) ** 2 + (first.z - playerPosition.z) ** 2 -
+        ((second.x - playerPosition.x) ** 2 + (second.z - playerPosition.z) ** 2),
+    );
+
+    activeLights.forEach((light, index) => {
+      const fixture = closestFixtures[index] ?? null;
+      light.userData.fixture = fixture;
+      light.visible = fixture !== null;
+      if (!fixture) return;
+      light.color.setHex(fixture.color);
+      light.distance = fixture.range * 1.2;
+      light.position.set(fixture.x, CEILING_Y - 0.24, fixture.z);
+    });
+  }
+
+  function updatePointLights(delta, playerPosition) {
+    refreshTimer += delta;
+    const movedSinceRefresh =
+      !lastLightAnchor ||
+      Math.hypot(playerPosition.x - lastLightAnchor.x, playerPosition.z - lastLightAnchor.z) > 1.15;
+    if (movedSinceRefresh || refreshTimer >= 0.22) {
+      refreshActiveLights(playerPosition);
+      lastLightAnchor = { x: playerPosition.x, z: playerPosition.z };
+      refreshTimer = 0;
+    }
+
+    activeLights.forEach((light) => {
+      const fixture = light.userData.fixture;
+      if (!fixture) return;
+      light.intensity = fixture.pulse * fixture.baseIntensity * 2.25;
+    });
+  }
+
+  return { fixtures, updatePointLights };
 }
 
 export function getExitMount(position) {
@@ -315,32 +349,27 @@ export function collectWallTransforms() {
         eastWest.push(position);
       }
 
-      const lightSeed = (col * 37 + row * 19) % 11;
-      const roomFixtureGrid = col % 6 === 3 && row % 4 === 1;
-      const brightFixtureGrid = col % 5 === 2 && row % 4 === 1;
+      const roomFixtureGrid = col % 2 === 1 && row % 2 === 1;
       const horizontalCorridor = isOpenCell(col - 1, row) && isOpenCell(col + 1, row);
       const verticalCorridor = isOpenCell(col, row - 1) && isOpenCell(col, row + 1);
       const corridorCenter = !isSpacious && (horizontalCorridor || verticalCorridor);
-      const corridorGrid = corridorCenter && row % 5 === 2 && col % 6 === 3;
+      const corridorFixtureGrid = horizontalCorridor ? col % 2 === 1 : row % 2 === 1;
+      const fixtureGrid = isSpacious ? roomFixtureGrid : corridorFixtureGrid;
       const shouldLight =
-        (isBrightZone && brightFixtureGrid) ||
-        (!isDarkZone && isSpacious && roomFixtureGrid) ||
-        (!isDarkZone && corridorGrid) ||
-        (isDarkZone && roomFixtureGrid && (row + col) % 2 === 0);
+        fixtureGrid &&
+        ((isDarkZone && (Math.floor(col / 5) + Math.floor(row / 5)) % 2 === 0) ||
+          (!isDarkZone && (isSpacious || corridorCenter)));
 
       if (shouldLight) {
         fixtureCandidates.push({
           x: center.x,
           z: center.z,
-          rotation: 0,
           phase: col * 0.83 + row * 1.17,
           speed: isDarkZone ? 5 + ((col * row) % 5) : 2.6 + ((col * row) % 4) * 0.45,
           weak: isDarkZone ? 0.18 : isBrightZone ? 0 : isSpacious ? 0.04 : 0.08,
-          range: isBrightZone ? 14.8 : isDarkZone ? 8.6 : 11.4,
+          range: isBrightZone ? 10.8 : isDarkZone ? 6.8 : 8.8,
           baseIntensity: isBrightZone ? 1.78 : isDarkZone ? 0.74 : 1.24,
-          panelWidth: isBrightZone ? 2.95 : isSpacious ? 2.58 : 2.08,
           color: isDarkZone ? 0xe7d79f : 0xfff9df,
-          hasPointLight: isBrightZone || isSpacious || (corridorGrid && lightSeed <= 2),
           priority: (isBrightZone ? 4 : 0) + (isSpacious ? 2 : 0) - (isDarkZone ? 1 : 0),
         });
       }
@@ -354,29 +383,23 @@ export function collectWallTransforms() {
     {
       x: startCenter.x,
       z: startCenter.z,
-      rotation: 0,
       phase: 0.2,
       speed: 2.2,
       weak: 0.02,
       range: 13.6,
       baseIntensity: 1.46,
-      panelWidth: 2.72,
       color: 0xfff9df,
-      hasPointLight: true,
       priority: 8,
     },
     {
       x: exitCenter.x,
       z: exitCenter.z,
-      rotation: 0,
       phase: 1.4,
       speed: 2.4,
       weak: 0.02,
       range: 13.2,
       baseIntensity: 1.42,
-      panelWidth: 2.72,
       color: 0xfff9df,
-      hasPointLight: true,
       priority: 7,
     },
   );
@@ -385,11 +408,12 @@ export function collectWallTransforms() {
     .sort((a, b) => b.priority - a.priority)
     .forEach((candidate) => {
       const tooClose = fixturePositions.some(
-        (fixture) => Math.hypot(fixture.x - candidate.x, fixture.z - candidate.z) < MIN_FIXTURE_DISTANCE,
+        (fixture) =>
+          Math.hypot(fixture.x - candidate.x, fixture.z - candidate.z) <
+          LEVEL_ZERO_MIN_FIXTURE_DISTANCE,
       );
       if (!tooClose) fixturePositions.push(candidate);
     });
 
   return { northSouth, eastWest, fixturePositions };
 }
-

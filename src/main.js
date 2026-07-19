@@ -70,15 +70,14 @@ const levelPicker = document.querySelector("#level-picker");
 const levelPickerButton = document.querySelector("#level-picker-button");
 const levelPickerLabel = document.querySelector("#level-picker-label");
 const levelPickerMenu = document.querySelector("#level-picker-menu");
-const distanceReadout = document.querySelector("#distance-readout");
 const lightReadout = document.querySelector("#light-readout");
 const fpsReadout = document.querySelector("#fps-readout");
 const staminaMeter = document.querySelector(".stamina-meter");
+const staminaLabel = document.querySelector("#stamina-label");
 const staminaFill = document.querySelector("#stamina-fill");
-const staminaReadout = document.querySelector("#stamina-readout");
 const healthMeter = document.querySelector(".health-meter");
+const healthLabel = document.querySelector("#health-label");
 const healthFill = document.querySelector("#health-fill");
-const healthReadout = document.querySelector("#health-readout");
 const damageFlash = document.querySelector("#damage-flash");
 const flashlightMeter = document.querySelector(".flashlight-meter");
 const flashlightFill = document.querySelector("#flashlight-fill");
@@ -108,12 +107,12 @@ const exitOverlayContinueHint = document.querySelector("#exit-overlay-continue-h
 const exitOverlayDanger = document.querySelector("#exit-overlay-danger");
 const loadingLevelLabel = loadingOverlay?.querySelector(".loading-overlay__panel span");
 const loadingDanger = document.querySelector("#loading-danger");
-const timerReadout = document.querySelector("#timer-readout");
-const timerReadoutValue = timerReadout?.querySelector(".timer-readout__value");
 const itemInfo = document.querySelector("#item-info");
 const itemInfoName = document.querySelector("#item-info-name");
 const itemInfoEffect = document.querySelector("#item-info-effect");
 const itemInfoAction = document.querySelector("#item-info-action");
+const pickupPrompt = document.querySelector("#pickup-prompt");
+const doorPrompt = document.querySelector("#door-prompt");
 const documentReader = document.querySelector("#document-reader");
 const documentReaderEyebrow = document.querySelector("#document-reader-eyebrow");
 const documentReaderTitle = document.querySelector("#document-reader-title");
@@ -128,9 +127,6 @@ const pauseOverlay = document.querySelector("#pause-overlay");
 const pauseTitle = document.querySelector("#pause-title");
 const pauseSubtitle = document.querySelector("#pause-subtitle");
 const pauseResumeArea = document.querySelector("#pause-resume-area");
-const pauseTutorialButton = document.querySelector("#pause-tutorial");
-const pauseTutorialLabel = document.querySelector("#pause-tutorial-label");
-const pauseTutorialHint = document.querySelector("#pause-tutorial-hint");
 const pauseTimeLabel = document.querySelector("#pause-time-label");
 const pauseTimeReadout = document.querySelector("#pause-time-readout");
 const pauseSettingsButton = document.querySelector("#pause-settings");
@@ -369,6 +365,9 @@ let detectorCooldownTimer = 0;
 let currentLanguage = "zh-CN";
 const detectorProjection = new THREE.Vector3();
 const compassToExit = new THREE.Vector3();
+const pickupPromptProjection = new THREE.Vector3();
+const doorPromptProjection = new THREE.Vector3();
+const flashlightBeamDirection = new THREE.Vector3();
 const debugExitProjection = new THREE.Vector3();
 let lastMetrics = null;
 
@@ -376,7 +375,6 @@ const INVENTORY_ORDER = [
   "flashlight",
   "detector",
   "silence-liquid",
-  "compass",
   "level-one-file",
   ...LEVEL_KEY_IDS,
   "almond-water",
@@ -394,7 +392,6 @@ const INVENTORY_DEFS = {
   },
   detector: { id: "detector", type: "scan", unique: true, stackable: false },
   "silence-liquid": { id: "silence-liquid", type: "consumable", unique: false, stackable: true },
-  compass: { id: "compass", type: "passive", unique: true, stackable: false },
   ...Object.fromEntries(
     LEVEL_KEY_IDS.map((id) => [id, { id, type: "key", unique: true, stackable: false }]),
   ),
@@ -693,6 +690,7 @@ function setLanguage(nextLanguage) {
   document.documentElement.lang = currentLanguage;
   canvas.dataset.language = currentLanguage;
   updateMainMenuText();
+  updateHudLabels();
   if (controls) {
     updateBuffCards(controls.getState());
     updateDetectorHud();
@@ -725,6 +723,7 @@ function setLanguage(nextLanguage) {
 }
 
 updateMainMenuText();
+updateHudLabels();
 
 function loadIntegerSet(key) {
   try {
@@ -988,6 +987,11 @@ function formatLocalizedStatus(id, values = {}) {
   const template = getLocalizedText(STATUS_TEXT, id);
   if (typeof template !== "string") return String(id);
   return template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ""));
+}
+
+function updateHudLabels() {
+  if (staminaLabel) staminaLabel.textContent = formatLocalizedStatus("staminaLabel");
+  if (healthLabel) healthLabel.textContent = formatLocalizedStatus("healthLabel");
 }
 
 function formatDuration(totalSeconds) {
@@ -1290,8 +1294,9 @@ function applySaveToRuntime(save) {
   if (!save) return;
   inventory.length = 0;
   const equippedId = save.inventory?.[save.equippedIndex]?.id ?? null;
-  for (const entry of save.inventory) {
-    inventory.push({ id: entry.id, count: entry.count, type: entry.type });
+  for (const entry of save.inventory ?? []) {
+    if (!INVENTORY_DEFS[entry?.id] || !Number.isFinite(entry.count) || entry.count <= 0) continue;
+    inventory.push({ id: entry.id, count: entry.count, type: INVENTORY_DEFS[entry.id].type });
   }
   sortInventory(equippedId);
   flashlightOwned = Boolean(save.flashlight?.owned);
@@ -1595,11 +1600,6 @@ function setExitOverlayCompletionState(completed) {
   }
 }
 
-function updateTimerReadout() {
-  if (!timerReadoutValue) return;
-  timerReadoutValue.textContent = formatDuration(runTime);
-}
-
 function updatePauseOverlay() {
   if (pauseTitle) pauseTitle.textContent = formatLocalizedStatus("pauseTitle");
   if (pauseSubtitle) pauseSubtitle.textContent = formatLocalizedStatus("pauseSubtitle");
@@ -1661,16 +1661,16 @@ function updateLevelTransitionOverlayText(transition = levelTransition) {
   if (!transition?.nextLevelInfo) return;
   setExitOverlayText(transition.nextLevelInfo.levelLabel, transition.nextLevelInfo.levelName);
   setLevelDangerIndicator(exitOverlayDanger, transition.nextLevelInfo);
-  setExitOverlayDetail(
-    formatLocalizedStatus(transition.loaded ? "levelTransitionReady" : "levelTransitionHint"),
-  );
+  const status = formatLocalizedStatus(transition.loaded ? "levelTransitionReady" : "levelTransitionHint");
+  const elapsed = formatLocalizedStatus("exitTotalTime", { time: formatDuration(runTime) });
+  setExitOverlayDetail(`${status} · ${elapsed}`);
 }
 
 function showLevelDangerBriefing(levelInfo) {
   if (!levelInfo) return;
   if (levelBriefingTimer) window.clearTimeout(levelBriefingTimer);
   showExitOverlay(levelInfo.levelLabel, levelInfo.levelName, {
-    showTime: false,
+    showTime: true,
     variantClass: "is-level-transition",
   });
   setLevelDangerIndicator(exitOverlayDanger, levelInfo);
@@ -1859,10 +1859,6 @@ function updateStaminaHud(controlState) {
   const boostRemaining = Math.max(0, staminaBuff?.remaining ?? 0);
   const hasBoost = Boolean(staminaBuff);
   if (staminaFill) staminaFill.style.transform = `scaleX(${staminaRatio.toFixed(3)})`;
-  if (staminaReadout) {
-    const valueText = `${Math.round(controlState.stamina)}/${Math.round(controlState.staminaMax)}`;
-    staminaReadout.textContent = hasBoost ? `${valueText} ${Math.ceil(boostRemaining)}s` : valueText;
-  }
   staminaMeter?.dataset &&
     (staminaMeter.dataset.state = staminaRatio < 0.24 ? "low" : hasBoost ? "boosted" : "ready");
   canvas.dataset.stamina = String(Math.round(staminaRatio * 100));
@@ -1884,9 +1880,6 @@ function updateHealthHud(controlState) {
   const health = Math.max(0, Math.min(healthMax, controlState.health ?? healthMax));
   const ratio = health / healthMax;
   if (healthFill) healthFill.style.transform = `scaleX(${ratio.toFixed(3)})`;
-  if (healthReadout) {
-    healthReadout.textContent = `${Math.round(health)}/${Math.round(healthMax)}`;
-  }
   if (healthMeter) {
     const regenerating = Boolean(controlState.healthRegenerating);
     healthMeter.dataset.state = ratio <= 0.24 ? "low" : regenerating ? "regenerating" : "ready";
@@ -2097,7 +2090,7 @@ function updateCompassHud(metrics) {
 
   if (compassArrow) compassArrow.style.transform = `rotate(${relative.toFixed(4)}rad)`;
   if (compassReadout) {
-    compassReadout.textContent = isLevelKeyEquipped ? `L${equippedKeyTarget} · ${direction}` : direction;
+    compassReadout.textContent = direction;
   }
   canvas.dataset.compassBearing = String(Math.round((relative * 180) / Math.PI));
   canvas.dataset.compassWorldBearing = String(Math.round((targetYaw * 180) / Math.PI));
@@ -2223,11 +2216,8 @@ function updateDetector(delta, metrics) {
 function renderInventoryBar() {
   if (!inventoryBar || !inventorySlots) return;
   const hasItems = inventory.length > 0;
-  inventoryBar.classList.toggle("is-visible", true);
-  inventoryBar.classList.toggle("is-empty", !hasItems);
-  if (inventorySlots) {
-    inventorySlots.dataset.emptyText = formatLocalizedStatus("inventoryEmpty");
-  }
+  inventoryBar.toggleAttribute("hidden", !hasItems);
+  inventoryBar.classList.toggle("is-visible", hasItems);
   if (!hasItems) {
     inventorySlots.replaceChildren();
     inventoryPrev?.setAttribute("hidden", "");
@@ -2351,12 +2341,6 @@ function setPauseState(next, { fromUnlock = false } = {}) {
     if (pauseResetHint && !pauseResetArmed) {
       pauseResetHint.textContent = formatLocalizedStatus("pauseResetHint");
     }
-    if (pauseTutorialLabel) {
-      pauseTutorialLabel.textContent = formatLocalizedStatus("pauseTutorialLabel");
-    }
-    if (pauseTutorialHint) {
-      pauseTutorialHint.textContent = formatLocalizedStatus("pauseTutorialHint");
-    }
     pauseAccumulatedDelta = clock.getDelta();
     if (document.pointerLockElement === canvas && document.exitPointerLock) {
       try {
@@ -2395,12 +2379,6 @@ function armPauseReset() {
     pauseResetArmedTimer = 0;
     disarmPauseReset();
   }, PAUSE_RESET_ARM_TIMEOUT_MS);
-}
-
-function handlePauseTutorial() {
-  if (!isPaused) return;
-  if (pauseResetArmed) disarmPauseReset();
-  showTutorial();
 }
 
 function resetAllProgress() {
@@ -2566,12 +2544,13 @@ function updatePickupHud(metrics) {
   const detector = metrics.detector;
   const silenceLiquid = metrics.silenceLiquid;
   const compass = metrics.compass;
-  const canDrink = Boolean(almondWater?.available);
-  const canDrinkSuper = Boolean(superAlmondWater?.available);
-  const canTakeFlashlight = Boolean(flashlight?.available);
-  const canTakeDetector = Boolean(detector?.available);
-  const canTakeSilenceLiquid = Boolean(silenceLiquid?.available);
-  const canTakeCompass = Boolean(compass?.available);
+  const focusedPickup = getFocusedPickupable(metrics);
+  const canDrink = focusedPickup?.id === "almond-water";
+  const canDrinkSuper = focusedPickup?.id === "super-almond-water";
+  const canTakeFlashlight = focusedPickup?.id === "flashlight";
+  const canTakeDetector = focusedPickup?.id === "detector";
+  const canTakeSilenceLiquid = focusedPickup?.id === "silence-liquid";
+  const canTakeCompass = focusedPickup?.id === "compass";
   const canInteract = Boolean(metrics.focusInteraction?.available);
   const canUse =
     canDrink ||
@@ -2617,11 +2596,23 @@ function updatePickupHud(metrics) {
   canvas.dataset.focusInteractionAvailable = String(canInteract);
 }
 
-function findNearestPickupable(metrics) {
-  const candidates = getPickupStates(metrics).filter((item) => Number.isFinite(item.distance) && item.available);
+function getFocusedPickupable(metrics) {
+  const focus = metrics?.focusItem;
+  if (!focus?.id) return null;
+  const candidates = getPickupStates(metrics).filter((item) => item.id === focus.id && item.available);
   if (candidates.length === 0) return null;
-  candidates.sort((a, b) => a.distance - b.distance);
-  return candidates[0];
+  if (!focus.position || candidates.length === 1) return candidates[0];
+  return candidates
+    .slice()
+    .sort((a, b) => {
+      const aDistance = a.position
+        ? Math.hypot(a.position.x - focus.position.x, a.position.z - focus.position.z)
+        : Infinity;
+      const bDistance = b.position
+        ? Math.hypot(b.position.x - focus.position.x, b.position.z - focus.position.z)
+        : Infinity;
+      return aDistance - bDistance;
+    })[0];
 }
 
 function getPickupStates(metrics) {
@@ -2636,46 +2627,52 @@ function getPickupStates(metrics) {
   ].filter(Boolean);
 }
 
-function findPickupableById(metrics, id) {
-  if (!id) return null;
-  return getPickupStates(metrics).find((item) => item.id === id && item.available) ?? null;
+function getEquippedItemInfo() {
+  const equipped = getEquipped();
+  if (!equipped?.id) return null;
+  const localized = getLocalizedText(ITEM_TEXT, equipped.id);
+  const embedded =
+    DECORATIVE_ITEM_DEFS[equipped.id]?.i18n?.[currentLanguage] ??
+    DECORATIVE_ITEM_DEFS[equipped.id]?.i18n?.en ??
+    getWorldItemDefinition(equipped.id)?.i18n?.[currentLanguage] ??
+    getWorldItemDefinition(equipped.id)?.i18n?.en ??
+    {};
+  const name = localized?.name ?? embedded.name ?? getInventoryItemLabel(equipped.id);
+  const effect = localized?.effect ?? embedded.effect ?? "";
+  return { id: equipped.id, type: "item", name, effect };
 }
 
-function getPickupItemInfo(candidate) {
-  if (!candidate?.id) return null;
-  const embedded = candidate.i18n?.[currentLanguage] ?? candidate.i18n?.en ?? {};
-  const text = getLocalizedText(ITEM_TEXT, candidate.id);
-  if (!text?.name && !embedded.name) return null;
-  return {
-    id: candidate.id,
-    type: "item",
-    name: text.name ?? embedded.name,
-    effect: text.effect ?? embedded.effect,
-    action: text.action ?? embedded.action,
-    distance: candidate.distance,
-  };
+function isDoorInteraction(interaction) {
+  return Boolean(
+    interaction?.exitRoute ||
+      interaction?.exitDoor ||
+      interaction?.id?.includes("door") ||
+      interaction?.id?.includes("exit"),
+  );
 }
 
 function updateItemInfo(metrics) {
-  const pickupable = findNearestPickupable(metrics);
+  const pickupable = getFocusedPickupable(metrics);
   const focusItem = metrics.focusItem;
   const focusInteraction = metrics.focusInteraction;
   const focusEntity = metrics.focusEntity;
   let item = null;
   let canPickup = false;
   let canInteract = false;
+  let displayMode = "";
 
   if (pickupable) {
-    item = getPickupItemInfo(pickupable);
-    canPickup = Boolean(item);
-  } else if (focusItem) {
-    item = focusItem;
-    canPickup = Boolean(findPickupableById(metrics, focusItem.id));
-  } else if (focusInteraction) {
+    canPickup = true;
+  } else if (focusInteraction && !isDoorInteraction(focusInteraction)) {
     item = focusInteraction;
     canInteract = Boolean(focusInteraction.available);
+    displayMode = "interaction";
   } else if (focusEntity) {
     item = focusEntity;
+    displayMode = "entity";
+  } else if (!focusItem && !isDoorInteraction(focusInteraction)) {
+    item = getEquippedItemInfo();
+    displayMode = item ? "details" : "";
   }
 
   const hasFocus = Boolean(item);
@@ -2684,16 +2681,19 @@ function updateItemInfo(metrics) {
     itemInfo.classList.toggle("is-visible", hasFocus);
     itemInfo.classList.toggle("is-pickup-ready", canPickup || canInteract);
     itemInfo.dataset.infoType = item?.type ?? "item";
+    itemInfo.dataset.infoMode = displayMode;
     if (!hasFocus) itemInfo.hidden = true;
   }
   if (hasFocus) {
+    if (itemInfoEffect) itemInfoEffect.hidden = false;
+    if (itemInfoAction) itemInfoAction.hidden = displayMode === "details";
     const collection =
       item.type === "entity" ? ENTITY_TEXT : item.type === "interaction" ? INTERACTION_TEXT : ITEM_TEXT;
     const embedded = item.i18n?.[currentLanguage] ?? item.i18n?.en ?? item;
     const localized = getLocalizedText(collection, item.id) ?? {};
     if (itemInfoName) itemInfoName.textContent = localized.name ?? embedded.name ?? item.name;
-    if (itemInfoEffect) itemInfoEffect.textContent = localized.effect ?? embedded.effect ?? item.effect;
-    if (itemInfoAction) itemInfoAction.textContent = localized.action ?? embedded.action ?? item.action;
+    if (itemInfoEffect) itemInfoEffect.textContent = localized.effect ?? embedded.effect ?? item.effect ?? "";
+    if (itemInfoAction) itemInfoAction.textContent = localized.action ?? embedded.action ?? item.action ?? "";
   }
   canvas.dataset.focusItem = item?.type === "item" ? item.id : "";
   canvas.dataset.focusEntity = metrics.focusEntity?.id ?? "";
@@ -2705,18 +2705,49 @@ function updateItemInfo(metrics) {
   return { canPickup, canInteract };
 }
 
-function showItemInfoPickupKey(show) {
-  if (!itemInfo) return;
-  const existing = itemInfo.querySelector(".item-info__pickup-key");
-  if (!show) {
-    existing?.remove();
+function updatePickupPrompt(pickup) {
+  if (!pickupPrompt) return;
+  const position = pickup?.position;
+  if (!position || !world?.camera) {
+    pickupPrompt.hidden = true;
     return;
   }
-  if (existing) return;
-  const key = document.createElement("span");
-  key.className = "item-info__pickup-key";
-  key.textContent = currentLanguage === "en" ? "F" : "F";
-  itemInfo.prepend(key);
+  pickupPromptProjection.set(position.x, (position.y ?? 0) + 0.62, position.z).project(world.camera);
+  const visible = pickupPromptProjection.z >= -1 && pickupPromptProjection.z <= 1;
+  if (!visible) {
+    pickupPrompt.hidden = true;
+    return;
+  }
+  const bounds = canvas.getBoundingClientRect();
+  const x = bounds.left + (pickupPromptProjection.x * 0.5 + 0.5) * bounds.width;
+  const y = bounds.top + (-pickupPromptProjection.y * 0.5 + 0.5) * bounds.height;
+  pickupPrompt.textContent = currentLanguage === "en" ? "[F] PICK UP" : "[F] 拾取";
+  pickupPrompt.style.transform = `translate(-50%, -100%) translate(${x.toFixed(1)}px, ${(y - 10).toFixed(1)}px)`;
+  pickupPrompt.hidden = false;
+}
+
+function updateDoorPrompt(interaction) {
+  if (!doorPrompt) return;
+  const position = interaction?.position ?? (interaction?.exitDoor ? world?.targetPosition : null);
+  if (!interaction?.available || !isDoorInteraction(interaction) || !position || !world?.camera) {
+    doorPrompt.hidden = true;
+    return;
+  }
+  doorPromptProjection
+    .set(position.x, Number.isFinite(position.y) ? position.y + 0.72 : 2.1, position.z)
+    .project(world.camera);
+  const visible = doorPromptProjection.z >= -1 && doorPromptProjection.z <= 1;
+  if (!visible) {
+    doorPrompt.hidden = true;
+    return;
+  }
+  const bounds = canvas.getBoundingClientRect();
+  const x = bounds.left + (doorPromptProjection.x * 0.5 + 0.5) * bounds.width;
+  const y = bounds.top + (-doorPromptProjection.y * 0.5 + 0.5) * bounds.height;
+  const action = interaction.opened ? (currentLanguage === "en" ? "CLOSE" : "关闭") : (currentLanguage === "en" ? "OPEN" : "打开");
+  doorPrompt.textContent = `[F] ${action}`;
+  doorPrompt.style.transform = `translate(-50%, -100%) translate(${x.toFixed(1)}px, ${(y - 12).toFixed(1)}px)`;
+  doorPrompt.hidden = false;
 }
 
 function flashPickupHint(textKey, durationMs = 1100) {
@@ -2726,8 +2757,9 @@ function flashPickupHint(textKey, durationMs = 1100) {
 
 function usePickup() {
   if (!world || exitComplete || gameFailed || levelTransition || isPaused) return;
-  const looseTarget = worldItems?.getPickupTarget(world.camera.position);
-  if (looseTarget) {
+  const focusedPickup = getFocusedPickupable(lastMetrics);
+  const looseTarget = focusedPickup ? worldItems?.getPickupTarget(world.camera.position) : null;
+  if (looseTarget?.id === focusedPickup?.id) {
     const result = worldItems.tryPickup(world.camera.position);
     if (result?.pickedUp) {
       let added = false;
@@ -2761,9 +2793,9 @@ function usePickup() {
       return;
     }
   }
-  const liveTarget = world.getPickupTarget
+  const liveTarget = focusedPickup && world.getPickupTarget
     ? world.getPickupTarget(world.camera.position)
-    : findNearestPickupable(lastMetrics);
+    : null;
   if (
     liveTarget?.id === "flashlight" &&
     getInventoryCount("flashlight") >= FLASHLIGHT_MAX_STACK
@@ -2774,16 +2806,14 @@ function usePickup() {
     window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
     return;
   }
-  const pickup = world.tryPickup?.(world.camera.position);
+  const pickup = liveTarget?.id === focusedPickup?.id ? world.tryPickup?.(world.camera.position) : null;
   if (!pickup?.pickedUp) {
     if (openExitDoor()) return;
     if (lastMetrics?.focusInteraction?.available) {
       const interaction = world.interact?.(world.camera.position, {
-        hasLevelKey: (targetLevel) =>
-          (isDebugFeaturesActive() && world.level === HUB_LEVEL) ||
-          getLevelKeyTarget(getEquipped()?.id) === targetLevel,
+        routeId: lastMetrics?.focusInteraction?.exitRoute ? lastMetrics.focusInteraction.id : null,
+        hasLevelKey: (targetLevel) => getLevelKeyTarget(getEquipped()?.id) === targetLevel,
         consumeLevelKey: (targetLevel) => {
-          if (isDebugFeaturesActive() && world.level === HUB_LEVEL) return true;
           const keyId = `level-key-${targetLevel}`;
           if (getEquipped()?.id !== keyId || !removeInventory(keyId)) return false;
           renderInventoryBar();
@@ -2953,7 +2983,6 @@ function tickLongPressProgress() {
 function updateHud(metrics, controlState, elapsed) {
   const hudMetrics = withExitDoorMetrics(metrics);
   const exitDistance = getCurrentExitDistance(hudMetrics);
-  distanceReadout.textContent = `${metrics.exitDistance}m`;
   lightReadout.textContent = metrics.lightState ?? (metrics.flicker < 0.62 ? "DIM" : "HUM");
   statusText.textContent =
     elapsed < pickupFlashUntil
@@ -2964,27 +2993,16 @@ function updateHud(metrics, controlState, elapsed) {
         ? formatLocalizedStatus("exitDoorReady")
       : hudMetrics.focusInteraction?.id === "exit-elevator-door"
         ? formatLocalizedStatus("exitDoorNearby")
-      : metrics.superAlmondWater?.available
-        ? formatLocalizedStatus("super-almond-water")
-      : metrics.detector?.available
-        ? formatLocalizedStatus("detector")
-      : metrics.silenceLiquid?.available
-        ? formatLocalizedStatus("silence-liquid")
-        : metrics.compass?.available
-        ? formatLocalizedStatus("compass")
-        : metrics.flashlight?.available
-        ? formatLocalizedStatus("flashlight")
-        : metrics.almondWater?.available
-        ? formatLocalizedStatus("almond-water")
-        : metrics.statusText ??
+      : metrics.statusText ??
           (hudMetrics.exitReached
             ? "EXIT STABILIZED"
             : metrics.exitDistance < 7
               ? "SIGNAL FOUND"
               : "NO SIGNAL");
   updatePickupHud(hudMetrics);
-  const itemInfoState = updateItemInfo(hudMetrics);
-  showItemInfoPickupKey(itemInfoState.canPickup || itemInfoState.canInteract);
+  updatePickupPrompt(getFocusedPickupable(hudMetrics));
+  updateDoorPrompt(hudMetrics.focusInteraction);
+  updateItemInfo(hudMetrics);
   updateStaminaHud(controlState);
   updateHealthHud(controlState);
   updateBuffCards(controlState);
@@ -3004,7 +3022,7 @@ function applyEntityContactDamage(delta, metrics) {
   if (playerHealthCooldown > 0) return;
   const entities = Array.isArray(metrics.entities) ? metrics.entities : [];
   const hit = entities.find((entity) => {
-    if (!entity?.active) return false;
+    if (!entity?.active || entity.stunned) return false;
     if (!Number.isFinite(entity.distance)) return false;
     const id = entity.id ?? "";
     const radius = id.includes("hound") ? HOUND_CONTACT_RADIUS : BACTERIA_CONTACT_RADIUS;
@@ -3072,6 +3090,18 @@ function animate(timestamp) {
     repelSpeedMultiplier: SILENCE_LIQUID_REPEL_SPEED_MULTIPLIER,
     equippedLevelKey: getLevelKeyTarget(getEquipped()?.id),
     debugBypassLevelKeys: isDebugFeaturesActive() && world.level === HUB_LEVEL,
+    flashlightBeam: (() => {
+      const active = flashlightOwned && flashlightOn && flashlightBattery > 0;
+      if (!active) return { active: false };
+      world.camera.getWorldDirection(flashlightBeamDirection);
+      return {
+        active: true,
+        origin: world.camera.position,
+        direction: { x: flashlightBeamDirection.x, z: flashlightBeamDirection.z },
+        range: Math.min(32, Math.max(18, flashlightLight.distance || 32)),
+        minimumDot: Math.cos(flashlightLight.angle * 0.82),
+      };
+    })(),
   });
   const looseItems = worldItems?.update(world.camera.position) ?? [];
   const looseItemFocus = worldItems?.inspect(world.camera) ?? null;
@@ -3105,7 +3135,6 @@ function animate(timestamp) {
   ambientHum.update(metrics.flicker, controlState);
   ambientHum.updateEntityAudio(metrics.entities);
   updateHud(metrics, controlState, elapsed);
-  updateTimerReadout();
   updatePerformanceReadout(delta);
   updateLoadingOverlay();
   updateDrinkingMeter(controlState);
@@ -3351,11 +3380,6 @@ pauseOverlay?.addEventListener("pointerdown", (event) => {
   if (event.target === pauseOverlay) {
     setPauseState(false);
   }
-});
-pauseTutorialButton?.addEventListener("pointerdown", (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  handlePauseTutorial();
 });
 pauseSettingsButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();

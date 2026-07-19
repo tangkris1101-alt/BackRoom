@@ -9,7 +9,7 @@ import {
   SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
 } from "../constants.js";
-import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
+import { addInstancedBoxes, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import {
   createLevelZeroWallpaperTexture,
@@ -41,14 +41,96 @@ import {
 import { createAlmondWaterPickup, createFlashlightPickup, createCompassPickup } from "../items/index.js";
 import { getPickupTarget, tryPickupItems, getFocusedItem } from "../entities/index.js";
 
+function createFixtureLightField(fixturePositions) {
+  const size = 512;
+  const width = COLS * CELL_SIZE;
+  const height = ROWS * CELL_SIZE;
+  const minX = MAP_CENTER.x - width / 2;
+  const minZ = MAP_CENTER.z - height / 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#000000";
+  context.fillRect(0, 0, size, size);
+  context.globalCompositeOperation = "lighter";
+
+  fixturePositions.forEach((fixture) => {
+    const x = ((fixture.x - minX) / width) * size;
+    const z = ((fixture.z - minZ) / height) * size;
+    const radius = Math.max(18, (fixture.range / width) * size * 1.45);
+    const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.78, 0.34, 1);
+    const gradient = context.createRadialGradient(x, z, 0, x, z, radius);
+    gradient.addColorStop(0, `rgba(255, 242, 184, ${0.34 * strength})`);
+    gradient.addColorStop(0.38, `rgba(244, 220, 147, ${0.2 * strength})`);
+    gradient.addColorStop(0.76, `rgba(176, 145, 77, ${0.075 * strength})`);
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+    context.fillStyle = gradient;
+    context.fillRect(x - radius, z - radius, radius * 2, radius * 2);
+  });
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  return { texture, minX, minZ, width, height };
+}
+
+function applyFixtureLightField(material, lightField, intensity) {
+  material.levelZeroLightFieldTexture = lightField.texture;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.levelZeroLightField = { value: lightField.texture };
+    shader.uniforms.levelZeroLightBounds = {
+      value: new THREE.Vector4(lightField.minX, lightField.minZ, lightField.width, lightField.height),
+    };
+    shader.uniforms.levelZeroLightIntensity = { value: intensity };
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nvarying vec3 levelZeroWorldPosition;",
+      )
+      .replace(
+        "#include <project_vertex>",
+        `#include <project_vertex>
+        vec4 levelZeroPosition = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          levelZeroPosition = instanceMatrix * levelZeroPosition;
+        #endif
+        levelZeroWorldPosition = (modelMatrix * levelZeroPosition).xyz;`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        varying vec3 levelZeroWorldPosition;
+        uniform sampler2D levelZeroLightField;
+        uniform vec4 levelZeroLightBounds;
+        uniform float levelZeroLightIntensity;`,
+      )
+      .replace(
+        "#include <opaque_fragment>",
+        `vec2 levelZeroLightUv = vec2(
+          (levelZeroWorldPosition.x - levelZeroLightBounds.x) / levelZeroLightBounds.z,
+          1.0 - (levelZeroWorldPosition.z - levelZeroLightBounds.y) / levelZeroLightBounds.w
+        );
+        vec3 levelZeroBakedLight = texture2D(levelZeroLightField, levelZeroLightUv).rgb;
+        outgoingLight += levelZeroBakedLight * diffuseColor.rgb * levelZeroLightIntensity;
+        #include <opaque_fragment>`,
+      );
+  };
+  material.customProgramCacheKey = () => `level-zero-light-field-${intensity}`;
+}
+
 export function createLevelZeroScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
   // The background MUST match the fog colour, otherwise corridor ends, the
   // far-clip plane and plane edges render as black voids instead of dissolving
   // into the warm Backrooms haze.
-  const HAZE_COLOR = 0xd8d0a0;
+  const HAZE_COLOR = 0x6f6139;
   scene.background = new THREE.Color(HAZE_COLOR);
-  scene.fog = new THREE.FogExp2(HAZE_COLOR, 0.0095);
+  scene.fog = new THREE.FogExp2(HAZE_COLOR, 0.01);
 
   const cameraFar = Math.hypot(COLS * CELL_SIZE, ROWS * CELL_SIZE) + CELL_SIZE * 2;
   const camera = new THREE.PerspectiveCamera(72, 1, 0.05, cameraFar);
@@ -60,6 +142,8 @@ export function createLevelZeroScene({ initialState = null } = {}) {
 
   const pickupInitial = initialState?.pickups ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
+  const { northSouth, eastWest, fixturePositions } = collectWallTransforms();
+  const fixtureLightField = createFixtureLightField(fixturePositions);
 
   const carpetTexture = createLevelZeroCarpetTexture();
   const wallpaperTexture = createLevelZeroWallpaperTexture();
@@ -69,14 +153,14 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     map: carpetTexture,
     color: 0xf6e9c6,
     emissive: 0x8a7449,
-    emissiveIntensity: 0.2,
+    emissiveIntensity: 0,
     roughness: 0.98,
   });
   const wallMaterial = new THREE.MeshStandardMaterial({
     map: wallpaperTexture,
     color: 0xfffce3,
     emissive: 0x655b34,
-    emissiveIntensity: 0.11,
+    emissiveIntensity: 0,
     roughness: 0.92,
     metalness: 0,
   });
@@ -84,16 +168,20 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     map: ceilingTexture,
     color: 0xfff7df,
     emissive: 0xc0b07a,
-    emissiveIntensity: 0.4,
+    emissiveIntensity: 0,
     roughness: 0.86,
   });
   const wallCapMaterial = new THREE.MeshStandardMaterial({
     color: 0xc7b778,
     emissive: 0x584c24,
-    emissiveIntensity: 0.1,
+    emissiveIntensity: 0,
     roughness: 0.98,
     metalness: 0,
   });
+  applyFixtureLightField(floorMaterial, fixtureLightField, 1.28);
+  applyFixtureLightField(wallMaterial, fixtureLightField, 0.94);
+  applyFixtureLightField(ceilingMaterial, fixtureLightField, 0.72);
+  applyFixtureLightField(wallCapMaterial, fixtureLightField, 0.78);
   const wallMaterials = [
     wallMaterial,
     wallMaterial,
@@ -127,7 +215,6 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   ceiling.position.set(MAP_CENTER.x, CEILING_Y, MAP_CENTER.z);
   scene.add(ceiling);
 
-  const { northSouth, eastWest, fixturePositions } = collectWallTransforms();
   addInstancedBoxes(
     scene,
     new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
@@ -140,14 +227,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     wallMaterials,
     eastWest,
   );
-  const ambientLight = new THREE.HemisphereLight(0xfff8dc, 0xb99d68, 1.44);
-  scene.add(ambientLight);
-
-  const ceilingFill = new THREE.DirectionalLight(0xfff8d8, 0.32);
-  ceilingFill.position.set(-18, CEILING_Y - 0.45, 12);
-  scene.add(ceilingFill);
-
-  const fixtures = createLights(scene, fixturePositions);
+  const { fixtures, updatePointLights } = createLights(scene, fixturePositions);
   const updateLightState = createStableLightState("HUM", {
     dimBelow: 0.5,
     normalAbove: 0.66,
@@ -227,9 +307,10 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       const twitch = Math.sin(elapsed * fixture.speed + fixture.phase * 2.4) > 0.965 ? 0.72 : 1;
       const pulse = Math.max(0.58, hum * twitch - fixture.weak);
       fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.56;
-      updateFixturePointLight(fixture, pulse, 1.1);
+      fixture.pulse = pulse;
       lightTotal += pulse;
     });
+    updatePointLights(delta, playerPosition);
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.9;
     const manilaBlackout = manilaRoom.update(elapsed);
 
@@ -311,6 +392,3 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     },
   };
 }
-
-
-

@@ -1,16 +1,17 @@
 import * as THREE from "three";
 import {
   createAlmondWaterModel,
-  createCompassModel,
   createDetectorModel,
   createFlashlightModel,
   createSilenceLiquidModel,
 } from "../items/index.js";
+import { createItemHighlight, setItemHighlight } from "../items/shared.js";
 
 const PICKUP_RADIUS = 3;
 const INSPECT_DISTANCE = 7;
 const LEVEL_KEY_SPAWN_CHANCE = 0.14;
 const HUB_BONUS_LEVEL_KEY_ROLLS = 2;
+const KEY_MODEL_SCALE = 0.1875;
 
 export const LEVEL_KEY_IDS = Object.freeze(Array.from({ length: 8 }, (_, level) => `level-key-${level}`));
 
@@ -219,7 +220,6 @@ export function createWorldItemModel(id) {
   const toolModelFactories = {
     flashlight: createFlashlightModel,
     detector: createDetectorModel,
-    compass: createCompassModel,
     "silence-liquid": createSilenceLiquidModel,
     "almond-water": () => createAlmondWaterModel("normal"),
     "super-almond-water": () => createAlmondWaterModel("super"),
@@ -246,6 +246,7 @@ export function createWorldItemModel(id) {
       ward.position.x = 0.28;
       group.add(ward);
     }
+    group.scale.setScalar(KEY_MODEL_SCALE);
   } else if (definition.shape === "note") {
     group.add(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.025, 0.34), material));
     const inkedFace = new THREE.Mesh(
@@ -354,7 +355,9 @@ export function createWorldItemManager(scene, defaultSpawns = [], initialState =
     model.rotation.set(raw.tiltX ?? 0, raw.rotation ?? 0, raw.tiltZ ?? 0);
     model.visible = raw.active !== false;
     scene.add(model);
-    const item = { id: raw.id, model, active: raw.active !== false, data: raw.data ?? null };
+    const highlight = createItemHighlight({ color: 0xc9f7aa, width: 0.76, height: 0.72, depth: 0.76, y: 0.34 });
+    model.add(highlight);
+    const item = { id: raw.id, model, highlight, active: raw.active !== false, data: raw.data ?? null };
     items.push(item);
     return item;
   }
@@ -375,12 +378,16 @@ export function createWorldItemManager(scene, defaultSpawns = [], initialState =
       visible: item.active,
       available: item.active && distance <= PICKUP_RADIUS,
       distance,
+      position: { x: item.model.position.x, y: item.model.position.y, z: item.model.position.z },
       i18n: getItemDefinition(item.id).i18n,
     };
   }
 
   function update(playerPosition) {
-    return items.filter((item) => item.active).map((item) => stateFor(item, playerPosition));
+    return items.filter((item) => {
+      setItemHighlight(item.highlight, false);
+      return item.active;
+    }).map((item) => stateFor(item, playerPosition));
   }
 
   function inspect(camera) {
@@ -401,9 +408,15 @@ export function createWorldItemManager(scene, defaultSpawns = [], initialState =
         id: item.id,
         type: "item",
         distance,
+        position: { x: item.model.position.x, y: item.model.position.y, z: item.model.position.z },
         i18n: definition.i18n,
         ...definition.i18n.en,
       };
+    }
+    if (focused) {
+      const highlighted = items.find((item) => item.active && item.id === focused.id &&
+        Math.hypot(item.model.position.x - focused.position.x, item.model.position.z - focused.position.z) < 0.01);
+      if (highlighted) setItemHighlight(highlighted.highlight, focused.distance <= PICKUP_RADIUS);
     }
     return focused;
   }

@@ -6,7 +6,6 @@ import {
 } from "../constants.js";
 import { createFixturePointLight } from "../common/lighting.js";
 import { createWideSignTexture } from "../common/textures.js";
-import { isInAnyZone } from "../common/layout.js";
 import {
   LEVEL_ONE_COLS,
   LEVEL_ONE_ROWS,
@@ -16,8 +15,6 @@ import {
   LEVEL_ONE_START_CELL,
   LEVEL_ONE_TARGET_CELL,
   LEVEL_ONE_MAX_POINT_LIGHTS,
-  LEVEL_ONE_ORIGIN_X,
-  LEVEL_ONE_ORIGIN_Z,
   LEVEL_ONE_CORRIDOR_FIXTURES,
 } from "./layout.js";
 import {
@@ -87,8 +84,8 @@ export function createLevelOneLights(scene, fixturePositions) {
     let light = null;
     if (fixture.hasPointLight && pointLightIndexes.has(index)) {
       light = createFixturePointLight(fixture, tubeY - 0.2, {
-        rangeScale: 1.52,
-        intensityScale: 1.2,
+        rangeScale: 1.28,
+        intensityScale: 3.6,
       });
       scene.add(light);
     }
@@ -262,37 +259,6 @@ export function addLevelOnePuddles(scene) {
   });
 }
 
-export function addLevelOneFloorZones(scene) {
-  const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x1d2320,
-    transparent: true,
-    opacity: 0.11,
-    depthWrite: false,
-  });
-  const supplyMaterial = new THREE.MeshBasicMaterial({
-    color: 0xc7d1b3,
-    transparent: true,
-    opacity: 0.055,
-    depthWrite: false,
-  });
-
-  const addTint = (zone, material, yOffset) => {
-    const width = zone.width * CELL_SIZE;
-    const height = zone.height * CELL_SIZE;
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(
-      LEVEL_ONE_ORIGIN_X + zone.col * CELL_SIZE + width / 2,
-      yOffset,
-      LEVEL_ONE_ORIGIN_Z + zone.row * CELL_SIZE + height / 2,
-    );
-    scene.add(mesh);
-  };
-
-  LEVEL_ONE_DARK_ZONES.forEach((zone) => addTint(zone, shadowMaterial, 0.018));
-  LEVEL_ONE_SUPPLY_ZONES.forEach((zone) => addTint(zone, supplyMaterial, 0.02));
-}
-
 export function addLevelOneCorridorDetails(scene) {
   const colliders = [];
   const doorMaterial = new THREE.MeshStandardMaterial({
@@ -410,42 +376,6 @@ export function addLevelOneCorridorDetails(scene) {
   return colliders;
 }
 
-export function addLevelOneParkingMarks(scene) {
-  const lineMaterial = new THREE.MeshBasicMaterial({
-    color: 0xd7dec8,
-    transparent: true,
-    opacity: 0.18,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
-  const hazardMaterial = new THREE.MeshBasicMaterial({
-    color: 0xd6c95a,
-    transparent: true,
-    opacity: 0.18,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
-  const marks = [
-    { col: 5, row: 21, width: 9.4, height: 0.09, rot: 0, hazard: false },
-    { col: 5, row: 23, width: 7.8, height: 0.08, rot: 0, hazard: false },
-    { col: 13, row: 8, width: 6.4, height: 0.1, rot: Math.PI / 2, hazard: true },
-    { col: 16, row: 9, width: 5.2, height: 0.08, rot: 0, hazard: false },
-    { col: 27, row: 18, width: 7.2, height: 0.1, rot: 0, hazard: true },
-    { col: 30, row: 19, width: 5.8, height: 0.08, rot: Math.PI / 2, hazard: false },
-  ];
-
-  marks.forEach((mark) => {
-    const center = levelOneCellCenter(mark.col, mark.row);
-    const mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(mark.width, mark.height),
-      mark.hazard ? hazardMaterial : lineMaterial,
-    );
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.rotation.z = mark.rot;
-    mesh.position.set(center.x, 0.033, center.z);
-    scene.add(mesh);
-  });
-}
 
 export function addLevelOneWallSigns(scene) {
   const signs = [
@@ -681,4 +611,3 @@ export function collectLevelOneTransforms({ openings = [] } = {}) {
 
   return { northSouth, eastWest, corridorNorthSouth, corridorEastWest, fixturePositions };
 }
-

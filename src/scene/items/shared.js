@@ -63,6 +63,7 @@ export function createPickupState({
     visible: true,
     available: distance <= pickupRadius,
     distance,
+    position: { x: group.position.x, y: group.position.y, z: group.position.z },
     respawn: 0,
   };
 }

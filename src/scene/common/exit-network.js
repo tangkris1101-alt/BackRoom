@@ -7,6 +7,22 @@ const ENTER_RADIUS = 1.25;
 
 function createRouteText(route) {
   const target = route.targetLabel ?? `LEVEL ${route.targetLevel}`;
+  if (route.anonymous) {
+    return {
+      "zh-CN": {
+        name: "混凝土门",
+        effect: "门后的空间没有标记",
+        action: "F / 按钮开锁",
+        response: "锁芯发出一声轻响",
+      },
+      en: {
+        name: "CONCRETE DOOR",
+        effect: "THE SPACE BEYOND IS UNMARKED",
+        action: "F / BUTTON UNLOCK",
+        response: "THE LOCK CLICKS OPEN",
+      },
+    };
+  }
   const kindZh = route.kind === "elevator"
     ? "电梯"
     : route.kind === "cabinet"
@@ -40,6 +56,22 @@ function createRouteText(route) {
 
 function createLockedRouteText(route) {
   const target = route.targetLabel ?? `LEVEL ${route.targetLevel}`;
+  if (route.anonymous) {
+    return {
+      "zh-CN": {
+        name: "锁定混凝土门",
+        effect: "门后的空间没有标记",
+        action: "需要对应钥匙",
+        response: "锁没有松动",
+      },
+      en: {
+        name: "LOCKED CONCRETE DOOR",
+        effect: "THE SPACE BEYOND IS UNMARKED",
+        action: "A MATCHING KEY IS REQUIRED",
+        response: "THE LOCK DOES NOT YIELD",
+      },
+    };
+  }
   return {
     "zh-CN": {
       name: `${target} \u9501\u5b9a\u95e8`,
@@ -196,11 +228,56 @@ function createRouteModel(scene, route) {
     group.add(cabinBack, cabinLeft, cabinRight, cabinCeiling, cabinFloor, ceilingLamp, controlPanel, cabinLight);
   }
 
-  const leftPanel = new THREE.Mesh(new THREE.BoxGeometry(1.12, 2.35, 0.12), panelMaterial);
-  const rightPanel = leftPanel.clone();
-  leftPanel.position.set(-0.57, 1.2, 0);
-  rightPanel.position.set(0.57, 1.2, 0);
-  group.add(leftPanel, rightPanel);
+  let leftPanel = null;
+  let rightPanel = null;
+  let singlePanel = null;
+  let singleHinge = null;
+  let lockAssembly = null;
+  if (route.singleDoor) {
+    singleHinge = new THREE.Group();
+    singleHinge.position.set(-1.14, 0, 0);
+    singlePanel = new THREE.Mesh(new THREE.BoxGeometry(2.28, 2.35, 0.12), panelMaterial);
+    singlePanel.position.set(1.14, 1.2, 0);
+    singleHinge.add(singlePanel);
+    group.add(singleHinge);
+  } else {
+    leftPanel = new THREE.Mesh(new THREE.BoxGeometry(1.12, 2.35, 0.12), panelMaterial);
+    rightPanel = leftPanel.clone();
+    leftPanel.position.set(-0.57, 1.2, 0);
+    rightPanel.position.set(0.57, 1.2, 0);
+    group.add(leftPanel, rightPanel);
+  }
+
+  if (route.requiresLevelKey && singleHinge) {
+    const plateMaterial = new THREE.MeshStandardMaterial({
+      color: 0x28231a,
+      emissive: 0x090704,
+      emissiveIntensity: 0.16,
+      roughness: 0.46,
+      metalness: 0.72,
+    });
+    const lockMaterial = new THREE.MeshStandardMaterial({
+      color: 0x8d6b2b,
+      emissive: 0x3c2609,
+      emissiveIntensity: 0.32,
+      roughness: 0.36,
+      metalness: 0.8,
+    });
+    const keyholeMaterial = new THREE.MeshBasicMaterial({ color: 0x100c05 });
+    lockAssembly = new THREE.Group();
+    lockAssembly.name = `exit-lock-${route.id}`;
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.52, 0.05), plateMaterial);
+    plate.position.set(1.14, 1.22, 0.095);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.22, 0.1), lockMaterial);
+    body.position.set(1.14, 1.13, 0.165);
+    const shackle = new THREE.Mesh(new THREE.TorusGeometry(0.095, 0.023, 8, 18, Math.PI), lockMaterial);
+    shackle.position.set(1.14, 1.25, 0.168);
+    shackle.rotation.z = Math.PI;
+    const keyhole = new THREE.Mesh(new THREE.CircleGeometry(0.026, 10), keyholeMaterial);
+    keyhole.position.set(1.14, 1.13, 0.221);
+    lockAssembly.add(plate, body, shackle, keyhole);
+    singleHinge.add(lockAssembly);
+  }
 
   const top = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.18, 0.22), frameMaterial);
   top.position.set(0, 2.47, 0);
@@ -223,7 +300,16 @@ function createRouteModel(scene, route) {
     group.add(sign);
   }
 
-  if (route.symbolSeed !== undefined) {
+  if (route.doorNumber !== undefined && route.doorNumber !== null) {
+    const numberMaterial = new THREE.MeshBasicMaterial({
+      map: createWideSignTexture(String(route.doorNumber), "#1d1810", "#ffd777"),
+      side: THREE.DoubleSide,
+    });
+    const numberSign = new THREE.Mesh(new THREE.PlaneGeometry(1.08, 0.64), numberMaterial);
+    // Hub doorways sit under a curved vault. Offset the plate into the corridor so the vault cannot clip it.
+    numberSign.position.set(0, 3.08, 0.48);
+    group.add(numberSign);
+  } else if (route.symbolSeed !== undefined) {
     const glyphMaterial = new THREE.MeshBasicMaterial({ color: 0xe2b35f });
     const glyph = new THREE.Group();
     const seed = Number(route.symbolSeed) || 0;
@@ -240,7 +326,7 @@ function createRouteModel(scene, route) {
   }
 
   scene.add(group);
-  return { group, portal, leftPanel, rightPanel };
+  return { group, portal, leftPanel, rightPanel, singlePanel, singleHinge, lockAssembly };
 }
 
 export function createExitNetwork(scene, camera, routeDefinitions, initialState = {}) {
@@ -248,6 +334,7 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
     const route = {
       ...definition,
       opened: Boolean(initialState?.[definition.id]?.count),
+      unlocked: Boolean(initialState?.[definition.id]?.unlocked ?? initialState?.[definition.id]?.count),
       openProgress: Boolean(initialState?.[definition.id]?.count) ? 1 : 0,
       i18n: createRouteText(definition),
     };
@@ -264,15 +351,20 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
   function updateModel(route, delta) {
     const target = route.opened ? 1 : 0;
     route.openProgress += (target - route.openProgress) * Math.min(1, delta * 4.8);
+    if (route.model.lockAssembly) route.model.lockAssembly.visible = !route.unlocked;
     if (route.kind === "cabinet") {
       const swing = route.openProgress * Math.PI * 0.58;
       route.model.leftHinge.rotation.y = swing;
       route.model.rightHinge.rotation.y = -swing;
       return;
     }
-    const slide = route.openProgress * 1.08;
-    route.model.leftPanel.position.x = -0.57 - slide;
-    route.model.rightPanel.position.x = 0.57 + slide;
+    if (route.model.singlePanel) {
+      route.model.singleHinge.rotation.y = route.openProgress * (route.doorSwingAngle ?? -Math.PI * 0.58);
+    } else {
+      const slide = route.openProgress * 1.08;
+      route.model.leftPanel.position.x = -0.57 - slide;
+      route.model.rightPanel.position.x = 0.57 + slide;
+    }
     if (route.kind === "elevator" && route.model.portal) {
       route.model.portal.visible = route.openProgress < 0.3;
     }
@@ -312,12 +404,13 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
       const score = direction.dot(toRoute.normalize());
       if (score < 0.9 || score <= bestScore) continue;
       bestScore = score;
-      const locked = !route.opened && Boolean(route.requiresLevelKey) && !hasLevelKey(route.targetLevel);
+      const locked = !route.opened && !route.unlocked && Boolean(route.requiresLevelKey) && !hasLevelKey(route.targetLevel);
       const text = locked ? createLockedRouteText(route) : route.i18n;
+      const canClose = route.opened && route.canClose !== false && distance <= INTERACT_RADIUS;
       const displayText = route.opened
         ? {
-            "zh-CN": { ...text["zh-CN"], action: "走入门后区域" },
-            en: { ...text.en, action: "WALK THROUGH" },
+            "zh-CN": { ...text["zh-CN"], action: "F / 按钮关闭门" },
+            en: { ...text.en, action: "F / BUTTON CLOSE DOOR" },
           }
         : text;
       focused = {
@@ -326,9 +419,11 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
         exitRoute: true,
         targetLevel: route.targetLevel,
         distance,
-        available: !route.opened && !locked && distance <= INTERACT_RADIUS,
+        available: (!route.opened && !locked && distance <= INTERACT_RADIUS) || canClose,
         locked,
         opened: route.opened,
+        unlocked: route.unlocked,
+        position: { x: route.position.x, y: 1.38, z: route.position.z },
         i18n: displayText,
         name: text.en.name,
         effect: text.en.effect,
@@ -338,15 +433,35 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
     return focused;
   }
 
-  function interact(playerPosition, { hasLevelKey = () => true, consumeLevelKey = () => false } = {}) {
+  function interact(playerPosition, {
+    hasLevelKey = () => true,
+    consumeLevelKey = () => false,
+    routeId = null,
+  } = {}) {
     let candidate = null;
     for (const route of routes) {
       const distance = distanceTo(route, playerPosition);
-      if (route.opened || distance > INTERACT_RADIUS) continue;
+      if ((routeId && route.id !== routeId) || distance > INTERACT_RADIUS) continue;
       if (!candidate || distance < candidate.distance) candidate = { route, distance };
     }
     if (!candidate) return null;
-    if (candidate.route.requiresLevelKey && !hasLevelKey(candidate.route.targetLevel)) {
+    if (candidate.route.opened) {
+      if (candidate.route.canClose === false) return null;
+      candidate.route.opened = false;
+      return {
+        interacted: true,
+        closed: true,
+        id: candidate.route.id,
+        count: 0,
+        exitRoute: true,
+        targetLevel: candidate.route.targetLevel,
+        i18n: {
+          "zh-CN": { ...candidate.route.i18n["zh-CN"], response: "门缓缓合上" },
+          en: { ...candidate.route.i18n.en, response: "THE DOOR SWINGS SHUT" },
+        },
+      };
+    }
+    if (!candidate.route.unlocked && candidate.route.requiresLevelKey && !hasLevelKey(candidate.route.targetLevel)) {
       return {
         interacted: false,
         locked: true,
@@ -355,7 +470,7 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
         i18n: createLockedRouteText(candidate.route),
       };
     }
-    if (candidate.route.requiresLevelKey && !consumeLevelKey(candidate.route.targetLevel)) {
+    if (!candidate.route.unlocked && candidate.route.requiresLevelKey && !consumeLevelKey(candidate.route.targetLevel)) {
       return {
         interacted: false,
         locked: true,
@@ -364,6 +479,7 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
         i18n: createLockedRouteText(candidate.route),
       };
     }
+    candidate.route.unlocked = true;
     candidate.route.opened = true;
     return {
       interacted: true,
@@ -380,6 +496,9 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
     update,
     inspect,
     interact,
-    getState: () => Object.fromEntries(routes.map((route) => [route.id, { count: route.opened ? 1 : 0 }])),
+    getState: () => Object.fromEntries(routes.map((route) => [route.id, {
+      count: route.opened ? 1 : 0,
+      unlocked: route.unlocked,
+    }])),
   };
 }

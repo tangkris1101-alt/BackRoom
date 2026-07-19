@@ -18,7 +18,8 @@ import {
   LEVEL_ONE_ROWS,
   LEVEL_ONE_START_CELL,
   LEVEL_ONE_TARGET_CELL,
-  LEVEL_ONE_CORRIDOR_BOUNDS,
+  LEVEL_ONE_ORIGIN_X,
+  LEVEL_ONE_ORIGIN_Z,
   isLevelOneOpenCell,
   levelOneCellCenter,
   levelOneWorldToCell,
@@ -26,19 +27,12 @@ import {
 } from "./layout.js";
 import {
   createLevelOneFloorTexture,
-  createLevelOneWallTexture,
-  createLevelOneCeilingTexture,
-  createLevelOneCorridorFloorTexture,
-  createLevelOneCorridorWallTexture,
-  createLevelOneCorridorCeilingTexture,
 } from "./textures.js";
 import {
   createLevelOneLights,
   addLevelOnePipes,
   addLevelOneCrates,
   addLevelOnePuddles,
-  addLevelOneFloorZones,
-  addLevelOneParkingMarks,
   addLevelOneWallSigns,
   addLevelOneSupplyShelves,
   addLevelOneCorridorDetails,
@@ -69,6 +63,82 @@ import { createExitNetwork } from "../common/exit-network.js";
 const LEVEL_ONE_DOORWAY_WIDTH = 2.7;
 const LEVEL_ONE_DOORWAY_HEIGHT = 2.56;
 const LEVEL_ONE_EXIT_ACTIVITY_RADIUS = CELL_SIZE * 6;
+
+function createLevelOneLightField(fixturePositions) {
+  const size = 512;
+  const width = LEVEL_ONE_COLS * CELL_SIZE;
+  const height = LEVEL_ONE_ROWS * CELL_SIZE;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#000000";
+  context.fillRect(0, 0, size, size);
+  context.globalCompositeOperation = "lighter";
+
+  fixturePositions.forEach((fixture) => {
+    const x = ((fixture.x - LEVEL_ONE_ORIGIN_X) / width) * size;
+    const z = ((fixture.z - LEVEL_ONE_ORIGIN_Z) / height) * size;
+    const radius = Math.max(24, (fixture.range / width) * size * 1.32);
+    const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.8, 0.42, 1);
+    const gradient = context.createRadialGradient(x, z, 0, x, z, radius);
+    gradient.addColorStop(0, `rgba(232, 237, 232, ${0.82 * strength})`);
+    gradient.addColorStop(0.36, `rgba(193, 202, 196, ${0.48 * strength})`);
+    gradient.addColorStop(0.78, `rgba(128, 138, 132, ${0.15 * strength})`);
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+    context.fillStyle = gradient;
+    context.fillRect(x - radius, z - radius, radius * 2, radius * 2);
+  });
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  return { texture, width, height };
+}
+
+function applyLevelOneLightField(material, lightField, intensity) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.levelOneLightField = { value: lightField.texture };
+    shader.uniforms.levelOneLightFieldBounds = {
+      value: new THREE.Vector4(LEVEL_ONE_ORIGIN_X, LEVEL_ONE_ORIGIN_Z, lightField.width, lightField.height),
+    };
+    shader.uniforms.levelOneLightFieldIntensity = { value: intensity };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 levelOneWorldPosition;")
+      .replace(
+        "#include <project_vertex>",
+        `#include <project_vertex>
+        vec4 levelOnePosition = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          levelOnePosition = instanceMatrix * levelOnePosition;
+        #endif
+        levelOneWorldPosition = (modelMatrix * levelOnePosition).xyz;`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+        varying vec3 levelOneWorldPosition;
+        uniform sampler2D levelOneLightField;
+        uniform vec4 levelOneLightFieldBounds;
+        uniform float levelOneLightFieldIntensity;`,
+      )
+      .replace(
+        "#include <opaque_fragment>",
+        `vec2 levelOneLightUv = vec2(
+          (levelOneWorldPosition.x - levelOneLightFieldBounds.x) / levelOneLightFieldBounds.z,
+          1.0 - (levelOneWorldPosition.z - levelOneLightFieldBounds.y) / levelOneLightFieldBounds.w
+        );
+        vec3 levelOneBakedLight = texture2D(levelOneLightField, levelOneLightUv).rgb;
+        outgoingLight += levelOneBakedLight * diffuseColor.rgb * levelOneLightFieldIntensity;
+        #include <opaque_fragment>`,
+      );
+  };
+  material.customProgramCacheKey = () => `level-one-light-field-${intensity}`;
+}
 
 function addLevelOneDoorwayWall(scene, mount, material) {
   const sideWidth = (CELL_SIZE - LEVEL_ONE_DOORWAY_WIDTH) / 2;
@@ -108,7 +178,7 @@ function getEntryPosition(mount) {
 
 export function createLevelOneScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
-  const FOG_COLOR = 0x8c988e;
+  const FOG_COLOR = 0x555b57;
   scene.background = new THREE.Color(FOG_COLOR);
   scene.fog = new THREE.FogExp2(FOG_COLOR, 0.0115);
 
@@ -134,53 +204,34 @@ export function createLevelOneScene({ initialState = null } = {}) {
     Array.isArray(initialState?.entities) ? initialState.entities : [],
     isWalkable,
   );
+  const { northSouth, eastWest, corridorNorthSouth, corridorEastWest, fixturePositions } = collectLevelOneTransforms({
+    openings: [elevatorMount, hubMount],
+  });
+  const lightField = createLevelOneLightField(fixturePositions);
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: createLevelOneFloorTexture(),
-    color: 0xd5dccc,
-    emissive: 0x3b463d,
-    emissiveIntensity: 0.32,
-    roughness: 0.96,
+    color: 0xe1e3de,
+    emissive: 0x303130,
+    emissiveIntensity: 0.13,
+    roughness: 0.88,
   });
   const wallMaterial = new THREE.MeshStandardMaterial({
-    map: createLevelOneWallTexture(),
-    color: 0xd7ddd4,
-    emissive: 0x354036,
-    emissiveIntensity: 0.27,
+    color: 0xd5d7d2,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
     roughness: 0.94,
   });
   const ceilingMaterial = new THREE.MeshStandardMaterial({
-    map: createLevelOneCeilingTexture(),
-    color: 0xcbd2c8,
-    emissive: 0x414e45,
-    emissiveIntensity: 0.34,
-    roughness: 0.9,
-  });
-  const corridorFloorMaterial = new THREE.MeshStandardMaterial({
-    map: createLevelOneCorridorFloorTexture(),
-    color: 0xd2dadb,
-    emissive: 0x49575b,
-    emissiveIntensity: 0.3,
-    roughness: 0.95,
-  });
-  const corridorWallMaterial = new THREE.MeshStandardMaterial({
-    map: createLevelOneCorridorWallTexture(),
-    color: 0xf0f5f5,
-    emissive: 0x697d83,
-    emissiveIntensity: 0.34,
-    roughness: 0.9,
-  });
-  const corridorCeilingMaterial = new THREE.MeshStandardMaterial({
-    map: createLevelOneCorridorCeilingTexture(),
-    color: 0xe7eeee,
-    emissive: 0x6d7f84,
-    emissiveIntensity: 0.3,
+    color: 0xcfd1cc,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
     roughness: 0.9,
   });
   const wallCapMaterial = new THREE.MeshStandardMaterial({
-    color: 0x777f76,
-    emissive: 0x252d28,
-    emissiveIntensity: 0.12,
+    color: 0x747976,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
     roughness: 0.96,
   });
   const wallMaterials = [
@@ -191,20 +242,10 @@ export function createLevelOneScene({ initialState = null } = {}) {
     wallMaterial,
     wallMaterial,
   ];
-  const corridorWallCapMaterial = new THREE.MeshStandardMaterial({
-    color: 0xb6c0c2,
-    emissive: 0x3c4b4f,
-    emissiveIntensity: 0.18,
-    roughness: 0.94,
-  });
-  const corridorWallMaterials = [
-    corridorWallMaterial,
-    corridorWallMaterial,
-    corridorWallCapMaterial,
-    corridorWallCapMaterial,
-    corridorWallMaterial,
-    corridorWallMaterial,
-  ];
+  applyLevelOneLightField(floorMaterial, lightField, 3.05);
+  applyLevelOneLightField(wallMaterial, lightField, 2.35);
+  applyLevelOneLightField(ceilingMaterial, lightField, 2.1);
+  applyLevelOneLightField(wallCapMaterial, lightField, 2.15);
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(LEVEL_ONE_COLS * CELL_SIZE, LEVEL_ONE_ROWS * CELL_SIZE),
@@ -221,31 +262,6 @@ export function createLevelOneScene({ initialState = null } = {}) {
   ceiling.position.set(0, CEILING_Y, 0);
   scene.add(ceiling);
 
-  const corridorWidth = LEVEL_ONE_CORRIDOR_BOUNDS.width * CELL_SIZE;
-  const corridorDepth = LEVEL_ONE_CORRIDOR_BOUNDS.height * CELL_SIZE;
-  const corridorCenter = levelOneCellCenter(
-    LEVEL_ONE_CORRIDOR_BOUNDS.col + LEVEL_ONE_CORRIDOR_BOUNDS.width / 2 - 0.5,
-    LEVEL_ONE_CORRIDOR_BOUNDS.row + LEVEL_ONE_CORRIDOR_BOUNDS.height / 2 - 0.5,
-  );
-  const corridorFloor = new THREE.Mesh(
-    new THREE.PlaneGeometry(corridorWidth, corridorDepth),
-    corridorFloorMaterial,
-  );
-  corridorFloor.rotation.x = -Math.PI / 2;
-  corridorFloor.position.set(corridorCenter.x, 0.012, corridorCenter.z);
-  scene.add(corridorFloor);
-
-  const corridorCeiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(corridorWidth, corridorDepth),
-    corridorCeilingMaterial,
-  );
-  corridorCeiling.rotation.x = Math.PI / 2;
-  corridorCeiling.position.set(corridorCenter.x, CEILING_Y - 0.012, corridorCenter.z);
-  scene.add(corridorCeiling);
-
-  const { northSouth, eastWest, corridorNorthSouth, corridorEastWest, fixturePositions } = collectLevelOneTransforms({
-    openings: [elevatorMount, hubMount],
-  });
   addInstancedBoxes(
     scene,
     new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
@@ -261,22 +277,17 @@ export function createLevelOneScene({ initialState = null } = {}) {
   addInstancedBoxes(
     scene,
     new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
-    corridorWallMaterials,
+    wallMaterials,
     corridorNorthSouth,
   );
   addInstancedBoxes(
     scene,
     new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
-    corridorWallMaterials,
+    wallMaterials,
     corridorEastWest,
   );
   addLevelOneDoorwayWall(scene, elevatorMount, wallMaterials);
   addLevelOneDoorwayWall(scene, hubMount, wallMaterials);
-
-  scene.add(new THREE.HemisphereLight(0xe3eadf, 0x6c766b, 1.68));
-  const ceilingFill = new THREE.DirectionalLight(0xd8e4d4, 0.22);
-  ceilingFill.position.set(18, CEILING_Y - 0.55, -10);
-  scene.add(ceilingFill);
 
   const fixtures = createLevelOneLights(scene, fixturePositions);
   const updateLightState = createStableLightState("HUM", {
@@ -285,8 +296,6 @@ export function createLevelOneScene({ initialState = null } = {}) {
   });
   addLevelOnePipes(scene);
   addLevelOnePuddles(scene);
-  addLevelOneFloorZones(scene);
-  addLevelOneParkingMarks(scene);
   addLevelOneWallSigns(scene);
   propColliders = propColliders.concat(addLevelOneCorridorDetails(scene));
   const almondWater = createAlmondWaterPickup(scene, {
@@ -549,6 +558,3 @@ export function createLevelOneScene({ initialState = null } = {}) {
     },
   };
 }
-
-
-

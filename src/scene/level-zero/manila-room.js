@@ -93,13 +93,13 @@ export function createManilaRoom(scene, room, cellCenter) {
   const panelMaterial = new THREE.MeshStandardMaterial({
     color: 0xfff4d2,
     emissive: 0xfff1bd,
-    emissiveIntensity: 1.55,
+    emissiveIntensity: 2.1,
     roughness: 0.32,
   });
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(2.52, 0.035, 0.38), panelMaterial);
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.035, 1.42), panelMaterial);
   panel.position.set(center.x, CEILING_Y - 0.09, center.z);
   scene.add(panel);
-  const light = new THREE.PointLight(0xffedbd, 1.05, 12.5, 1.86);
+  const light = new THREE.PointLight(0xffedbd, 2.25, 11.5, 2.35);
   light.position.set(center.x, CEILING_Y - 0.32, center.z);
   scene.add(light);
 
@@ -109,8 +109,8 @@ export function createManilaRoom(scene, room, cellCenter) {
       const cycle = elapsed % 31;
       const blackout = cycle > 26.4 && cycle < 27.35;
       const flicker = blackout ? 0.025 : 0.84 + Math.sin(elapsed * 2.35) * 0.1 + Math.sin(elapsed * 7.8) * 0.035;
-      panelMaterial.emissiveIntensity = Math.max(0.02, flicker * 1.58);
-      light.intensity = Math.max(0.015, flicker * 1.08);
+      panelMaterial.emissiveIntensity = Math.max(0.02, flicker * 2.14);
+      light.intensity = Math.max(0.015, flicker * 2.3);
       return blackout;
     },
   };

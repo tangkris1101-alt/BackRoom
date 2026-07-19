@@ -10,6 +10,7 @@ import {
 import {
   createItemHighlight,
   createPickupState,
+  getPickupDistance,
   inspectForward,
   inspectToItem,
   markItemMeshes,
@@ -192,7 +193,7 @@ export function createDetectorPickup(
       inspectToItem.normalize();
       const maxAngle = Math.min(0.15, Math.max(0.055, Math.atan2(0.5, distance)));
       if (inspectForward.dot(inspectToItem) < Math.cos(maxAngle)) return null;
-      setItemHighlight(highlight, true);
+      setItemHighlight(highlight, getPickupDistance(camera.position, group) <= DETECTOR_PICKUP_RADIUS);
 
       return {
         id: "detector",
@@ -200,6 +201,7 @@ export function createDetectorPickup(
         effect: "WIDE ENTITY PING / 5s SCAN",
         action: "F / BUTTON PICK UP",
         distance,
+        position: { x: group.position.x, y: group.position.y, z: group.position.z },
       };
     },
 
@@ -231,4 +233,3 @@ export function createDetectorPickup(
     },
   };
 }
-

@@ -43,10 +43,6 @@
 
       <header class="hud hud--top" hidden>
         <div class="hud-top-left">
-          <div id="timer-readout" class="timer-readout" aria-label="Run timer">
-            <span class="timer-readout__label">TIME</span>
-            <span class="timer-readout__value">00:00</span>
-          </div>
           <div class="signal">
             <div id="level-picker" class="level-picker" data-open="false">
               <button
@@ -63,28 +59,23 @@
               <div id="level-picker-menu" class="level-picker__menu" role="listbox" tabindex="-1" hidden></div>
             </div>
             <span id="status-text">NO SIGNAL</span>
-          </div>
-        </div>
-        <div class="hud-stack">
-          <div class="meters" aria-live="polite">
-            <span id="distance-readout">0m</span>
             <span id="light-readout">HUM</span>
             <span id="fps-readout">-- FPS</span>
           </div>
-          <div class="stamina-meter" aria-label="Stamina">
-            <span class="stamina-meter__label">STAMINA</span>
+          <div class="stamina-meter" aria-labelledby="stamina-label">
+            <span id="stamina-label" class="stamina-meter__label">STAMINA</span>
             <div class="stamina-meter__track">
               <div id="stamina-fill" class="stamina-meter__fill"></div>
             </div>
-            <span id="stamina-readout">100/100</span>
           </div>
-          <div class="health-meter" aria-label="Health">
-            <span class="health-meter__label">HEALTH</span>
+          <div class="health-meter" aria-labelledby="health-label">
+            <span id="health-label" class="health-meter__label">HEALTH</span>
             <div class="health-meter__track">
               <div id="health-fill" class="health-meter__fill"></div>
             </div>
-            <span id="health-readout">100/100</span>
           </div>
+        </div>
+        <div class="hud-stack">
           <div id="flashlight-meter" class="flashlight-meter" aria-label="Flashlight battery" hidden>
             <span class="flashlight-meter__label">LIGHT</span>
             <div class="flashlight-meter__track">
@@ -123,6 +114,8 @@
       </header>
 
       <div class="reticle" aria-hidden="true"></div>
+      <div id="pickup-prompt" class="pickup-prompt" aria-live="polite" hidden>[F] 拾取</div>
+      <div id="door-prompt" class="door-prompt" aria-live="polite" hidden>[F] 打开</div>
       <div id="entity-markers" class="entity-markers" aria-hidden="true"></div>
       <div id="debug-exit-markers" class="debug-exit-markers" aria-hidden="true"></div>
       <div id="item-info" class="item-info" aria-live="polite" hidden>
@@ -246,10 +239,6 @@
             <button id="pause-language-en" class="pause-overlay__language" type="button" data-language="en">English</button>
           </div>
         </section>
-        <button id="pause-tutorial" class="pause-overlay__tutorial" type="button" aria-label="查看教程">
-          <strong id="pause-tutorial-label">查看教程</strong>
-          <small id="pause-tutorial-hint">重新阅读操作说明</small>
-        </button>
         <button id="pause-reset" class="pause-overlay__reset" type="button" aria-label="重置进度">
           <strong id="pause-reset-label">重置进度</strong>
           <small id="pause-reset-hint">清空所有存档并回到 L0</small>

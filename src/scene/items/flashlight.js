@@ -10,6 +10,7 @@ import {
 import {
   createItemHighlight,
   createPickupState,
+  getPickupDistance,
   inspectForward,
   inspectToItem,
   markItemMeshes,
@@ -204,7 +205,7 @@ export function createFlashlightPickup(
       inspectToItem.normalize();
       const maxAngle = Math.min(0.15, Math.max(0.055, Math.atan2(0.5, distance)));
       if (inspectForward.dot(inspectToItem) < Math.cos(maxAngle)) return null;
-      setItemHighlight(highlight, true);
+      setItemHighlight(highlight, getPickupDistance(camera.position, group) <= FLASHLIGHT_PICKUP_RADIUS);
 
       return {
         id: "flashlight",
@@ -212,6 +213,7 @@ export function createFlashlightPickup(
         effect: "FORWARD BEAM / LIMITED BATTERY",
         action: "F / BUTTON PICK UP",
         distance,
+        position: { x: group.position.x, y: group.position.y, z: group.position.z },
       };
     },
 
@@ -243,4 +245,3 @@ export function createFlashlightPickup(
     },
   };
 }
-
