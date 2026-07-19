@@ -3,6 +3,7 @@ import {
   CELL_SIZE,
   CEILING_Y,
   WALL_HEIGHT,
+  WALL_THICKNESS,
 } from "../constants.js";
 import { createFixturePointLight } from "../common/lighting.js";
 import { createWideSignTexture } from "../common/textures.js";
@@ -84,8 +85,8 @@ export function createLevelOneLights(scene, fixturePositions) {
     let light = null;
     if (fixture.hasPointLight && pointLightIndexes.has(index)) {
       light = createFixturePointLight(fixture, tubeY - 0.2, {
-        rangeScale: 1.28,
-        intensityScale: 3.6,
+        rangeScale: 1.22,
+        intensityScale: 3.25,
       });
       scene.add(light);
     }
@@ -163,11 +164,15 @@ export function addLevelOneElevator(scene, position) {
 
 export function addLevelOnePipes(scene) {
   const pipeMaterial = new THREE.MeshStandardMaterial({
-    color: 0x26322e,
-    roughness: 0.7,
-    metalness: 0.28,
+    // A light galvanized gray-green keeps the pipe visible in the fixture-only
+    // parts of Level 1 without adding an invisible fill light.
+    color: 0x9ab7aa,
+    emissive: 0x386653,
+    emissiveIntensity: 0.48,
+    roughness: 0.44,
+    metalness: 0.54,
   });
-  const pipeGeometry = new THREE.CylinderGeometry(0.07, 0.07, CELL_SIZE * 9.5, 14);
+  const pipeGeometry = new THREE.CylinderGeometry(0.125, 0.125, 1, 16);
   const pipes = [
     { col: 9, row: 4, axis: "x" },
     { col: 18, row: 10, axis: "z" },
@@ -176,11 +181,32 @@ export function addLevelOnePipes(scene) {
   ];
 
   pipes.forEach((pipe) => {
-    const center = levelOneCellCenter(pipe.col, pipe.row);
+    const axisIsX = pipe.axis === "x";
+    const delta = axisIsX ? { col: 1, row: 0 } : { col: 0, row: 1 };
+    let start = { col: pipe.col, row: pipe.row };
+    let end = { col: pipe.col, row: pipe.row };
+
+    while (isLevelOneOpenCell(start.col - delta.col, start.row - delta.row)) {
+      start = { col: start.col - delta.col, row: start.row - delta.row };
+    }
+    while (isLevelOneOpenCell(end.col + delta.col, end.row + delta.row)) {
+      end = { col: end.col + delta.col, row: end.row + delta.row };
+    }
+
+    const startCenter = levelOneCellCenter(start.col, start.row);
+    const endCenter = levelOneCellCenter(end.col, end.row);
+    const innerWallOffset = CELL_SIZE / 2 - WALL_THICKNESS / 2;
+    const startEdge = (axisIsX ? startCenter.x : startCenter.z) - innerWallOffset;
+    const endEdge = (axisIsX ? endCenter.x : endCenter.z) + innerWallOffset;
     const mesh = new THREE.Mesh(pipeGeometry, pipeMaterial);
-    mesh.position.set(center.x, CEILING_Y - 0.42, center.z);
-    if (pipe.axis === "x") mesh.rotation.z = Math.PI / 2;
-    if (pipe.axis === "z") mesh.rotation.x = Math.PI / 2;
+    mesh.scale.y = endEdge - startEdge;
+    mesh.position.set(
+      axisIsX ? (startEdge + endEdge) / 2 : startCenter.x,
+      CEILING_Y - 0.42,
+      axisIsX ? startCenter.z : (startEdge + endEdge) / 2,
+    );
+    if (axisIsX) mesh.rotation.z = Math.PI / 2;
+    else mesh.rotation.x = Math.PI / 2;
     scene.add(mesh);
   });
 }
@@ -519,8 +545,10 @@ export function collectLevelOneTransforms({ openings = [] } = {}) {
         );
       }
 
-      const fixtureGrid = col % 7 === 3 && row % 5 === 2;
-      const corridorGrid = col % 9 === 5 && row % 6 === 4;
+      // Fluorescent fixtures form an intentionally regular warehouse grid.
+      // Each candidate below creates both the visible tube and its light.
+      const fixtureGrid = col % 6 === 3 && row % 4 === 2;
+      const corridorGrid = col % 8 === 4 && row % 5 === 2;
       if (!isCorridor && ((fixtureGrid && !isDarkZone) || (corridorGrid && isOpenHall))) {
         fixtureCandidates.push({
           x: center.x,
@@ -530,11 +558,11 @@ export function collectLevelOneTransforms({ openings = [] } = {}) {
           speed: isDarkZone ? 6.2 : 3.1 + ((col + row) % 5) * 0.34,
           weak: isDarkZone ? 0.28 : isSupplyZone ? 0.06 : 0.14,
           broken: isDarkZone || (col + row) % 13 === 0,
-          range: isSupplyZone ? 15 : isOpenHall ? 12.8 : 9.8,
-          baseIntensity: isSupplyZone ? 1.8 : isOpenHall ? 1.22 : 0.92,
+          range: isSupplyZone ? 16.2 : isOpenHall ? 14.1 : 11.7,
+          baseIntensity: isSupplyZone ? 1.72 : isOpenHall ? 1.28 : 1.02,
           panelWidth: isSupplyZone ? 2.95 : 2.35,
           color: isSupplyZone ? 0xeef7dc : 0xdce7d6,
-          hasPointLight: isSupplyZone || isOpenHall,
+          hasPointLight: true,
           priority: (isSupplyZone ? 3 : 0) + (isOpenHall ? 2 : 0) - (isDarkZone ? 2 : 0),
         });
       }

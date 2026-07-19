@@ -860,7 +860,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
       getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
-    interact: (playerPosition) => exitNetwork.interact(playerPosition) ?? tryInteractWithSpots(playerPosition, ...interactions),
+    interact: (playerPosition, access) => exitNetwork.interact(playerPosition, access) ?? tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {

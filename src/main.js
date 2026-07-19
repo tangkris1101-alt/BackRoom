@@ -672,10 +672,22 @@ canvas.dataset.language = currentLanguage;
 
 function updateMainMenuText() {
   const text = MAIN_MENU_TEXT[currentLanguage] ?? MAIN_MENU_TEXT.en;
+  let entryLevel = 0;
+  try {
+    const save = hasSavedGame() ? loadSave() : null;
+    entryLevel = getInitialLevelFromSave(save) ?? 0;
+  } catch {
+    entryLevel = 0;
+  }
+  const entryInfo = getBackroomsLevelInfo(entryLevel);
   if (mainMenuEyebrow) mainMenuEyebrow.textContent = text.eyebrow;
   if (mainMenuSubtitle) mainMenuSubtitle.textContent = text.subtitle;
   if (mainMenuStartLabel) mainMenuStartLabel.textContent = text.start;
-  if (mainMenuStartHint) mainMenuStartHint.textContent = text.startHint;
+  if (mainMenuStartHint) {
+    mainMenuStartHint.textContent = currentLanguage === "en"
+      ? `ENTER ${entryInfo.levelLabel}`
+      : `进入 ${entryInfo.levelLabel}`;
+  }
   if (mainMenuSettingsLabel) mainMenuSettingsLabel.textContent = text.settings;
   if (mainMenuSettingsHint) mainMenuSettingsHint.textContent = text.settingsHint;
   if (mainMenuSettingsTitle) mainMenuSettingsTitle.textContent = text.language;
@@ -1546,7 +1558,7 @@ function handleMainMenuStart() {
     return;
   }
 
-  beginGameSession(getInitialLevel(), null);
+  beginGameSession(0, null);
 }
 
 function setExitOverlayText(title, subtitle) {
@@ -2778,8 +2790,52 @@ function flashPickupHint(textKey, durationMs = 1100) {
   pickupFlashUntil = clock.elapsedTime + durationMs / 1000;
 }
 
+function tryFocusedInteraction() {
+  const focusedInteraction = lastMetrics?.focusInteraction;
+  if (!focusedInteraction?.available) return false;
+
+  if (openExitDoor()) return true;
+
+  const interaction = world?.interact?.(world.camera.position, {
+    routeId: focusedInteraction.exitRoute ? focusedInteraction.id : null,
+    hasLevelKey: (targetLevel) => getLevelKeyTarget(getEquipped()?.id) === targetLevel,
+    consumeLevelKey: (targetLevel) => {
+      const keyId = `level-key-${targetLevel}`;
+      if (getEquipped()?.id !== keyId || !removeInventory(keyId)) return false;
+      renderInventoryBar();
+      markDirty();
+      return true;
+    },
+  });
+
+  if (interaction?.interacted) {
+    const localized = getLocalizedText(INTERACTION_TEXT, interaction.id);
+    const embedded = interaction.i18n?.[currentLanguage] ?? interaction.i18n?.en ?? {};
+    pickupFlashText = localized.response ?? localized.name ?? embedded.response ?? embedded.name ?? "INTERACTION";
+    pickupFlashUntil = clock.elapsedTime + 1.9;
+    useButton?.classList.add("is-active");
+    window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
+    canvas.dataset.lastInteraction = interaction.id;
+    canvas.dataset.lastInteractionCount = String(interaction.count ?? 1);
+    writeSaveSnapshot();
+    return true;
+  }
+
+  if (interaction?.locked) {
+    const embedded = interaction.i18n?.[currentLanguage] ?? interaction.i18n?.en ?? {};
+    pickupFlashText = embedded.response ?? embedded.effect ?? "LEVEL KEY REQUIRED";
+    pickupFlashUntil = clock.elapsedTime + 1.7;
+    return true;
+  }
+
+  return false;
+}
+
 function usePickup() {
   if (!world || exitComplete || gameFailed || levelTransition || isPaused) return;
+  // The visible door prompt is an explicit target. Resolve it before nearby props or
+  // pickups can consume F, which previously made the Level 5 STAIRS door appear inert.
+  if (isDoorInteraction(lastMetrics?.focusInteraction) && tryFocusedInteraction()) return;
   const focusedPickup = getFocusedPickupable(lastMetrics);
   const looseTarget = focusedPickup ? worldItems?.getPickupTarget(world.camera.position) : null;
   if (looseTarget?.id === focusedPickup?.id) {
@@ -2839,38 +2895,7 @@ function usePickup() {
   }
   const pickup = liveTarget?.id === focusedPickup?.id ? world.tryPickup?.(world.camera.position) : null;
   if (!pickup?.pickedUp) {
-    if (openExitDoor()) return;
-    if (lastMetrics?.focusInteraction?.available) {
-      const interaction = world.interact?.(world.camera.position, {
-        routeId: lastMetrics?.focusInteraction?.exitRoute ? lastMetrics.focusInteraction.id : null,
-        hasLevelKey: (targetLevel) => getLevelKeyTarget(getEquipped()?.id) === targetLevel,
-        consumeLevelKey: (targetLevel) => {
-          const keyId = `level-key-${targetLevel}`;
-          if (getEquipped()?.id !== keyId || !removeInventory(keyId)) return false;
-          renderInventoryBar();
-          markDirty();
-          return true;
-        },
-      });
-      if (interaction?.interacted) {
-        const localized = getLocalizedText(INTERACTION_TEXT, interaction.id);
-        const embedded = interaction.i18n?.[currentLanguage] ?? interaction.i18n?.en ?? {};
-        pickupFlashText = localized.response ?? localized.name ?? embedded.response ?? embedded.name ?? "INTERACTION";
-        pickupFlashUntil = clock.elapsedTime + 1.9;
-        useButton?.classList.add("is-active");
-        window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
-        canvas.dataset.lastInteraction = interaction.id;
-        canvas.dataset.lastInteractionCount = String(interaction.count ?? 1);
-        writeSaveSnapshot();
-        return;
-      }
-      if (interaction?.locked) {
-        const embedded = interaction.i18n?.[currentLanguage] ?? interaction.i18n?.en ?? {};
-        pickupFlashText = embedded.response ?? embedded.effect ?? "LEVEL KEY REQUIRED";
-        pickupFlashUntil = clock.elapsedTime + 1.7;
-        return;
-      }
-    }
+    if (tryFocusedInteraction()) return;
     flashPickupHint("pickupEmpty", 900);
     return;
   }
@@ -3548,13 +3573,9 @@ tutorialDots.forEach((dot) => {
 function populateSavePrompt(save) {
   if (!save) return;
   const saveLevel = Number(save.player?.level ?? 0);
-  const urlLevel = getInitialLevel();
-  const urlOverridesSave = urlLevel > 0 && urlLevel !== saveLevel;
-  const displayLevel = urlOverridesSave ? urlLevel : saveLevel;
-  const displayInfo = getBackroomsLevelInfo(displayLevel);
   const saveInfo = getBackroomsLevelInfo(saveLevel);
 
-  if (savePromptLevel) savePromptLevel.textContent = displayInfo.levelLabel ?? "LEVEL ?";
+  if (savePromptLevel) savePromptLevel.textContent = saveInfo.levelLabel ?? "LEVEL ?";
   if (savePromptStamina) {
     const stamina = Math.round(save.player?.stamina ?? 0);
     const staminaMax = Math.round(save.player?.staminaMax ?? 0);
@@ -3577,78 +3598,36 @@ function populateSavePrompt(save) {
     }
   }
 
-  if (urlOverridesSave) {
-    if (savePromptEyebrow) {
-      savePromptEyebrow.textContent = currentLanguage === "en"
-        ? "URL OVERRIDE"
-        : "URL 指定关卡";
-    }
-    if (savePromptTitle) {
-      savePromptTitle.textContent = currentLanguage === "en"
-        ? `ENTER ${displayInfo.levelLabel}`
-        : `进入 ${displayInfo.levelLabel}`;
-    }
-    if (savePromptDesc) {
-      savePromptDesc.textContent = currentLanguage === "en"
-        ? `Save is parked at ${saveInfo.levelLabel}. URL points to ${displayInfo.levelLabel}; loading that instead.`
-        : `存档停在 ${saveInfo.levelLabel},URL 请求的是 ${displayInfo.levelLabel},按此进入`;
-    }
-    if (savePromptContinueLabel) {
-      savePromptContinueLabel.textContent = currentLanguage === "en"
-        ? `ENTER ${displayInfo.levelLabel}`
-        : `进入 ${displayInfo.levelLabel}`;
-    }
-    if (savePromptContinueHint) {
-      savePromptContinueHint.textContent = currentLanguage === "en"
-        ? `KEEP INVENTORY · START AT ${displayInfo.levelLabel}`
-        : `保留道具 · 在 ${displayInfo.levelLabel} 开始`;
-    }
-    if (savePromptRestartLabel) {
-      savePromptRestartLabel.textContent = currentLanguage === "en"
-        ? `RESUME ${saveInfo.levelLabel}`
-        : `恢复 ${saveInfo.levelLabel}`;
-    }
-    if (savePromptRestartHint) {
-      savePromptRestartHint.textContent = currentLanguage === "en"
-        ? `RESTORE SAVE STATE AT ${saveInfo.levelLabel}`
-        : `在 ${saveInfo.levelLabel} 恢复存档`;
-    }
-  } else {
-    if (savePromptEyebrow) {
-      savePromptEyebrow.textContent = currentLanguage === "en"
-        ? "PREVIOUS RUN DETECTED"
-        : "PREVIOUS RUN DETECTED";
-    }
-    if (savePromptTitle) {
-      savePromptTitle.textContent = currentLanguage === "en"
-        ? "CONTINUE PREVIOUS RUN"
-        : "继续上次进度";
-    }
-    if (savePromptDesc) {
-      savePromptDesc.textContent = currentLanguage === "en"
-        ? "An unfinished run was detected. Resume?"
-        : "检测到一份未完成的进度。是否恢复?";
-    }
-    if (savePromptContinueLabel) {
-      savePromptContinueLabel.textContent = currentLanguage === "en"
-        ? "CONTINUE"
-        : "继续";
-    }
-    if (savePromptContinueHint) {
-      savePromptContinueHint.textContent = currentLanguage === "en"
-        ? "RESTORE SAVE STATE"
-        : "恢复上次进度";
-    }
-    if (savePromptRestartLabel) {
-      savePromptRestartLabel.textContent = currentLanguage === "en"
-        ? "RESTART"
-        : "重新开始";
-    }
-    if (savePromptRestartHint) {
-      savePromptRestartHint.textContent = currentLanguage === "en"
-        ? "WIPE SAVE · START AT L0"
-        : "清空存档,从头开始";
-    }
+  if (savePromptEyebrow) {
+    savePromptEyebrow.textContent = currentLanguage === "en" ? "SAVE FOUND" : "检测到存档";
+  }
+  if (savePromptTitle) {
+    savePromptTitle.textContent = currentLanguage === "en"
+      ? `ENTER ${saveInfo.levelLabel}`
+      : `进入 ${saveInfo.levelLabel}`;
+  }
+  if (savePromptDesc) {
+    savePromptDesc.textContent = currentLanguage === "en"
+      ? `Resume at ${saveInfo.levelLabel}, or start a new run from Level 0.`
+      : `将恢复到 ${saveInfo.levelLabel}；也可清空存档后从 Level 0 重新开始。`;
+  }
+  if (savePromptContinueLabel) {
+    savePromptContinueLabel.textContent = currentLanguage === "en"
+      ? `ENTER ${saveInfo.levelLabel}`
+      : `进入 ${saveInfo.levelLabel}`;
+  }
+  if (savePromptContinueHint) {
+    savePromptContinueHint.textContent = currentLanguage === "en"
+      ? "RESTORE SAVE STATE"
+      : "恢复上次保存的位置与状态";
+  }
+  if (savePromptRestartLabel) {
+    savePromptRestartLabel.textContent = currentLanguage === "en" ? "RESTART" : "重新开始";
+  }
+  if (savePromptRestartHint) {
+    savePromptRestartHint.textContent = currentLanguage === "en"
+      ? "WIPE SAVE · START AT LEVEL 0"
+      : "清空存档 · 从 LEVEL 0 开始";
   }
   if (savePromptJumpLabel) {
     savePromptJumpLabel.textContent = formatLocalizedStatus("savePromptJumpLabel");
@@ -3747,29 +3726,15 @@ function populateSavePromptLevels() {
 
 function handleSavePromptContinue(save) {
   hideSavePrompt();
-  const urlLevel = getInitialLevel();
-  const saveLevel = getInitialLevelFromSave(save);
-  // When the URL explicitly points to a different level than the save,
-  // honour the URL — the player asked for that level. Save state (inventory,
-  // flashlight, detector) is still applied so they keep their items.
-  const targetLevel = urlLevel > 0 && urlLevel !== saveLevel ? urlLevel : saveLevel;
-  beginGameSession(targetLevel, save);
+  const saveLevel = getInitialLevelFromSave(save) ?? 0;
+  updateLevelUrl(saveLevel);
+  beginGameSession(saveLevel, save);
 }
 
 function handleSavePromptRestart(save) {
   hideSavePrompt();
-  const urlLevel = getInitialLevel();
-  const saveLevel = save ? getInitialLevelFromSave(save) : 0;
-  if (urlLevel > 0 && urlLevel !== saveLevel && save) {
-    // URL override case: the second button offers to abandon the override
-    // and resume the save at its actual level. URL is rewritten so refreshes
-    // go to the same place.
-    updateLevelUrl(saveLevel);
-    beginGameSession(saveLevel, save);
-    return;
-  }
   clearSave();
-  beginGameSession(getInitialLevel(), null);
+  beginGameSession(0, null);
 }
 
 function handleSavePromptJumpToLevel(targetLevel, save) {

@@ -8,8 +8,11 @@ export const LEVEL_ONE_ROWS = 33;
 export const LEVEL_ONE_EXIT_TRIGGER_RADIUS = CELL_SIZE * 0.86;
 export const LEVEL_ONE_START_CELL = { col: 4, row: 22, yaw: -Math.PI * 0.18 };
 export const LEVEL_ONE_TARGET_CELL = { col: 31, row: 1 };
-export const LEVEL_ONE_MAX_POINT_LIGHTS = 19;
-export const LEVEL_ONE_MIN_FIXTURE_DISTANCE = CELL_SIZE * 4.15;
+// Every dynamic light is paired with a visible fluorescent fixture. Keep this
+// cap high enough to cover the expanded warehouse grid without relying on
+// invisible fill or ambient lights.
+export const LEVEL_ONE_MAX_POINT_LIGHTS = 32;
+export const LEVEL_ONE_MIN_FIXTURE_DISTANCE = CELL_SIZE * 3.5;
 export const LEVEL_ONE_CORRIDOR_BOUNDS = { col: 2, row: 6, width: 10, height: 9 };
 export const LEVEL_ONE_CORRIDOR_FIXTURES = [
   { col: 3, row: 8, rotation: Math.PI / 2 },

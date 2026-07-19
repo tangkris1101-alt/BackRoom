@@ -96,16 +96,21 @@ function createRouteModel(scene, route) {
 
   const frameColor = route.hidden ? 0x31332f : route.kind === "elevator" ? 0x4f5755 : 0x514b40;
   const frameMaterial = new THREE.MeshStandardMaterial({
-    color: frameColor,
+    color: route.kind === "elevator" ? 0x64736d : frameColor,
+    // Level 1 uses a local baked light field for its architecture. Exit meshes
+    // sit outside that shader path, so elevator metal needs a small visible
+    // baseline instead of collapsing to a black rectangle before it opens.
+    emissive: route.kind === "elevator" ? 0x14231d : 0x000000,
+    emissiveIntensity: route.kind === "elevator" ? 0.26 : 0,
     roughness: route.hidden ? 0.96 : 0.68,
     metalness: route.kind === "elevator" ? 0.28 : 0.08,
   });
   const panelMaterial = new THREE.MeshStandardMaterial({
-    color: route.hidden ? 0x242723 : route.kind === "elevator" ? 0x69716e : 0x62594a,
-    emissive: route.hidden ? 0x020302 : 0x0b0d0c,
-    emissiveIntensity: 0.12,
-    roughness: 0.74,
-    metalness: route.kind === "elevator" ? 0.22 : 0.04,
+    color: route.hidden ? 0x242723 : route.kind === "elevator" ? 0x7b8983 : 0x62594a,
+    emissive: route.hidden ? 0x020302 : route.kind === "elevator" ? 0x263c32 : 0x0b0d0c,
+    emissiveIntensity: route.kind === "elevator" ? 0.42 : 0.12,
+    roughness: route.kind === "elevator" ? 0.62 : 0.74,
+    metalness: route.kind === "elevator" ? 0.38 : 0.04,
   });
   const portalMaterial = new THREE.MeshBasicMaterial({ color: route.hidden ? 0x030403 : 0x090a08 });
 

@@ -90,7 +90,7 @@ function createLevelOneLightField(fixturePositions) {
   fixturePositions.forEach((fixture) => {
     const x = ((fixture.x - LEVEL_ONE_ORIGIN_X) / width) * size;
     const z = ((fixture.z - LEVEL_ONE_ORIGIN_Z) / height) * size;
-    const radius = Math.max(24, (fixture.range / width) * size * 1.32);
+    const radius = Math.max(24, (fixture.range / width) * size * 1.42);
     const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.8, 0.42, 1);
     const gradient = context.createRadialGradient(x, z, 0, x, z, radius);
     gradient.addColorStop(0, `rgba(232, 237, 232, ${0.82 * strength})`);
@@ -566,7 +566,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
       getPickupTarget(playerPosition, firesalt, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, firesalt, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
-    interact: (playerPosition) => exitNetwork.interact(playerPosition),
+    interact: (playerPosition, access) => exitNetwork.interact(playerPosition, access),
     getSnapshot() {
       return {
         pickups: {
