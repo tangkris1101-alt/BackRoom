@@ -88,6 +88,33 @@ function createLockedRouteText(route) {
   };
 }
 
+function addRouteHeaderLight(group, route) {
+  const cabinet = route.kind === "cabinet";
+  const housingMaterial = new THREE.MeshStandardMaterial({
+    color: cabinet ? 0x52645c : 0x596a63,
+    emissive: 0x111d18,
+    emissiveIntensity: 0.28,
+    roughness: 0.48,
+    metalness: 0.48,
+  });
+  const lensMaterial = new THREE.MeshStandardMaterial({
+    color: cabinet ? 0xc6f5d6 : 0xe8f7ed,
+    emissive: cabinet ? 0x9debbb : 0xd9ffe8,
+    emissiveIntensity: 1.8,
+    roughness: 0.22,
+  });
+  const housing = new THREE.Mesh(new THREE.BoxGeometry(cabinet ? 1.4 : 1.62, 0.12, 0.16), housingMaterial);
+  housing.name = `exit-header-fixture-${route.id}`;
+  housing.position.set(0, 2.28, 0.2);
+  const lens = new THREE.Mesh(new THREE.BoxGeometry(cabinet ? 1.18 : 1.4, 0.035, 0.034), lensMaterial);
+  lens.name = `exit-header-lens-${route.id}`;
+  lens.position.set(0, 2.24, 0.292);
+  const light = new THREE.PointLight(cabinet ? 0xbff8d2 : 0xe3fff0, cabinet ? 2.4 : 3.4, 4.2, 2);
+  light.name = `exit-header-light-${route.id}`;
+  light.position.set(0, 2.12, 0.42);
+  group.add(housing, lens, light);
+}
+
 function createRouteModel(scene, route) {
   const group = new THREE.Group();
   group.position.set(route.position.x, 0, route.position.z);
@@ -106,11 +133,11 @@ function createRouteModel(scene, route) {
     metalness: route.kind === "elevator" ? 0.28 : 0.08,
   });
   const panelMaterial = new THREE.MeshStandardMaterial({
-    color: route.hidden ? 0x242723 : route.kind === "elevator" ? 0x7b8983 : 0x62594a,
-    emissive: route.hidden ? 0x020302 : route.kind === "elevator" ? 0x263c32 : 0x0b0d0c,
-    emissiveIntensity: route.kind === "elevator" ? 0.42 : 0.12,
-    roughness: route.kind === "elevator" ? 0.62 : 0.74,
-    metalness: route.kind === "elevator" ? 0.38 : 0.04,
+    color: route.hidden ? 0x242723 : route.kind === "elevator" ? 0x92a99d : 0x62594a,
+    emissive: route.hidden ? 0x020302 : route.kind === "elevator" ? 0x365f4b : 0x0b0d0c,
+    emissiveIntensity: route.kind === "elevator" ? 0.62 : 0.12,
+    roughness: route.kind === "elevator" ? 0.48 : 0.74,
+    metalness: route.kind === "elevator" ? 0.5 : 0.04,
   });
   const portalMaterial = new THREE.MeshBasicMaterial({ color: route.hidden ? 0x030403 : 0x090a08 });
 
@@ -129,11 +156,11 @@ function createRouteModel(scene, route) {
       roughness: 0.9,
     });
     const cabinetDoorMaterial = new THREE.MeshStandardMaterial({
-      color: 0x828982,
-      emissive: 0x242b28,
-      emissiveIntensity: 0.16,
-      roughness: 0.7,
-      metalness: 0.18,
+      color: 0x90a69a,
+      emissive: 0x315b47,
+      emissiveIntensity: 0.46,
+      roughness: 0.5,
+      metalness: 0.4,
     });
     const cabinetBody = new THREE.Group();
     const back = new THREE.Mesh(new THREE.BoxGeometry(2.06, 2.48, 0.08), cabinetInteriorMaterial);
@@ -152,6 +179,7 @@ function createRouteModel(scene, route) {
     group.add(cabinetBody);
 
     const portal = new THREE.Mesh(new THREE.PlaneGeometry(1.88, 2.3), portalMaterial);
+    portal.name = `exit-portal-${route.id}`;
     portal.position.set(0, 1.2, -0.43);
     group.add(portal);
 
@@ -173,15 +201,25 @@ function createRouteModel(scene, route) {
 
     const leftHinge = makeDoor(-1);
     const rightHinge = makeDoor(1);
+    addRouteHeaderLight(group, route);
     scene.add(group);
     return { group, portal, leftHinge, rightHinge };
   }
 
-  const portal = new THREE.Mesh(new THREE.PlaneGeometry(2.35, 2.4), portalMaterial);
-  portal.position.set(0, 1.2, -0.055);
-  group.add(portal);
+  // The elevator has a modeled cabin. An opaque portal at the threshold used
+  // to overlap the closed panels and could win the depth test as a black slab.
+  // Keep the real cabin visible after the doors slide apart instead.
+  const portal = route.kind === "elevator"
+    ? null
+    : new THREE.Mesh(new THREE.PlaneGeometry(2.35, 2.4), portalMaterial);
+  if (portal) {
+    portal.name = `exit-portal-${route.id}`;
+    portal.position.set(0, 1.2, -0.055);
+    group.add(portal);
+  }
 
   if (route.kind === "elevator") {
+    addRouteHeaderLight(group, route);
     const cabinMaterial = new THREE.MeshStandardMaterial({
       color: 0x52605e,
       emissive: 0x172522,
@@ -251,6 +289,26 @@ function createRouteModel(scene, route) {
     leftPanel.position.set(-0.57, 1.2, 0);
     rightPanel.position.set(0.57, 1.2, 0);
     group.add(leftPanel, rightPanel);
+  }
+
+  if (route.kind === "elevator") {
+    const insetMaterial = new THREE.MeshStandardMaterial({
+      color: 0xa9c3b6,
+      emissive: 0x46775d,
+      emissiveIntensity: 0.52,
+      roughness: 0.38,
+      metalness: 0.56,
+    });
+    const addPanelInset = (panel, width) => {
+      if (!panel) return;
+      const inset = new THREE.Mesh(new THREE.BoxGeometry(width - 0.12, 2.08, 0.014), insetMaterial);
+      inset.name = `exit-elevator-panel-inset-${route.id}`;
+      inset.position.set(0, 0, 0.067);
+      panel.add(inset);
+    };
+    addPanelInset(singlePanel, 2.28);
+    addPanelInset(leftPanel, 1.12);
+    addPanelInset(rightPanel, 1.12);
   }
 
   if (route.requiresLevelKey && singleHinge) {

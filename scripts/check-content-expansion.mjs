@@ -95,6 +95,21 @@ const openedDoor = doorTestNetwork.interact(doorTestCamera.position, { routeId: 
 assert.equal(openedDoor?.id, "focused-stairs");
 assert.equal(openedDoor?.interacted, true);
 
+// Exit furniture must carry a visible fixture and a matching source light.
+// In particular, elevator cabins may not use an opaque threshold plane that
+// overlaps the closed doors and turns them into a black slab.
+const exitLightScene = new THREE.Scene();
+const exitLightCamera = new THREE.PerspectiveCamera();
+createExitNetwork(exitLightScene, exitLightCamera, [
+  { id: "lit-elevator", targetLevel: 2, kind: "elevator", position: { x: 0, z: 0 }, noSign: true },
+  { id: "lit-cabinet", targetLevel: -1, kind: "cabinet", position: { x: 5, z: 0 }, noSign: true },
+]);
+const elevatorModel = exitLightScene.getObjectByName("exit-network-lit-elevator");
+const cabinetModel = exitLightScene.getObjectByName("exit-network-lit-cabinet");
+assert.equal(elevatorModel?.getObjectByName("exit-header-light-lit-elevator")?.isPointLight, true);
+assert.equal(cabinetModel?.getObjectByName("exit-header-light-lit-cabinet")?.isPointLight, true);
+assert.equal(elevatorModel?.getObjectByName("exit-portal-lit-elevator"), undefined);
+
 for (const level of ["one", "two", "three", "four", "five", "six", "seven"]) {
   const source = await readFile(new URL(`../src/scene/level-${level}/index.js`, import.meta.url), "utf8");
   assert.match(source, /interact:\s*\(playerPosition, access\)\s*=>\s*exitNetwork\.interact\(playerPosition, access\)/);
