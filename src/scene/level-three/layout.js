@@ -1,7 +1,9 @@
 import { CELL_SIZE } from "../constants.js";
 
-export const LEVEL_THREE_COLS = 39;
-export const LEVEL_THREE_ROWS = 23;
+const LEVEL_THREE_LEGACY_COLS = 39;
+const LEVEL_THREE_LEGACY_ROWS = 23;
+export const LEVEL_THREE_COLS = 49;
+export const LEVEL_THREE_ROWS = 31;
 export const LEVEL_THREE_START_CELL = { col: 3, row: 3, yaw: -Math.PI * 0.44 };
 export const LEVEL_THREE_TARGET_CELL = { col: 36, row: 20 };
 export const LEVEL_THREE_EXIT_TRIGGER_RADIUS = CELL_SIZE * 0.74;
@@ -31,6 +33,8 @@ export const LEVEL_THREE_DARK_ZONES = [
   { col: 4, row: 14, width: 5, height: 4 },
   { col: 27, row: 16, width: 5, height: 4 },
   { col: 30, row: 5, width: 5, height: 5 },
+  { col: 39, row: 4, width: 8, height: 7 },
+  { col: 34, row: 23, width: 12, height: 6 },
 ];
 
 export function createLevelThreeLayout() {
@@ -101,6 +105,12 @@ export function createLevelThreeLayout() {
   // indestructible bar at (32, 7) has an actual corridor to bisect
   // (otherwise the bar is meaningless — the cell would already be wall).
   carveHorizontal(25, 35, 7, 1);
+  carveHorizontal(34, 46, 11, 2);
+  carveRoom(39, 4, 8, 7);
+  carveVertical(44, 11, 25, 2);
+  carveRoom(34, 23, 12, 6);
+  carveHorizontal(16, 44, 27, 2);
+  carveVertical(18, 20, 27, 2);
   // Mid-east alt corridor: row 7 cols 11-17 width 1. Carved so the two
   // indestructible bars at (12, 7) and (16, 7) have a corridor to bisect.
   carveHorizontal(11, 17, 7, 1);
@@ -137,8 +147,10 @@ export function createLevelThreeLayout() {
 }
 
 export const LEVEL_THREE_MAP = createLevelThreeLayout();
-export const LEVEL_THREE_ORIGIN_X = -(LEVEL_THREE_COLS * CELL_SIZE) / 2;
-export const LEVEL_THREE_ORIGIN_Z = -(LEVEL_THREE_ROWS * CELL_SIZE) / 2;
+export const LEVEL_THREE_ORIGIN_X = -(LEVEL_THREE_LEGACY_COLS * CELL_SIZE) / 2;
+export const LEVEL_THREE_ORIGIN_Z = -(LEVEL_THREE_LEGACY_ROWS * CELL_SIZE) / 2;
+export const LEVEL_THREE_CENTER_X = LEVEL_THREE_ORIGIN_X + (LEVEL_THREE_COLS * CELL_SIZE) / 2;
+export const LEVEL_THREE_CENTER_Z = LEVEL_THREE_ORIGIN_Z + (LEVEL_THREE_ROWS * CELL_SIZE) / 2;
 
 export function isLevelThreeOpenCell(col, row) {
   return (

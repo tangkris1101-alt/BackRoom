@@ -5,10 +5,12 @@ import { DebugMode, DEBUG_PLAYABLE_LEVELS } from "./debug-mode.js";
 import { createBackroomsScene, getBackroomsLevelInfo } from "./scene.js";
 import { FirstPersonControls } from "./first-person-controls.js";
 import { syncFirstPersonHeldItem } from "./scene/common/view-model.js";
+import { createFiresaltEffectManager } from "./scene/items/index.js";
 import {
   BACTERIA_CONTACT_RADIUS,
   HOUND_CONTACT_RADIUS,
   HUB_LEVEL,
+  PLAYABLE_LEVEL_IDS,
   SILENCE_LIQUID_DURATION,
   SILENCE_LIQUID_REPEL_RADIUS,
   SILENCE_LIQUID_REPEL_SPEED_MULTIPLIER,
@@ -198,6 +200,8 @@ const DETECTOR_SCAN_DURATION = 5;
 const DETECTOR_COOLDOWN_DURATION = 60;
 const DETECTOR_RANGE = 112;
 const LANGUAGE_STORAGE_KEY = "backrooms-language";
+const PROGRESS_VERSION_KEY = "backrooms-progress-version";
+const PROGRESS_VERSION = 2;
 const ALMOND_WATER_DURATION = 45;
 const SUPER_ALMOND_WATER_DURATION = 25;
 const ALMOND_WATER_STAMINA_BONUS = 50;
@@ -211,6 +215,7 @@ const HEALTH_MAX = 100;
 const BACTERIA_DAMAGE = 50;
 const SUPER_BACTERIA_DAMAGE = 60;
 const HOUND_DAMAGE = 30;
+const SMILER_DAMAGE = 45;
 const LEVEL_SEVEN_THING_DAMAGE = 68;
 const DAMAGE_COOLDOWN_S = 1.0;
 const ALMOND_WATER_HEAL = 30;
@@ -291,7 +296,6 @@ function getInitialLevel() {
   try {
     const reached = JSON.parse(window.localStorage?.getItem(REACHED_KEY) ?? "[]");
     if (!Array.isArray(reached)) return 0;
-    if (level === 8 && reached.includes(8)) return HUB_LEVEL;
     return reached.includes(requested) ? requested : 0;
   } catch {
     return 0;
@@ -300,6 +304,7 @@ function getInitialLevel() {
 
 let world = null;
 let worldItems = null;
+let firesaltEffects = null;
 let controls = null;
 let animationFrameStarted = false;
 let saveDirtyTimer = 0;
@@ -375,6 +380,8 @@ const INVENTORY_ORDER = [
   "flashlight",
   "detector",
   "silence-liquid",
+  "compass",
+  "firesalt",
   "level-one-file",
   ...LEVEL_KEY_IDS,
   "almond-water",
@@ -392,6 +399,8 @@ const INVENTORY_DEFS = {
   },
   detector: { id: "detector", type: "scan", unique: true, stackable: false },
   "silence-liquid": { id: "silence-liquid", type: "consumable", unique: false, stackable: true },
+  compass: { id: "compass", type: "passive", unique: true, stackable: false },
+  firesalt: { id: "firesalt", type: "throwable", unique: false, stackable: true, maxStack: 3 },
   ...Object.fromEntries(
     LEVEL_KEY_IDS.map((id) => [id, { id, type: "key", unique: true, stackable: false }]),
   ),
@@ -412,6 +421,9 @@ const INVENTORY_DEFS = {
 };
 
 const ITEM_ICON_SVG = {
+  firesalt: `<defs><radialGradient id="fs" cx="45%" cy="35%"><stop offset="0" stop-color="#fff3bd"/><stop offset="0.35" stop-color="#ff9b35"/><stop offset="1" stop-color="#8f1709"/></radialGradient></defs>
+    <path d="M50 8 L67 35 L58 83 L38 86 L28 39 Z" fill="url(#fs)" stroke="#ffbf55" stroke-width="2"/>
+    <path d="M22 31 L39 48 L34 79 L16 67 Z M71 34 L86 49 L75 76 L59 67 Z" fill="#d83b13" stroke="#ff8b36" stroke-width="2"/>`,
   flashlight: `<defs>
       <linearGradient id="fl-body" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="#8a9088"/><stop offset="0.35" stop-color="#3a4038"/>
@@ -731,11 +743,10 @@ function loadIntegerSet(key) {
     if (!raw) return new Set();
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return new Set();
-    return new Set(
-      parsed
-        .filter((n) => Number.isInteger(n) && n >= HUB_LEVEL && n <= 8)
-        .map((n) => n === 8 ? HUB_LEVEL : n),
-    );
+    const progressVersion = Number(window.localStorage?.getItem(PROGRESS_VERSION_KEY) ?? 1);
+    return new Set(parsed
+      .filter((n) => Number.isInteger(n) && PLAYABLE_LEVEL_IDS.includes(n))
+      .map((n) => progressVersion < PROGRESS_VERSION && n === 8 ? HUB_LEVEL : n));
   } catch {
     return new Set();
   }
@@ -777,10 +788,16 @@ let pickedUpItems = loadStringSet(PICKED_UP_KEY);
   const initialLevel = getInitialLevel();
   reachedLevels.add(initialLevel);
   saveIntegerSet(REACHED_KEY, reachedLevels);
+  try {
+    window.localStorage?.setItem(PROGRESS_VERSION_KEY, String(PROGRESS_VERSION));
+  } catch {
+    // Progress migration is best-effort when storage is unavailable.
+  }
 }
 
 function getLocalizedText(collection, id) {
-  return collection[currentLanguage]?.[id] ?? collection.en?.[id] ?? collection["zh-CN"]?.[id] ?? {};
+  const lookupId = collection === ENTITY_TEXT && String(id).includes("smiler") ? "smiler" : id;
+  return collection[currentLanguage]?.[lookupId] ?? collection.en?.[lookupId] ?? collection["zh-CN"]?.[lookupId] ?? {};
 }
 
 function getLevelDangerInfo(levelOrInfo) {
@@ -1114,7 +1131,7 @@ function isLevelPickerOpen() {
 function renderLevelPickerMenu() {
   if (!levelPickerMenu || !world) return;
   const fragment = document.createDocumentFragment();
-  for (let lv = 0; lv <= 8; lv += 1) {
+  for (const lv of PLAYABLE_LEVEL_IDS.filter((level) => level >= 0)) {
     const state = getLevelPickerState(lv);
     if (!state.reached) continue;
     const option = document.createElement("button");
@@ -1383,6 +1400,7 @@ function loadLevel(level, { updateUrl = false } = {}) {
   const initialStateForLevel = buildLevelInitialState(level, save);
 
   world = createBackroomsScene(level, { initialState: initialStateForLevel });
+  firesaltEffects = createFiresaltEffectManager(world.scene, world.isWalkable);
   worldItems = createWorldItemManager(
     world.scene,
     world.decorativeItemSpawns ?? [],
@@ -1396,6 +1414,7 @@ function loadLevel(level, { updateUrl = false } = {}) {
     isWalkable: world.isWalkable,
     getFloorHeight: world.getFloorHeight,
     spawn: world.spawn,
+    movementSpeedMultiplier: world.movementSpeedMultiplier ?? 1,
   });
   syncDebugState();
   if (
@@ -1426,6 +1445,7 @@ function bootstrapWorld(level, save) {
   applySaveToRuntime(save);
   const initialState = buildLevelInitialState(level, save);
   world = createBackroomsScene(level, { initialState });
+  firesaltEffects = createFiresaltEffectManager(world.scene, world.isWalkable);
   worldItems = createWorldItemManager(
     world.scene,
     world.decorativeItemSpawns ?? [],
@@ -1442,6 +1462,7 @@ function bootstrapWorld(level, save) {
     isWalkable: world.isWalkable,
     getFloorHeight: world.getFloorHeight,
     spawn: world.spawn,
+    movementSpeedMultiplier: world.movementSpeedMultiplier ?? 1,
   });
   controls.notifyDrinkComplete = handleDrinkComplete;
   if (
@@ -2551,6 +2572,7 @@ function updatePickupHud(metrics) {
   const canTakeDetector = focusedPickup?.id === "detector";
   const canTakeSilenceLiquid = focusedPickup?.id === "silence-liquid";
   const canTakeCompass = focusedPickup?.id === "compass";
+  const canTakeOther = focusedPickup?.id === "firesalt";
   const canInteract = Boolean(metrics.focusInteraction?.available);
   const canUse =
     canDrink ||
@@ -2559,6 +2581,7 @@ function updatePickupHud(metrics) {
     canTakeDetector ||
     canTakeSilenceLiquid ||
     canTakeCompass ||
+    canTakeOther ||
     canInteract;
   useButton?.classList.toggle("is-visible", canUse);
   if (useButton) useButton.disabled = !canUse;
@@ -2760,6 +2783,10 @@ function usePickup() {
   const focusedPickup = getFocusedPickupable(lastMetrics);
   const looseTarget = focusedPickup ? worldItems?.getPickupTarget(world.camera.position) : null;
   if (looseTarget?.id === focusedPickup?.id) {
+    if (looseTarget.id === "firesalt" && getInventoryCount("firesalt") >= 3) {
+      flashPickupHint("inventoryFull", 1200);
+      return;
+    }
     const result = worldItems.tryPickup(world.camera.position);
     if (result?.pickedUp) {
       let added = false;
@@ -2804,6 +2831,10 @@ function usePickup() {
     pickupFlashUntil = clock.elapsedTime + 1.4;
     useButton?.classList.add("is-active");
     window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
+    return;
+  }
+  if (liveTarget?.id === "firesalt" && getInventoryCount("firesalt") >= 3) {
+    flashPickupHint("inventoryFull", 1200);
     return;
   }
   const pickup = liveTarget?.id === focusedPickup?.id ? world.tryPickup?.(world.camera.position) : null;
@@ -2852,6 +2883,14 @@ function usePickup() {
     acquireCompass(pickup.count);
   } else if (pickup.itemId === "silence-liquid") {
     acquireSilenceLiquid(pickup.count);
+  } else if (pickup.itemId === "firesalt") {
+    if (!addInventory("firesalt")) {
+      pickupFlashText = formatLocalizedStatus("inventoryFull");
+      pickupFlashUntil = clock.elapsedTime + 1.4;
+      return;
+    }
+    pickupFlashText = getInventoryItemLabel("firesalt");
+    pickupFlashUntil = clock.elapsedTime + 1.7;
   } else if (pickup.itemId === "super-almond-water") {
     addInventory("super-almond-water");
     pickupFlashText = formatLocalizedStatus("superAlmondWaterUsed", {
@@ -2896,6 +2935,14 @@ function useEquippedShortPress() {
     window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
   } else if (equipped.id === "silence-liquid") {
     if (activateSilenceLiquid()) {
+      actionButton?.classList.add("is-active");
+      window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
+    }
+  } else if (equipped.id === "firesalt") {
+    if (removeInventory("firesalt")) {
+      firesaltEffects?.throw(world.camera);
+      renderInventoryBar();
+      markDirty();
       actionButton?.classList.add("is-active");
       window.setTimeout(() => actionButton?.classList.remove("is-active"), 140);
     }
@@ -3034,6 +3081,7 @@ function applyEntityContactDamage(delta, metrics) {
   if (id === "level-seven-thing") damage = LEVEL_SEVEN_THING_DAMAGE;
   else if (id === "super-bacteria") damage = SUPER_BACTERIA_DAMAGE;
   else if (id.includes("hound")) damage = HOUND_DAMAGE;
+  else if (id.includes("smiler")) damage = SMILER_DAMAGE;
   else damage = BACTERIA_DAMAGE;
   const killed = controls.applyDamage(damage);
   triggerDamageFlash();
@@ -3084,6 +3132,7 @@ function animate(timestamp) {
     pickupFlashUntil = clock.elapsedTime + 1.2;
     lastDrinkCancelledUntil = clock.elapsedTime + 1.4;
   }
+  const firesaltState = firesaltEffects?.update(delta) ?? { active: false, position: null, radius: 0 };
   let metrics = world.update(delta, elapsed, world.camera.position, {
     entityRepelActive: Boolean(controlState.silenceLiquidActive),
     repelRadius: SILENCE_LIQUID_REPEL_RADIUS,
@@ -3102,6 +3151,12 @@ function animate(timestamp) {
         minimumDot: Math.cos(flashlightLight.angle * 0.82),
       };
     })(),
+    flashlightOn: flashlightOwned && flashlightOn && flashlightBattery > 0,
+    playerSprinting: controlState.sprinting,
+    playerMoving: controlState.moving,
+    firesaltActive: firesaltState.active,
+    firesaltPosition: firesaltState.position,
+    firesaltRadius: firesaltState.radius,
   });
   const looseItems = worldItems?.update(world.camera.position) ?? [];
   const looseItemFocus = worldItems?.inspect(world.camera) ?? null;
@@ -3648,7 +3703,7 @@ function showSavePromptLevels() {
 function populateSavePromptLevels() {
   if (!savePromptLevelsList) return;
   savePromptLevelsList.replaceChildren();
-  for (let lv = 0; lv <= 8; lv += 1) {
+  for (const lv of PLAYABLE_LEVEL_IDS.filter((level) => level >= 0)) {
     const info = getBackroomsLevelInfo(lv);
     const reached = reachedLevels.has(lv);
     const li = document.createElement("li");

@@ -2335,6 +2335,16 @@ body {
   border-color: rgba(176, 160, 255, 0.34);
 }
 
+.inventory-slot[data-type="firesalt"] {
+  border-color: rgba(255, 118, 46, 0.58);
+  background: rgba(48, 17, 7, 0.88);
+}
+
+.inventory-slot[data-equipped="true"][data-type="firesalt"] {
+  border-color: #ff944d;
+  box-shadow: 0 0 16px rgba(255, 77, 20, 0.28);
+}
+
 .inventory-slot[data-type="compass"] {
   color: #ffd876;
   border-color: rgba(255, 218, 116, 0.36);

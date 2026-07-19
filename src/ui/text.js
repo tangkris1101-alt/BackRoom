@@ -1,5 +1,10 @@
 export const ITEM_TEXT = {
   "zh-CN": {
+    firesalt: {
+      name: "\u706b\u76d0",
+      effect: "\u6295\u63b7\u540e\u4ea7\u751f\u5f3a\u5149\uff0c\u77ed\u6682\u5e72\u6270\u9644\u8fd1\u5b9e\u4f53",
+      action: "F / \u6309\u94ae\u62fe\u53d6 \u00b7 \u9009\u4e2d\u540e\u6309 E \u6295\u63b7",
+    },
     "almond-water": {
       name: "杏仁水",
       effect: "+50 体力上限 / 持续回血",
@@ -32,6 +37,11 @@ export const ITEM_TEXT = {
     },
   },
   en: {
+    firesalt: {
+      name: "FIRESALT",
+      effect: "THROW TO FLASH AND DISORIENT NEARBY ENTITIES",
+      action: "F / BUTTON PICK UP - EQUIP AND PRESS E TO THROW",
+    },
     "almond-water": {
       name: "ALMOND WATER",
       effect: "+50 STAMINA CAP / HEALTH REGEN",
@@ -67,6 +77,13 @@ export const ITEM_TEXT = {
 
 export const ENTITY_TEXT = {
   "zh-CN": {
+    smiler: {
+      name: "\u7b11\u9b47",
+      marker: "\u7b11\u9b47",
+      effect: "\u4fdd\u6301\u6ce8\u89c6\u53ef\u538b\u5236\u5176\u884c\u52a8\uff1b\u5149\u6e90\u548c\u566a\u58f0\u4f1a\u5438\u5f15\u5b83",
+      action: "\u7f13\u6162\u540e\u9000\uff0c\u4e0d\u8981\u79fb\u5f00\u89c6\u7ebf",
+      failSubtitle: "\u88ab\u7b11\u9b47\u6355\u83b7",
+    },
     bacteria: {
       name: "\u7ec6\u83cc\u5b9e\u4f53",
       marker: "\u7ec6\u83cc",
@@ -104,6 +121,13 @@ export const ENTITY_TEXT = {
     },
   },
   en: {
+    smiler: {
+      name: "SMILER",
+      marker: "SMILER",
+      effect: "Eye contact suppresses it; light and noise attract it.",
+      action: "BACK AWAY SLOWLY AND KEEP WATCHING",
+      failSubtitle: "CAUGHT BY A SMILER",
+    },
     bacteria: {
       name: "BACTERIA ENTITY",
       marker: "BACTERIA",
@@ -523,6 +547,7 @@ export const STATUS_TEXT = {
     flashlightAcquired: "已获得手电筒",
     flashlightRestocked: "手电筒 +1",
     flashlightFull: "手电筒已达上限",
+    inventoryFull: "\u9053\u5177\u5df2\u8fbe\u5806\u53e0\u4e0a\u9650",
     flashlightRefilled: "手电筒电量已满",
     detectorAcquired: "探测仪已激活",
     silenceLiquidAcquired: "已获得寂静液体",
@@ -593,6 +618,7 @@ export const STATUS_TEXT = {
     flashlightAcquired: "FLASHLIGHT ACQUIRED",
     flashlightRestocked: "FLASHLIGHT +1",
     flashlightFull: "FLASHLIGHT STACK FULL",
+    inventoryFull: "ITEM STACK FULL",
     detectorAcquired: "DETECTOR ONLINE",
     silenceLiquidAcquired: "SILENCE LIQUID ACQUIRED",
     silenceLiquidUsed: "SILENCE LIQUID {seconds}s",

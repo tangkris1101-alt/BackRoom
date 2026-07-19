@@ -17,6 +17,8 @@ import {
   LEVEL_THREE_ROWS,
   LEVEL_THREE_START_CELL,
   LEVEL_THREE_TARGET_CELL,
+  LEVEL_THREE_CENTER_X,
+  LEVEL_THREE_CENTER_Z,
   LEVEL_THREE_MAX_POINT_LIGHTS,
   LEVEL_THREE_MIN_FIXTURE_DISTANCE,
   LEVEL_THREE_ORIGIN_X,
@@ -50,6 +52,7 @@ import {
   createDetectorPickup,
   createCompassPickup,
   createSilenceLiquidPickup,
+  createFiresaltPickup,
 
 
 
@@ -128,6 +131,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     }),
   );
   floor.rotation.x = -Math.PI / 2;
+  floor.position.set(LEVEL_THREE_CENTER_X, 0, LEVEL_THREE_CENTER_Z);
   floor.position.set(0, 0, 0);
   scene.add(floor);
 
@@ -140,7 +144,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     }),
   );
   ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(0, CEILING_Y, 0);
+  ceiling.position.set(LEVEL_THREE_CENTER_X, CEILING_Y, LEVEL_THREE_CENTER_Z);
   scene.add(ceiling);
 
   const wallMaterial = new THREE.MeshStandardMaterial({
@@ -245,6 +249,16 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial["silence-liquid"] ?? null,
+  });
+  const firesalt = createFiresaltPickup(scene, {
+    cols: LEVEL_THREE_COLS,
+    rows: LEVEL_THREE_ROWS,
+    isCellOpen: isLevelThreeOpenCell,
+    getCellCenter: levelThreeCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    initialState: pickupInitial.firesalt ?? null,
+    initialSpawnChance: 0.68,
   });
   const interactions = [
     createInteractionSpot({
@@ -373,6 +387,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const compassState = compass.update(delta, elapsed, playerPosition);
     const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
+    const firesaltState = firesalt.update(delta, elapsed, playerPosition);
     const bacteriaStates = bacteria.map((b) => b.update(delta, elapsed, playerPosition, effects));
     const houndState = hound.update(delta, elapsed, playerPosition, effects);
     const ambushHoundState = ambushHound ? ambushHound.update(delta, elapsed, playerPosition, effects) : null;
@@ -380,7 +395,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
       ? [...bacteriaStates, houndState, ambushHoundState]
       : [...bacteriaStates, houndState];
     const entityContact = entities.some((state) => state.contact);
-    const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
+    const pickups = [almondWaterState, superAlmondWaterState, firesaltState, silenceLiquidState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -400,6 +415,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
       focusInteraction: exitNetwork.inspect(playerPosition) ?? getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
+        firesalt.inspect(camera),
         superAlmondWater.inspect(camera),
         silenceLiquid.inspect(camera),
         compass.inspect(camera),
@@ -435,9 +451,9 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     ],
     update,
     getPickupTarget: (playerPosition) =>
-      getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
+      getPickupTarget(playerPosition, firesalt, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
+      tryPickupItems(playerPosition, firesalt, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     interact: (playerPosition) => exitNetwork.interact(playerPosition) ?? tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
@@ -446,6 +462,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
           detector: detector.getState(),
           compass: compass.getState(),
           "silence-liquid": silenceLiquid.getState(),
+          firesalt: firesalt.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },

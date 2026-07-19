@@ -202,6 +202,8 @@ export function createHubScene({ initialState = null } = {}) {
     { level: 2, side: 1, z: 57, symbolSeed: 11 },
     { level: 5, side: -1, z: 84, symbolSeed: 5 },
     { level: 4, side: 1, z: 108, symbolSeed: 8 },
+    { level: 8, side: -1, z: -126, symbolSeed: 13 },
+    { level: 37, side: 1, z: 126, symbolSeed: 17 },
   ].map(({ level, side, z, symbolSeed }) => ({
     id: `hub-door-level-${level}`,
     targetLevel: level,

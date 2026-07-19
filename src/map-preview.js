@@ -83,6 +83,28 @@ import {
   levelFiveCellType,
 } from "./scene/level-five/layout.js";
 import { collectLevelFiveTransforms } from "./scene/level-five/props.js";
+import {
+  LEVEL_EIGHT_MAP,
+  LEVEL_EIGHT_COLS,
+  LEVEL_EIGHT_ROWS,
+  LEVEL_EIGHT_ORIGIN_X as L8_OX,
+  LEVEL_EIGHT_ORIGIN_Z as L8_OZ,
+  LEVEL_EIGHT_START_CELL as L8_START,
+  LEVEL_EIGHT_TARGET_CELL as L8_TARGET,
+  isLevelEightOpenCell as l8IsOpen,
+  levelEightCellCenter as l8CellCenter,
+} from "./scene/level-eight/layout.js";
+import {
+  LEVEL_THIRTY_SEVEN_MAP,
+  LEVEL_THIRTY_SEVEN_COLS,
+  LEVEL_THIRTY_SEVEN_ROWS,
+  LEVEL_THIRTY_SEVEN_ORIGIN_X as L37_OX,
+  LEVEL_THIRTY_SEVEN_ORIGIN_Z as L37_OZ,
+  LEVEL_THIRTY_SEVEN_START_CELL as L37_START,
+  LEVEL_THIRTY_SEVEN_TARGET_CELL as L37_TARGET,
+  isLevelThirtySevenOpenCell as l37IsOpen,
+  levelThirtySevenCellCenter as l37CellCenter,
+} from "./scene/level-thirty-seven/layout.js";
 import { chooseBacteriaSpawn, pickBacteriaSpawnPositions } from "./scene/entities/spawn.js";
 
 const ITEM_AVOID_RADIUS = CELL_SIZE * 4;
@@ -734,19 +756,46 @@ function buildLevel5() {
   };
 }
 
-const LEVELS = [buildLevel0(), buildLevel1(), buildLevel2(), buildLevel3(), buildLevel4(), buildLevel5()];
+function buildSimpleLevel({ level, label, name, map, cols, rows, originX, originZ, startCell, targetCell, isOpen, cellCenter, smilers = [] }) {
+  const grid = buildGrid(map);
+  const startCenter = cellCenter(startCell.col, startCell.row);
+  const targetCenter = cellCenter(targetCell.col, targetCell.row);
+  return {
+    level, label, name, cols, rows, originX, originZ, cellSize: CELL_SIZE, grid,
+    floorColors: computeFloorColors(cols, rows, [], [], []),
+    getCellType(col, row) { return grid[row]?.[col] === "#" ? "wall" : "open"; },
+    startCell, targetCell, zones: { bright: [], dark: [], supply: [] },
+    fixedProps: { pillars: [], blocks: [], bulkheads: [], cubicles: [], vending: [], windows: [], signs: [] },
+    lightFixtures: [],
+    itemCandidates: {
+      "almond-water": computeItemCandidates(cols, rows, isOpen, cellCenter, [startCenter, targetCenter]),
+      flashlight: computeItemCandidates(cols, rows, isOpen, cellCenter, [startCenter, targetCenter]),
+      firesalt: level === 8 ? computeItemCandidates(cols, rows, isOpen, cellCenter, [startCenter, targetCenter]) : [],
+    },
+    entityCandidates: { bacteria: [], hound: [], "ambush-hound": [], smiler: smilers },
+    interactions: [],
+  };
+}
+
+const LEVELS = [
+  buildLevel0(), buildLevel1(), buildLevel2(), buildLevel3(), buildLevel4(), buildLevel5(),
+  buildSimpleLevel({ level: 8, label: "LEVEL 8", name: "CAVE SYSTEMS", map: LEVEL_EIGHT_MAP, cols: LEVEL_EIGHT_COLS, rows: LEVEL_EIGHT_ROWS, originX: L8_OX, originZ: L8_OZ, startCell: L8_START, targetCell: L8_TARGET, isOpen: l8IsOpen, cellCenter: l8CellCenter, smilers: [{ col: 38, row: 27 }, { col: 29, row: 17 }] }),
+  buildSimpleLevel({ level: 37, label: "LEVEL 37", name: "SUBLIMITY", map: LEVEL_THIRTY_SEVEN_MAP, cols: LEVEL_THIRTY_SEVEN_COLS, rows: LEVEL_THIRTY_SEVEN_ROWS, originX: L37_OX, originZ: L37_OZ, startCell: L37_START, targetCell: L37_TARGET, isOpen: l37IsOpen, cellCenter: l37CellCenter }),
+];
 
 const ITEM_COLORS = {
   "almond-water": "#9be5b6",
   "super-almond-water": "#ffd863",
   flashlight: "#fff0a6",
   detector: "#9fd6ff",
+  firesalt: "#ff7135",
 };
 
 const ENTITY_COLORS = {
   bacteria: "#ff5252",
   hound: "#ff8a3d",
   "ambush-hound": "#c44dff",
+  smiler: "#eaffd5",
 };
 
 const PALETTE = {
@@ -1469,6 +1518,7 @@ function buildEntityTints() {
     { id: "bacteria", label: "Bacteria" },
     { id: "hound", label: "Hound" },
     { id: "ambush-hound", label: "Ambush hound" },
+    { id: "smiler", label: "Smiler" },
   ];
   for (const def of entityDefs) {
     const count = currentLevel.entityCandidates[def.id]?.length ?? 0;
@@ -1528,6 +1578,7 @@ function buildLegend() {
     { color: ENTITY_COLORS.bacteria, label: "Bacteria spawn" },
     { color: ENTITY_COLORS.hound, label: "Hound spawn" },
     { color: ENTITY_COLORS["ambush-hound"], label: "Ambush hound" },
+    { color: ENTITY_COLORS.smiler, label: "Smiler" },
     { color: PALETTE.start, label: "Start" },
     { color: PALETTE.exit, label: "Target / Exit" },
     { color: PALETTE.pin, label: "Pin" },

@@ -32,7 +32,7 @@ function clampPitch(pitch) {
 }
 
 export class FirstPersonControls {
-  constructor({ camera, canvas, joystick, jumpButton, isWalkable, getFloorHeight, spawn }) {
+  constructor({ camera, canvas, joystick, jumpButton, isWalkable, getFloorHeight, spawn, movementSpeedMultiplier = 1 }) {
     this.camera = camera;
     this.canvas = canvas;
     this.joystick = joystick;
@@ -41,6 +41,7 @@ export class FirstPersonControls {
     this.isWalkable = isWalkable;
     this.getFloorHeight = typeof getFloorHeight === "function" ? getFloorHeight : () => 0;
     this.spawn = spawn;
+    this.environmentSpeedMultiplier = movementSpeedMultiplier;
     this.eyeHeight = 1.62;
     this.moveSpeed = 3.05;
     this.sprintMultiplier = 1.85;
@@ -178,11 +179,12 @@ export class FirstPersonControls {
     this.camera.userData.firstPersonMotion = motion;
   }
 
-  setWorld({ camera, isWalkable, getFloorHeight, spawn }) {
+  setWorld({ camera, isWalkable, getFloorHeight, spawn, movementSpeedMultiplier = 1 }) {
     this.camera = camera;
     this.isWalkable = isWalkable;
     this.getFloorHeight = typeof getFloorHeight === "function" ? getFloorHeight : () => 0;
     this.spawn = spawn;
+    this.environmentSpeedMultiplier = movementSpeedMultiplier;
     this.keys.clear();
     this.resetJoystick();
     this.reset();
@@ -714,6 +716,7 @@ export class FirstPersonControls {
         (this.isSprinting ? this.sprintMultiplier : 1) *
         drinkMultiplier *
         superAlmondSpeedMultiplier *
+        this.environmentSpeedMultiplier *
         delta;
       this.move.normalize().multiplyScalar(distance);
 

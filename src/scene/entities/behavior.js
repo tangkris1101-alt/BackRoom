@@ -1,4 +1,4 @@
-import { ENTITY_SPEED_MULTIPLIER } from "../constants.js";
+import { ENTITY_SPEED_MULTIPLIER, FIRESALT_STUN_DURATION } from "../constants.js";
 import { resolveEntityStep } from "./spawn.js";
 import { createNavGrid, aStar, followPath, pathContainsCell } from "./pathfinding.js";
 
@@ -50,6 +50,7 @@ export function createEntityMover({
   let lastPlayerCellKey = "";
   let lastPositionX = group.position.x;
   let lastPositionZ = group.position.z;
+  let firesaltStunTimer = 0;
 
   function clearPath() {
     path.waypoints = [];
@@ -79,7 +80,16 @@ export function createEntityMover({
       const closeBoost = !repelActive && distance < directChaseDistance ? 1.12 : 1;
       const farBoost = !repelActive && distance > directChaseDistance * 3 ? 1.08 : 1;
       const movementSpeed = baseSpeed * speedScale * closeBoost * farBoost;
-      const isDormant = Boolean(options.dormant);
+      const firesaltPosition = effects.firesaltPosition;
+      const firesaltStunned = Boolean(
+        effects.firesaltActive &&
+        firesaltPosition &&
+        Math.hypot(group.position.x - firesaltPosition.x, group.position.z - firesaltPosition.z) <=
+          (effects.firesaltRadius ?? 0),
+      );
+      if (firesaltStunned) firesaltStunTimer = FIRESALT_STUN_DURATION;
+      else firesaltStunTimer = Math.max(0, firesaltStunTimer - delta);
+      const isDormant = Boolean(options.dormant || firesaltStunTimer > 0);
       const directChaseAllowed = distance <= directChaseDistance && stuckTimer <= stuckThreshold * 0.6;
 
       if (repelActive || isDormant) {

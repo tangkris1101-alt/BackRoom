@@ -3,6 +3,7 @@ import {
   createAlmondWaterModel,
   createDetectorModel,
   createFlashlightModel,
+  createFiresaltModel,
   createSilenceLiquidModel,
 } from "../items/index.js";
 import { createItemHighlight, setItemHighlight } from "../items/shared.js";
@@ -13,7 +14,8 @@ const LEVEL_KEY_SPAWN_CHANCE = 0.14;
 const HUB_BONUS_LEVEL_KEY_ROLLS = 2;
 const KEY_MODEL_SCALE = 0.1875;
 
-export const LEVEL_KEY_IDS = Object.freeze(Array.from({ length: 8 }, (_, level) => `level-key-${level}`));
+export const LEVEL_KEY_TARGETS = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 37]);
+export const LEVEL_KEY_IDS = Object.freeze(LEVEL_KEY_TARGETS.map((level) => `level-key-${level}`));
 
 export function isLevelKeyId(id) {
   return typeof id === "string" && LEVEL_KEY_IDS.includes(id);
@@ -108,6 +110,24 @@ export const DECORATIVE_ITEM_DEFS = {
 };
 
 export function getWorldItemDefinition(id) {
+  if (id === "firesalt") {
+    return {
+      color: 0xff5a19,
+      shape: "crystal",
+      i18n: {
+        "zh-CN": {
+          name: "\u706b\u76d0",
+          effect: "\u6295\u63b7\u540e\u53d1\u51fa\u5f3a\u5149\u5e76\u5e72\u6270\u9644\u8fd1\u5b9e\u4f53",
+          action: "F / \u6309\u94ae\u62fe\u53d6 \u00b7 \u9009\u4e2d\u540e\u6309 E \u6295\u63b7",
+        },
+        en: {
+          name: "FIRESALT",
+          effect: "THROW TO FLASH AND DISORIENT NEARBY ENTITIES",
+          action: "F / BUTTON PICK UP - EQUIP AND PRESS E TO THROW",
+        },
+      },
+    };
+  }
   const targetLevel = getLevelKeyTarget(id);
   if (targetLevel !== null) {
     return {
@@ -223,6 +243,7 @@ export function createWorldItemModel(id) {
     "silence-liquid": createSilenceLiquidModel,
     "almond-water": () => createAlmondWaterModel("normal"),
     "super-almond-water": () => createAlmondWaterModel("super"),
+    firesalt: createFiresaltModel,
   };
   const createToolModel = toolModelFactories[id];
   if (createToolModel) return createToolModel();

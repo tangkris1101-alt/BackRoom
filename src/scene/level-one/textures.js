@@ -1,4 +1,9 @@
 import { createSeededRandom, makeTexture, drawSpeckles, clampColor, tileNoise } from "../common/texture-utils.js";
+import * as THREE from "three";
+import concreteColorUrl from "../../assets/textures/concrete-floor-worn/diff.jpg?url";
+import concreteNormalUrl from "../../assets/textures/concrete-floor-worn/normal.jpg?url";
+import concreteRoughnessUrl from "../../assets/textures/concrete-floor-worn/roughness.jpg?url";
+import concreteAoUrl from "../../assets/textures/concrete-floor-worn/ao.jpg?url";
 
 export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, contrast = 1) {
   const random = createSeededRandom(seed);
@@ -34,4 +39,43 @@ export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, cont
 
 export function createLevelOneFloorTexture() {
   return createLevelOneConcreteTexture(0x1e1e10, 13, 10, [100, 101, 98], 0.78);
+}
+export function createLevelOneFloorPbrMaps() {
+  const loader = new THREE.TextureLoader();
+  const configure = (texture, color = false) => {
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(18, 13);
+    texture.anisotropy = 6;
+    if (color) texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  };
+  return {
+    map: configure(loader.load(concreteColorUrl), true),
+    normalMap: configure(loader.load(concreteNormalUrl)),
+    roughnessMap: configure(loader.load(concreteRoughnessUrl)),
+    aoMap: configure(loader.load(concreteAoUrl)),
+  };
+}
+
+export function createLevelOneWallTexture() {
+  return createLevelOneConcreteTexture(0x1e1e11, 2.8, 1.15, [102, 107, 101], 0.9);
+}
+
+export function createLevelOneCeilingTexture() {
+  const texture = createLevelOneConcreteTexture(0x1e1e12, 10, 7, [76, 80, 77], 0.82);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+export function createLevelOneCorridorFloorTexture() {
+  return createLevelOneConcreteTexture(CORRIDOR_FLOOR_SEED, 6.2, 5.2, [118, 124, 124], 0.72);
+}
+
+export function createLevelOneCorridorWallTexture() {
+  return createLevelOneConcreteTexture(CORRIDOR_WALL_SEED, 4.8, 1.25, [190, 199, 201], 0.58);
+}
+
+export function createLevelOneCorridorCeilingTexture() {
+  return createLevelOneConcreteTexture(CORRIDOR_CEILING_SEED, 8.4, 6.4, [181, 190, 193], 0.52);
 }

@@ -1,3 +1,5 @@
+import breathingTiredUrl from "./assets/audio/breathing-tired.ogg?url";
+
 export function createAmbientHum() {
   let context = null;
   let master = null;
@@ -7,6 +9,8 @@ export function createAmbientHum() {
   let lastStepAt = 0;
   let stepNoiseBuffer = null;
   let suspendedByPause = false;
+  let breathAudio = null;
+  let breathGain = null;
 
   function start() {
     if (started) return;
@@ -69,6 +73,21 @@ export function createAmbientHum() {
     stepFilter.frequency.value = 1800;
     stepFilter.Q.value = 0.7;
     stepFilter.connect(master);
+
+    breathAudio = new Audio(breathingTiredUrl);
+    breathAudio.loop = true;
+    breathAudio.preload = "auto";
+    breathAudio.crossOrigin = "anonymous";
+    const breathSource = context.createMediaElementSource(breathAudio);
+    const breathFilter = context.createBiquadFilter();
+    breathFilter.type = "lowpass";
+    breathFilter.frequency.value = 3200;
+    breathGain = context.createGain();
+    breathGain.gain.value = 0;
+    breathSource.connect(breathFilter);
+    breathFilter.connect(breathGain);
+    breathGain.connect(master);
+    breathAudio.play().catch(() => {});
   }
 
   function playFootstep({ sprinting }) {
@@ -119,6 +138,18 @@ export function createAmbientHum() {
     const now = context.currentTime;
     const level = 0.055 + (1 - flicker) * 0.08;
     flickerGain.gain.setTargetAtTime(level, now, 0.035);
+    if (breathGain && breathAudio) {
+      const staminaRatio = Math.max(0, Math.min(1, (movementState.stamina ?? 100) / Math.max(1, movementState.staminaMax ?? 100)));
+      const healthRatio = Math.max(0, Math.min(1, (movementState.health ?? 100) / Math.max(1, movementState.healthMax ?? 100)));
+      const exertion = Math.max(
+        movementState.sprinting ? 0.72 : movementState.moving ? 0.18 : 0,
+        (1 - staminaRatio) * 0.92,
+        (1 - healthRatio) * 0.7,
+      );
+      const breathLevel = exertion < 0.12 ? 0.006 : 0.025 + exertion * 0.24;
+      breathGain.gain.setTargetAtTime(breathLevel, now, exertion > 0.5 ? 0.2 : 0.85);
+      breathAudio.playbackRate = 0.68 + exertion * 0.72;
+    }
 
     const moving = Boolean(movementState.moving && movementState.grounded);
     if (!moving) {
@@ -296,6 +327,7 @@ export function createAmbientHum() {
 
     let nearestBacteria = null;
     let nearestHound = null;
+    let nearestSmiler = null;
     for (const entity of entities ?? []) {
       if (!entity || !entity.active || entity.contact) continue;
       if (!Number.isFinite(entity.distance)) continue;
@@ -307,12 +339,15 @@ export function createAmbientHum() {
         if (!nearestHound || entity.distance < nearestHound.distance) {
           nearestHound = entity;
         }
+      } else if (entity.id?.includes("smiler")) {
+        if (!nearestSmiler || entity.distance < nearestSmiler.distance) nearestSmiler = entity;
       }
     }
 
     const now = context.currentTime;
     applySlotVolume("bacteria", nearestBacteria, now);
     applySlotVolume("hound", nearestHound, now);
+    applySlotVolume("smiler", nearestSmiler, now);
   }
 
   function applySlotVolume(slot, nearest, now) {
@@ -372,5 +407,10 @@ const ENTITY_AUDIO_CONFIG = {
     nearDistance: 2.6,
     maxAudible: 36,
     superIntensity: 1,
+  },
+  smiler: {
+    nearDistance: 2.2,
+    maxAudible: 28,
+    superIntensity: 0.72,
   },
 };

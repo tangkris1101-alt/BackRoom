@@ -1,8 +1,10 @@
 import { CELL_SIZE, WALL_THICKNESS } from "../constants.js";
 import { isInRect } from "../common/layout.js";
 
-export const LEVEL_ONE_COLS = 35;
-export const LEVEL_ONE_ROWS = 25;
+const LEVEL_ONE_LEGACY_COLS = 35;
+const LEVEL_ONE_LEGACY_ROWS = 25;
+export const LEVEL_ONE_COLS = 45;
+export const LEVEL_ONE_ROWS = 33;
 export const LEVEL_ONE_EXIT_TRIGGER_RADIUS = CELL_SIZE * 0.86;
 export const LEVEL_ONE_START_CELL = { col: 4, row: 22, yaw: -Math.PI * 0.18 };
 export const LEVEL_ONE_TARGET_CELL = { col: 31, row: 1 };
@@ -21,11 +23,14 @@ export const LEVEL_ONE_DARK_ZONES = [
   { col: 23, row: 11, width: 10, height: 6 },
   { col: 9, row: 19, width: 8, height: 4 },
   { col: 18, row: 4, width: 6, height: 5 },
+  { col: 35, row: 4, width: 8, height: 8 },
+  { col: 30, row: 25, width: 12, height: 6 },
 ];
 
 export const LEVEL_ONE_SUPPLY_ZONES = [
   { col: 11, row: 7, width: 6, height: 4 },
   { col: 25, row: 17, width: 6, height: 4 },
+  { col: 36, row: 17, width: 6, height: 5 },
 ];
 
 export function createLevelOneLayout() {
@@ -76,6 +81,10 @@ export function createLevelOneLayout() {
     { col: 3, row: 17, width: 5, height: 3 },
     { col: 18, row: 18, width: 5, height: 3 },
     { col: 28, row: 14, width: 4, height: 4 },
+    { col: 36, row: 3, width: 5, height: 4 },
+    { col: 34, row: 13, width: 7, height: 3 },
+    { col: 30, row: 26, width: 5, height: 3 },
+    { col: 38, row: 25, width: 4, height: 5 },
   ];
 
   const pillars = [];
@@ -121,8 +130,10 @@ export function createLevelOneLayout() {
 }
 
 export const LEVEL_ONE_MAP = createLevelOneLayout();
-export const LEVEL_ONE_ORIGIN_X = -(LEVEL_ONE_COLS * CELL_SIZE) / 2;
-export const LEVEL_ONE_ORIGIN_Z = -(LEVEL_ONE_ROWS * CELL_SIZE) / 2;
+export const LEVEL_ONE_ORIGIN_X = -(LEVEL_ONE_LEGACY_COLS * CELL_SIZE) / 2;
+export const LEVEL_ONE_ORIGIN_Z = -(LEVEL_ONE_LEGACY_ROWS * CELL_SIZE) / 2;
+export const LEVEL_ONE_CENTER_X = LEVEL_ONE_ORIGIN_X + (LEVEL_ONE_COLS * CELL_SIZE) / 2;
+export const LEVEL_ONE_CENTER_Z = LEVEL_ONE_ORIGIN_Z + (LEVEL_ONE_ROWS * CELL_SIZE) / 2;
 
 export function isLevelOneOpenCell(col, row) {
   return (

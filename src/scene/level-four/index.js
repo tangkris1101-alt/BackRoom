@@ -17,6 +17,8 @@ import {
   LEVEL_ONE_ROWS,
   LEVEL_ONE_START_CELL,
   LEVEL_ONE_TARGET_CELL,
+  LEVEL_ONE_CENTER_X,
+  LEVEL_ONE_CENTER_Z,
   isLevelOneOpenCell,
   levelOneCellCenter,
   levelOneWorldToCell,
@@ -106,6 +108,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
     floorMaterial,
   );
   floor.rotation.x = -Math.PI / 2;
+  floor.position.set(LEVEL_ONE_CENTER_X, 0, LEVEL_ONE_CENTER_Z);
   scene.add(floor);
 
   const ceiling = new THREE.Mesh(
@@ -113,7 +116,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
     ceilingMaterial,
   );
   ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(0, CEILING_Y, 0);
+  ceiling.position.set(LEVEL_ONE_CENTER_X, CEILING_Y, LEVEL_ONE_CENTER_Z);
   scene.add(ceiling);
 
   const { northSouth, eastWest, fixturePositions } = collectLevelOneTransforms();

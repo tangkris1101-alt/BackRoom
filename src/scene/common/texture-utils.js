@@ -1,4 +1,12 @@
 import * as THREE from "three";
+
+export function enableAoUv(geometry) {
+  const uv = geometry.getAttribute("uv");
+  if (!uv) return geometry;
+  if (!geometry.getAttribute("uv1")) geometry.setAttribute("uv1", uv.clone());
+  if (!geometry.getAttribute("uv2")) geometry.setAttribute("uv2", uv.clone());
+  return geometry;
+}
 export function makeTexture(size, draw, repeatX, repeatY) {
   const canvas = document.createElement("canvas");
   canvas.width = size;

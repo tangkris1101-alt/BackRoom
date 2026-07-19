@@ -40,6 +40,7 @@ const mimeTypes = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".png": "image/png",
+  ".ogg": "audio/ogg",
   ".svg": "image/svg+xml",
   ".webp": "image/webp",
 };
@@ -70,8 +71,32 @@ async function inlineCssAssets(source) {
   );
 }
 
+async function inlineJavascriptAssets(source) {
+  const matches = [...source.matchAll(/new URL\(`([^`]+)`,import\.meta\.url\)\.href/g)];
+  const replacements = await Promise.all(
+    matches.map(async (match) => {
+      const filename = match[1].replace(/[?#].*$/, "");
+      const mimeType = mimeTypes[extname(filename).toLowerCase()];
+      if (!mimeType) return null;
+      try {
+        const data = await readFile(resolve(dirname(resolveAsset(scriptMatch[1])), filename));
+        return {
+          source: match[0],
+          replacement: JSON.stringify(`data:${mimeType};base64,${data.toString("base64")}`),
+        };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return replacements.filter(Boolean).reduce(
+    (result, { source: original, replacement }) => result.replaceAll(original, replacement),
+    source,
+  );
+}
+
 const inlineCss = (await inlineCssAssets(css)).replace(/<\/style/gi, "<\\/style");
-const inlineJavascript = javascript.replace(/<\/script/gi, "<\\/script");
+const inlineJavascript = (await inlineJavascriptAssets(javascript)).replace(/<\/script/gi, "<\\/script");
 const buildId = createHash("sha256")
   .update(inlineCss)
   .update(inlineJavascript)

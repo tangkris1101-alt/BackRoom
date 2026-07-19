@@ -20,6 +20,9 @@ import {
   LEVEL_ONE_TARGET_CELL,
   LEVEL_ONE_ORIGIN_X,
   LEVEL_ONE_ORIGIN_Z,
+  LEVEL_ONE_CENTER_X,
+  LEVEL_ONE_CENTER_Z,
+  LEVEL_ONE_CORRIDOR_BOUNDS,
   isLevelOneOpenCell,
   levelOneCellCenter,
   levelOneWorldToCell,
@@ -27,7 +30,14 @@ import {
 } from "./layout.js";
 import {
   createLevelOneFloorTexture,
+  createLevelOneFloorPbrMaps,
+  createLevelOneWallTexture,
+  createLevelOneCeilingTexture,
+  createLevelOneCorridorFloorTexture,
+  createLevelOneCorridorWallTexture,
+  createLevelOneCorridorCeilingTexture,
 } from "./textures.js";
+import { enableAoUv } from "../common/texture-utils.js";
 import {
   createLevelOneLights,
   addLevelOnePipes,
@@ -44,6 +54,7 @@ import {
   createDetectorPickup,
   createCompassPickup,
   createSilenceLiquidPickup,
+  createFiresaltPickup,
 
 
 
@@ -210,11 +221,13 @@ export function createLevelOneScene({ initialState = null } = {}) {
   const lightField = createLevelOneLightField(fixturePositions);
 
   const floorMaterial = new THREE.MeshStandardMaterial({
-    map: createLevelOneFloorTexture(),
-    color: 0xe1e3de,
-    emissive: 0x303130,
-    emissiveIntensity: 0.13,
-    roughness: 0.88,
+    ...createLevelOneFloorPbrMaps(),
+    color: 0xd5dccc,
+    emissive: 0x3b463d,
+    emissiveIntensity: 0.32,
+    roughness: 0.96,
+    normalScale: new THREE.Vector2(0.42, 0.42),
+    aoMapIntensity: 0.58,
   });
   const wallMaterial = new THREE.MeshStandardMaterial({
     color: 0xd5d7d2,
@@ -248,10 +261,11 @@ export function createLevelOneScene({ initialState = null } = {}) {
   applyLevelOneLightField(wallCapMaterial, lightField, 2.15);
 
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(LEVEL_ONE_COLS * CELL_SIZE, LEVEL_ONE_ROWS * CELL_SIZE),
+    enableAoUv(new THREE.PlaneGeometry(LEVEL_ONE_COLS * CELL_SIZE, LEVEL_ONE_ROWS * CELL_SIZE)),
     floorMaterial,
   );
   floor.rotation.x = -Math.PI / 2;
+  floor.position.set(LEVEL_ONE_CENTER_X, 0, LEVEL_ONE_CENTER_Z);
   scene.add(floor);
 
   const ceiling = new THREE.Mesh(
@@ -259,7 +273,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
     ceilingMaterial,
   );
   ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(0, CEILING_Y, 0);
+  ceiling.position.set(LEVEL_ONE_CENTER_X, CEILING_Y, LEVEL_ONE_CENTER_Z);
   scene.add(ceiling);
 
   addInstancedBoxes(
@@ -356,6 +370,16 @@ export function createLevelOneScene({ initialState = null } = {}) {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial["silence-liquid"] ?? null,
+  });
+  const firesalt = createFiresaltPickup(scene, {
+    cols: LEVEL_ONE_COLS,
+    rows: LEVEL_ONE_ROWS,
+    isCellOpen: isLevelOneOpenCell,
+    getCellCenter: levelOneCellCenter,
+    avoidPositions: [spawnCell, targetPosition],
+    blockedAabbs: propColliders,
+    initialState: pickupInitial.firesalt ?? null,
+    initialSpawnChance: 0.56,
   });
   const routes = [
     {
@@ -458,6 +482,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const compassState = compass.update(delta, elapsed, playerPosition);
     const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
+    const firesaltState = firesalt.update(delta, elapsed, playerPosition);
     const playerNearExit = Math.hypot(
       playerPosition.x - targetPosition.x,
       playerPosition.z - targetPosition.z,
@@ -474,7 +499,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
       contact: playerNearExit && bacteriaMoveState.contact,
     };
     const entities = [bacteriaState];
-    const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
+    const pickups = [almondWaterState, superAlmondWaterState, firesaltState, silenceLiquidState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
@@ -494,6 +519,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
       focusInteraction: exitNetwork.inspect(playerPosition),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
+        firesalt.inspect(camera),
         superAlmondWater.inspect(camera),
         silenceLiquid.inspect(camera),
         compass.inspect(camera),
@@ -537,9 +563,9 @@ export function createLevelOneScene({ initialState = null } = {}) {
     ],
     update,
     getPickupTarget: (playerPosition) =>
-      getPickupTarget(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
+      getPickupTarget(playerPosition, firesalt, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
-      tryPickupItems(playerPosition, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
+      tryPickupItems(playerPosition, firesalt, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     interact: (playerPosition) => exitNetwork.interact(playerPosition),
     getSnapshot() {
       return {
@@ -548,6 +574,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
           detector: detector.getState(),
           compass: compass.getState(),
           "silence-liquid": silenceLiquid.getState(),
+          firesalt: firesalt.getState(),
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },

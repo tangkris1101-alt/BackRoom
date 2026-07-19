@@ -1,12 +1,13 @@
 const STORAGE_KEY = "backrooms-save";
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;
+const LEGACY_SAVE_VERSION = 1;
 const HUB_LEVEL = -1;
+const PLAYABLE_LEVELS = new Set([HUB_LEVEL, 0, 1, 2, 3, 4, 5, 6, 7, 8, 37]);
 
-function normalizeLevelId(level) {
+function normalizeLevelId(level, legacy = false) {
   const normalized = Math.floor(level);
-  // Saves written before the Hub was separated used 8 for its state.
-  if (normalized === 8) return HUB_LEVEL;
-  return Math.max(HUB_LEVEL, Math.min(8, normalized));
+  if (legacy && normalized === 8) return HUB_LEVEL;
+  return PLAYABLE_LEVELS.has(normalized) ? normalized : 0;
 }
 
 function safeStorage() {
@@ -51,12 +52,16 @@ function sanitizeEntityState(raw) {
   if (!raw || typeof raw !== "object") return null;
   const position = raw.position;
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) return null;
-  const type = raw.type === "hound" ? "hound" : "bacteria";
+  const type = typeof raw.type === "string" && /^[a-z0-9-]{1,48}$/.test(raw.type)
+    ? raw.type
+    : "unknown";
   return {
     id: typeof raw.id === "string" && raw.id ? raw.id : type,
     type,
     position: { x: position.x, z: position.z },
     contact: Boolean(raw.contact),
+    alertTimer: clampNumber(raw.alertTimer, 0),
+    stunnedTimer: clampNumber(raw.stunnedTimer, 0),
   };
 }
 
@@ -154,7 +159,11 @@ export function hasSavedGame() {
   try {
     const raw = storage.getItem(STORAGE_KEY);
     const parsed = safeParse(raw);
-    return Boolean(parsed && parsed.version === SAVE_VERSION && parsed.player);
+    return Boolean(
+      parsed &&
+      (parsed.version === SAVE_VERSION || parsed.version === LEGACY_SAVE_VERSION) &&
+      parsed.player,
+    );
   } catch {
     return false;
   }
@@ -170,8 +179,12 @@ export function loadSave() {
     return null;
   }
   const parsed = safeParse(raw);
-  if (!parsed || parsed.version !== SAVE_VERSION) return null;
-  const player = sanitizePlayer(parsed.player);
+  if (!parsed || (parsed.version !== SAVE_VERSION && parsed.version !== LEGACY_SAVE_VERSION)) return null;
+  const legacy = parsed.version === LEGACY_SAVE_VERSION;
+  const player = sanitizePlayer({
+    ...parsed.player,
+    level: normalizeLevelId(parsed.player?.level ?? 0, legacy),
+  });
   if (!player) return null;
   const inventory = Array.isArray(parsed.inventory)
     ? parsed.inventory.map(sanitizeInventoryEntry).filter(Boolean)
@@ -182,7 +195,7 @@ export function loadSave() {
   const pickups = {};
   if (parsed.pickups && typeof parsed.pickups === "object") {
     for (const [levelKey, levelPickups] of Object.entries(parsed.pickups)) {
-      const levelNum = normalizeLevelId(Number(levelKey));
+      const levelNum = normalizeLevelId(Number(levelKey), legacy);
       if (!Number.isFinite(levelNum)) continue;
       const sanitized = {};
       if (levelPickups && typeof levelPickups === "object") {
@@ -197,7 +210,7 @@ export function loadSave() {
   const interactions = {};
   if (parsed.interactions && typeof parsed.interactions === "object") {
     for (const [levelKey, levelInteractions] of Object.entries(parsed.interactions)) {
-      const levelNum = normalizeLevelId(Number(levelKey));
+      const levelNum = normalizeLevelId(Number(levelKey), legacy);
       if (!Number.isFinite(levelNum)) continue;
       const sanitized = {};
       if (levelInteractions && typeof levelInteractions === "object") {
@@ -213,7 +226,7 @@ export function loadSave() {
   const objectives = {};
   if (parsed.objectives && typeof parsed.objectives === "object") {
     for (const [levelKey, value] of Object.entries(parsed.objectives)) {
-      const levelNum = normalizeLevelId(Number(levelKey));
+      const levelNum = normalizeLevelId(Number(levelKey), legacy);
       if (!Number.isFinite(levelNum)) continue;
       objectives[levelNum] = { reached: Boolean(value?.reached) };
     }
@@ -221,7 +234,7 @@ export function loadSave() {
   const entities = {};
   if (parsed.entities && typeof parsed.entities === "object") {
     for (const [levelKey, list] of Object.entries(parsed.entities)) {
-      const levelNum = normalizeLevelId(Number(levelKey));
+      const levelNum = normalizeLevelId(Number(levelKey), legacy);
       if (!Number.isFinite(levelNum)) continue;
       if (Array.isArray(list)) {
         entities[levelNum] = list.map(sanitizeEntityState).filter(Boolean);
@@ -231,7 +244,7 @@ export function loadSave() {
   const worldItems = {};
   if (parsed.worldItems && typeof parsed.worldItems === "object") {
     for (const [levelKey, list] of Object.entries(parsed.worldItems)) {
-      const levelNum = normalizeLevelId(Number(levelKey));
+      const levelNum = normalizeLevelId(Number(levelKey), legacy);
       if (!Number.isFinite(levelNum)) continue;
       if (Array.isArray(list)) worldItems[levelNum] = list.map(sanitizeWorldItem).filter(Boolean);
     }
@@ -301,11 +314,13 @@ export function createPickupSnapshot({ active, respawnTimer, position, rotation 
   };
 }
 
-export function createEntitySnapshot({ id, type, position, contact }) {
+export function createEntitySnapshot({ id, type, position, contact, alertTimer = 0, stunnedTimer = 0 }) {
   return {
     id,
-    type: type === "hound" ? "hound" : "bacteria",
+    type: typeof type === "string" && /^[a-z0-9-]{1,48}$/.test(type) ? type : "unknown",
     position: { x: position.x, z: position.z },
     contact: Boolean(contact),
+    alertTimer: clampNumber(alertTimer, 0),
+    stunnedTimer: clampNumber(stunnedTimer, 0),
   };
 }

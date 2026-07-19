@@ -163,6 +163,10 @@ function positionHeldItem(item, itemId) {
     item.position.set(0.155, -0.6, -0.84);
     item.rotation.set(0.08, -0.26, -0.08);
     item.scale.setScalar(0.36);
+  } else if (itemId === "firesalt") {
+    item.position.set(0.17, -0.55, -0.7);
+    item.rotation.set(0.28, -0.42, -0.18);
+    item.scale.setScalar(0.72);
   } else if (itemId?.startsWith("level-key-")) {
     item.position.set(0.18, -0.49, -0.62);
     item.rotation.set(0.18, -0.26, -0.52);

@@ -3,7 +3,7 @@ import { HUB_LEVEL } from "./scene/constants.js";
 
 // Set to false in source to ignore ?debug=true entirely in published builds.
 export const ALLOW_QUERY_DEBUG = true;
-export const DEBUG_PLAYABLE_LEVELS = new Set([HUB_LEVEL, 0, 1, 2, 3, 4, 5, 6, 7]);
+export const DEBUG_PLAYABLE_LEVELS = new Set([HUB_LEVEL, 0, 1, 2, 3, 4, 5, 6, 7, 8, 37]);
 
 export class DebugMode {
   constructor({ canvas, onSync } = {}) {

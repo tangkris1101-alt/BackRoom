@@ -38,6 +38,12 @@ export const SILENCE_LIQUID_RESPAWN_VARIANCE = 46;
 export const SILENCE_LIQUID_INITIAL_SPAWN_CHANCE = 0.48;
 export const SILENCE_LIQUID_RESPAWN_CHANCE = 0.52;
 export const SILENCE_LIQUID_MODEL_SCALE = 0.66;
+export const FIRESALT_PICKUP_RADIUS = 3;
+export const FIRESALT_INSPECT_DISTANCE = 8;
+export const FIRESALT_RESPAWN_MIN = 74;
+export const FIRESALT_RESPAWN_VARIANCE = 48;
+export const FIRESALT_EFFECT_RADIUS = 8;
+export const FIRESALT_STUN_DURATION = 4;
 export const BACTERIA_CONTACT_RADIUS = 0.74;
 export const BACTERIA_SPAWN_MIN_FROM_PLAYER = CELL_SIZE * 7;
 export const BACTERIA_SPAWN_MAX_FROM_EXIT = CELL_SIZE * 6.4;
@@ -47,6 +53,19 @@ export const ENTITY_INSPECT_DISTANCE = 10.5;
 export const INTERACTION_RADIUS = 3.0;
 export const INTERACTION_INSPECT_DISTANCE = 8.0;
 export const HUB_LEVEL = -1;
+export const PLAYABLE_LEVEL_IDS = Object.freeze([
+  HUB_LEVEL,
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  37,
+]);
 
 // Level 0 grows toward positive X/Z so existing saved coordinates remain valid.
 export const LAYOUT_COLS = 45;
@@ -62,11 +81,16 @@ const LEVEL_INFOS = new Map([
   [5, { level: 5, levelLabel: "LEVEL 5", levelName: "TERROR HOTEL", danger: "high" }],
   [6, { level: 6, levelLabel: "LEVEL 6", levelName: "LIGHTS OUT", danger: "high" }],
   [7, { level: 7, levelLabel: "LEVEL 7", levelName: "THALASSOPHOBIA", danger: "critical" }],
-  [8, { level: 8, levelLabel: "LEVEL 8", levelName: "UNMAPPED", danger: "critical" }],
+  [8, { level: 8, levelLabel: "LEVEL 8", levelName: "CAVE SYSTEMS", danger: "critical" }],
+  [37, { level: 37, levelLabel: "LEVEL 37", levelName: "SUBLIMITY", danger: "safe" }],
 ]);
 
 export function getBackroomsLevelInfo(level = 0) {
   return LEVEL_INFOS.get(Number(level)) ?? LEVEL_INFOS.get(0);
+}
+
+export function isPlayableLevel(level) {
+  return PLAYABLE_LEVEL_IDS.includes(Number(level));
 }
 
 export function circleIntersectsAabb(x, z, radius, bounds) {

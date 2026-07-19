@@ -6,6 +6,8 @@ import { createLevelFourScene } from "./level-four/index.js";
 import { createLevelFiveScene } from "./level-five/index.js";
 import { createLevelSixScene } from "./level-six/index.js";
 import { createLevelSevenScene } from "./level-seven/index.js";
+import { createLevelEightScene } from "./level-eight/index.js";
+import { createLevelThirtySevenScene } from "./level-thirty-seven/index.js";
 import { createHubScene } from "./hub/index.js";
 import { getBackroomsLevelInfo, HUB_LEVEL } from "./constants.js";
 
@@ -19,6 +21,8 @@ export function createBackroomsScene(level = 0, { initialState = null } = {}) {
   if (levelInfo.level === 5) return createLevelFiveScene(options);
   if (levelInfo.level === 6) return createLevelSixScene(options);
   if (levelInfo.level === 7) return createLevelSevenScene(options);
+  if (levelInfo.level === 8) return createLevelEightScene(options);
+  if (levelInfo.level === 37) return createLevelThirtySevenScene(options);
   if (levelInfo.level === HUB_LEVEL) return createHubScene(options);
   return createLevelZeroScene(options);
 }

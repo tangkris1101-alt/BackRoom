@@ -14,7 +14,8 @@ import { addInstancedBoxes, createStableLightState } from "../common/lighting.js
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createWideSignTexture } from "../common/textures.js";
 import { createExitNetwork } from "../common/exit-network.js";
-import { createInteractionSpot, getPickupTarget, tryPickupItems, getFocusedEntity, getFocusedInteraction, getFocusedItem, tryInteractWithSpots } from "../entities/index.js";
+import { createInteractionSpot, createSmilerEntity, getPickupTarget, tryPickupItems, getFocusedEntity, getFocusedInteraction, getFocusedItem, tryInteractWithSpots } from "../entities/index.js";
+import { snapEntityStates } from "../common/snap.js";
 import {
   createAlmondWaterPickup,
   createCompassPickup,
@@ -27,6 +28,10 @@ import {
   LEVEL_SIX_ROWS,
   LEVEL_SIX_START_CELL,
   LEVEL_SIX_TARGET_CELL,
+  LEVEL_SIX_CENTER_X,
+  LEVEL_SIX_CENTER_Z,
+  LEVEL_SIX_ORIGIN_X,
+  LEVEL_SIX_ORIGIN_Z,
   LEVEL_SIX_DARK_ZONES,
   isLevelSixOpenCell,
   levelSixCellCenter,
@@ -122,8 +127,8 @@ function addLevelSixDetails(scene, interactionInitial = {}) {
   });
 
   LEVEL_SIX_DARK_ZONES.forEach((zone) => {
-    const x = -(LEVEL_SIX_COLS * CELL_SIZE) / 2 + zone.col * CELL_SIZE + (zone.width * CELL_SIZE) / 2;
-    const z = -(LEVEL_SIX_ROWS * CELL_SIZE) / 2 + zone.row * CELL_SIZE + (zone.height * CELL_SIZE) / 2;
+    const x = LEVEL_SIX_ORIGIN_X + zone.col * CELL_SIZE + (zone.width * CELL_SIZE) / 2;
+    const z = LEVEL_SIX_ORIGIN_Z + zone.row * CELL_SIZE + (zone.height * CELL_SIZE) / 2;
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(zone.width * CELL_SIZE, zone.height * CELL_SIZE),
       shadowMaterial,
@@ -192,6 +197,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
+  const entityInitial = snapEntityStates(initialState?.entities ?? [], isWalkable);
 
   const { colliders: propColliders, interactions: propInteractions } = addLevelSixDetails(scene, interactionInitial);
 
@@ -222,6 +228,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
     floorMaterial,
   );
   floor.rotation.x = -Math.PI / 2;
+  floor.position.set(LEVEL_SIX_CENTER_X, 0, LEVEL_SIX_CENTER_Z);
   scene.add(floor);
 
   const ceiling = new THREE.Mesh(
@@ -229,7 +236,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
     ceilingMaterial,
   );
   ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.set(0, CEILING_Y, 0);
+  ceiling.position.set(LEVEL_SIX_CENTER_X, CEILING_Y, LEVEL_SIX_CENTER_Z);
   scene.add(ceiling);
 
   const { northSouth, eastWest } = collectLevelSixWallTransforms();
@@ -261,6 +268,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
   const routes = [
     { id: "level-six-stairs-level-seven", targetLevel: 7, targetLabel: "LEVEL 7", label: "DESCENT", kind: "stair", position: targetPosition, rotation: 0 },
     { id: "level-six-return-level-five", targetLevel: 5, targetLabel: "LEVEL 5", label: "RETURN", kind: "door", position: levelSixCellCenter(4, 15), rotation: Math.PI },
+    { id: "level-six-pool-level-eight", targetLevel: 8, targetLabel: "LEVEL 8", label: "COLD POOL", kind: "stair", position: levelSixCellCenter(18, 7), rotation: Math.PI / 2 },
   ];
   const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
 
@@ -324,6 +332,19 @@ export function createLevelSixScene({ initialState = null } = {}) {
     initialState: pickupInitial["silence-liquid"] ?? null,
   });
 
+  const smiler = createSmilerEntity(scene, {
+    id: "smiler-level-six",
+    spawnPosition: levelSixCellCenter(29, 20),
+    isWalkable,
+    camera,
+    initialState: entityInitial.find((entity) => entity.id === "smiler-level-six") ?? null,
+    cols: LEVEL_SIX_COLS,
+    rows: LEVEL_SIX_ROWS,
+    isCellOpen: isLevelSixOpenCell,
+    worldToCell: levelSixWorldToCell,
+    cellCenter: levelSixCellCenter,
+  });
+
   let objectiveReached = Boolean(objectiveInitial.reached);
 
   function isWalkable(x, z, radius = 0.34) {
@@ -347,7 +368,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
     return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
   }
 
-  function update(delta, elapsed, playerPosition) {
+  function update(delta, elapsed, playerPosition, effects = {}) {
     const enteredExit = exitNetwork.update(delta, playerPosition);
     const exitDistance = Math.min(...routes.map((route) => Math.hypot(playerPosition.x - route.position.x, playerPosition.z - route.position.z)));
     if (enteredExit) objectiveReached = true;
@@ -362,14 +383,14 @@ export function createLevelSixScene({ initialState = null } = {}) {
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const compassState = compass.update(delta, elapsed, playerPosition);
     const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
-    const entities = [];
+    const entities = [smiler.update(delta, elapsed, playerPosition, effects)];
     const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
 
     return {
       exitDistance: Math.round(exitDistance),
       exitReached: Boolean(enteredExit),
       nextLevel: enteredExit?.targetLevel,
-      entityContact: false,
+      entityContact: entities.some((entity) => entity.contact),
       flicker,
       almondWater: almondWaterState,
       superAlmondWater: superAlmondWaterState,
@@ -438,7 +459,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
           ...Object.fromEntries(interactions.map((spot) => [spot.id, spot.getState()])),
         },
         objectives: { reached: objectiveReached },
-        entities: [],
+        entities: [smiler.getState()],
       };
     },
   };
