@@ -77,6 +77,7 @@ export function collectLevelTwoTransforms() {
     startCell: LEVEL_TWO_START_CELL,
     targetCell: LEVEL_TWO_TARGET_CELL,
     minFixtureDistance: LEVEL_TWO_MIN_FIXTURE_DISTANCE,
+    isDiagonalCell: isLevelTwoDiagonalCell,
   });
 }
 
@@ -90,6 +91,7 @@ export function collectLevelTransforms({
   startCell,
   targetCell,
   minFixtureDistance,
+  isDiagonalCell = () => false,
   isBarCell = () => false,
 }) {
   const northSouth = [];
@@ -103,7 +105,7 @@ export function collectLevelTransforms({
       const center = getCellCenter(col, row);
       const isDarkPocket = isInAnyZone(col, row, darkZones);
 
-      if (DIAGONAL_TYPES.has(LEVEL_TWO_MAP[row][col])) {
+      if (isDiagonalCell(col, row)) {
         // Diagonal cells don't contribute rectangular walls (handled separately in merged geometry).
       } else {
         if (!isCellOpen(col, row - 1)) {
@@ -128,7 +130,7 @@ export function collectLevelTransforms({
       const isTarget = col === targetCell.col && row === targetCell.row;
       const isCriticalFixture = isStart || isTarget;
       if (isDarkPocket && !isCriticalFixture) continue;
-      if (DIAGONAL_TYPES.has(LEVEL_TWO_MAP[row][col])) continue; // skip lights in diagonals
+      if (isDiagonalCell(col, row)) continue; // skip lights in diagonals
       if ((isCorridor && fixtureGrid) || isCriticalFixture) {
         fixtureCandidates.push({
           x: center.x,

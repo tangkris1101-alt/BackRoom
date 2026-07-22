@@ -114,6 +114,9 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     startCell: LEVEL_THREE_START_CELL,
     targetCell: LEVEL_THREE_TARGET_CELL,
     minFixtureDistance: LEVEL_THREE_MIN_FIXTURE_DISTANCE,
+    // Level 3 has no diagonal cells. This prevents the shared builder from
+    // indexing Level 2's smaller map while Level 3 is loading.
+    isDiagonalCell: () => false,
     isBarCell: (col, row) => LEVEL_THREE_BAR_POSITIONS.some((b) => b.col === col && b.row === row),
   });
   fixturePositions.forEach((fixture, index) => {

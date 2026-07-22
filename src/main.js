@@ -3163,6 +3163,23 @@ function animate(timestamp) {
   if (!exitComplete && !gameFailed && !levelTransition) runTime += delta;
 
   updateLevelTransition(delta);
+  // Keep the completed scene completely inert while its exit transition is
+  // on screen. In particular, do not keep advancing its entities or their
+  // audio while the next level is being prepared.
+  if (levelTransition) {
+    ambientHum.stopAllEntityAudio();
+    updatePickupPrompt(null);
+    updateDoorPrompt(null);
+    updatePerformanceReadout(delta);
+    updateLoadingOverlay();
+    renderer.render(world.scene, world.camera);
+    frameCount += 1;
+    canvas.dataset.sceneReady = "true";
+    canvas.dataset.frameCount = String(frameCount);
+    requestAnimationFrame(animate);
+    return;
+  }
+
   if (!exitComplete && !gameFailed && !levelTransition) controls.update(delta);
   syncFirstPersonHeldItem(world.camera, getEquipped()?.id ?? null);
   const controlState = controls.getState();
@@ -3218,7 +3235,6 @@ function animate(timestamp) {
   updateFlashlight(delta);
   updateDetector(delta, metrics);
   updateDebugExitMarkers();
-  applyEntityContactDamage(delta, metrics);
   if (shouldEnterExit(metrics) && !gameFailed && !exitComplete && !levelTransition) {
     const nextLevel = metrics.nextLevel ?? world.nextLevel;
     if (nextLevel !== null && nextLevel !== undefined) {
@@ -3232,8 +3248,15 @@ function animate(timestamp) {
       canvas.dataset.exitReached = "true";
     }
   }
-  ambientHum.update(metrics.flicker, controlState);
-  ambientHum.updateEntityAudio(metrics.entities);
+  // Exit recognition wins this frame: a pursuing entity must not get a final
+  // damage tick after the player has already reached the transition point.
+  applyEntityContactDamage(delta, metrics);
+  if (levelTransition) {
+    ambientHum.stopAllEntityAudio();
+  } else {
+    ambientHum.update(metrics.flicker, controlState);
+    ambientHum.updateEntityAudio(metrics.entities);
+  }
   updateHud(metrics, controlState, elapsed);
   updatePerformanceReadout(delta);
   updateLoadingOverlay();

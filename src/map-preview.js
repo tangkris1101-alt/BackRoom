@@ -594,6 +594,7 @@ function buildLevel3() {
     startCell: L3_START,
     targetCell: L3_TARGET,
     minFixtureDistance: 5.25 * CELL_SIZE,
+    isDiagonalCell: () => false,
     isBarCell: (col, row) => L3_BAR_SET.has(`${col},${row}`),
   });
   return {
