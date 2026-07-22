@@ -131,6 +131,10 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   const HAZE_COLOR = 0x6f6139;
   scene.background = new THREE.Color(HAZE_COLOR);
   scene.fog = new THREE.FogExp2(HAZE_COLOR, 0.01);
+  // Keep the distant maze readable between fluorescent fixtures. This is a
+  // single, shadowless fill light, so it fixes the black-wall problem without
+  // adding the cost of more dynamic lights or shadow maps.
+  scene.add(new THREE.HemisphereLight(0xffedb5, 0x4b3516, 1.0));
 
   const cameraFar = Math.hypot(COLS * CELL_SIZE, ROWS * CELL_SIZE) + CELL_SIZE * 2;
   const camera = new THREE.PerspectiveCamera(72, 1, 0.05, cameraFar);
@@ -160,7 +164,8 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     map: wallpaperTexture,
     color: 0xfffce3,
     emissive: 0x655b34,
-    emissiveIntensity: 0,
+    // A subtle baseline prevents unlit wall faces from collapsing to black.
+    emissiveIntensity: 0.045,
     roughness: 0.92,
     metalness: 0,
   });
