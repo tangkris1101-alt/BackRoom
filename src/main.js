@@ -673,14 +673,10 @@ canvas.dataset.language = currentLanguage;
 
 function updateMainMenuText() {
   const text = MAIN_MENU_TEXT[currentLanguage] ?? MAIN_MENU_TEXT.en;
-  let entryLevel = 0;
-  try {
-    const save = hasSavedGame() ? loadSave() : null;
-    entryLevel = getInitialLevelFromSave(save) ?? 0;
-  } catch {
-    entryLevel = 0;
-  }
-  const entryInfo = getBackroomsLevelInfo(entryLevel);
+  // Keep menu startup independent from localStorage. A stale or oversized save
+  // must never delay event binding or make the first Start press look inert.
+  // The save is read only after the player explicitly starts a session.
+  const entryInfo = getBackroomsLevelInfo(0);
   if (mainMenuEyebrow) mainMenuEyebrow.textContent = text.eyebrow;
   if (mainMenuSubtitle) mainMenuSubtitle.textContent = text.subtitle;
   if (mainMenuStartLabel) mainMenuStartLabel.textContent = text.start;
