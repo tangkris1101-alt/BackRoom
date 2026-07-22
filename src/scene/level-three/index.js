@@ -72,6 +72,12 @@ import {
   tryInteractWithSpots,
 } from "../entities/index.js";
 
+// Entity movement is multiplied by two globally. These produce roughly
+// 3.6–4.6 world units/s while chasing: just ahead of normal walking (3.05),
+// but safely below the player's sprint speed (5.64).
+const LEVEL_THREE_HOUND_SPEED = 1.68;
+const LEVEL_THREE_AMBUSH_HOUND_SPEED = 1.75;
+
 export function createLevelThreeScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
   const FOG_COLOR = 0x242620;
@@ -314,7 +320,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
         minSeparation: CELL_SIZE * 7,
       })[0] ?? targetPosition,
     isWalkable,
-    speed: 2.22,
+    speed: LEVEL_THREE_HOUND_SPEED,
     initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
@@ -329,7 +335,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     ? createHoundEntity(scene, {
         spawnPosition: ambushPosition,
         isWalkable,
-        speed: 2.42,
+        speed: LEVEL_THREE_AMBUSH_HOUND_SPEED,
         id: "ambush-hound",
         type: "ambush-hound",
         dormant: true,
