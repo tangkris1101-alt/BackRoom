@@ -659,6 +659,7 @@ let pauseResetArmed = false;
 let pauseResetArmedTimer = 0;
 let isResettingProgress = false;
 let savePromptMode = "main";
+let isMainMenuStarting = false;
 
 try {
   const savedLanguage = window.localStorage?.getItem(LANGUAGE_STORAGE_KEY);
@@ -1531,18 +1532,24 @@ function beginGameSession(level, save) {
   bootstrapWorld(level, save);
 }
 
-function handleMainMenuStart() {
-  startAudioOnce();
-  if (debugMode.queryEnabled) {
-    let debugSave = null;
-    try {
-      debugSave = hasSavedGame() ? loadSave() : null;
-    } catch {
-      debugSave = null;
-    }
-    beginGameSession(getInitialLevel(), debugSave);
+function setMainMenuStarting(starting) {
+  isMainMenuStarting = Boolean(starting);
+  if (!mainMenuStart) return;
+  mainMenuStart.disabled = isMainMenuStarting;
+  mainMenuStart.setAttribute("aria-busy", String(isMainMenuStarting));
+  if (!isMainMenuStarting) {
+    updateMainMenuText();
     return;
   }
+  if (mainMenuStartLabel) {
+    mainMenuStartLabel.textContent = currentLanguage === "en" ? "LOADING..." : "正在加载...";
+  }
+  if (mainMenuStartHint) {
+    mainMenuStartHint.textContent = currentLanguage === "en" ? "CHECKING SAVE DATA" : "正在检查存档";
+  }
+}
+
+function finishMainMenuStart() {
   let save = null;
   try {
     save = hasSavedGame() ? loadSave() : null;
@@ -1550,6 +1557,11 @@ function handleMainMenuStart() {
     save = null;
   }
 
+  setMainMenuStarting(false);
+  if (debugMode.queryEnabled) {
+    beginGameSession(getInitialLevel(), save);
+    return;
+  }
   if (save) {
     pendingSaveForPrompt = save;
     mainMenu?.classList.add("is-save-prompt");
@@ -1558,7 +1570,16 @@ function handleMainMenuStart() {
     return;
   }
 
-  beginGameSession(0, null);
+  beginGameSession(debugMode.queryEnabled ? getInitialLevel() : 0, null);
+}
+
+function handleMainMenuStart() {
+  if (isMainMenuStarting) return;
+  startAudioOnce();
+  setMainMenuStarting(true);
+  // Yield once so the pressed/loading state is painted before any synchronous
+  // localStorage parsing or scene construction starts.
+  window.requestAnimationFrame(() => window.setTimeout(finishMainMenuStart, 0));
 }
 
 function setExitOverlayText(title, subtitle) {
@@ -2756,7 +2777,9 @@ function updatePickupPrompt(pickup) {
   const bounds = canvas.getBoundingClientRect();
   const x = bounds.left + (pickupPromptProjection.x * 0.5 + 0.5) * bounds.width;
   const y = bounds.top + (-pickupPromptProjection.y * 0.5 + 0.5) * bounds.height;
-  pickupPrompt.textContent = currentLanguage === "en" ? "[F] PICK UP" : "[F] 拾取";
+  const label = currentLanguage === "en" ? "[F] PICK UP" : "[F] 拾取";
+  pickupPrompt.textContent = label;
+  pickupPrompt.setAttribute("aria-label", currentLanguage === "en" ? "Pick up item" : "拾取物品");
   pickupPrompt.style.transform = `translate(-50%, -100%) translate(${x.toFixed(1)}px, ${(y - 10).toFixed(1)}px)`;
   pickupPrompt.hidden = false;
 }
@@ -2781,6 +2804,7 @@ function updateDoorPrompt(interaction) {
   const y = bounds.top + (-doorPromptProjection.y * 0.5 + 0.5) * bounds.height;
   const action = interaction.opened ? (currentLanguage === "en" ? "CLOSE" : "关闭") : (currentLanguage === "en" ? "OPEN" : "打开");
   doorPrompt.textContent = `[F] ${action}`;
+  doorPrompt.setAttribute("aria-label", currentLanguage === "en" ? `${action.toLowerCase()} door` : action);
   doorPrompt.style.transform = `translate(-50%, -100%) translate(${x.toFixed(1)}px, ${(y - 12).toFixed(1)}px)`;
   doorPrompt.hidden = false;
 }
@@ -3383,6 +3407,13 @@ useButton?.addEventListener("pointerdown", (event) => {
   event.stopPropagation();
   usePickup();
 });
+[pickupPrompt, doorPrompt].forEach((prompt) => {
+  prompt?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    usePickup();
+  });
+});
 actionButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
@@ -3783,7 +3814,16 @@ savePromptOverlay?.addEventListener("pointerdown", (event) => {
   }
 });
 
-mainMenuStart?.addEventListener("pointerdown", (event) => {
+function handleMainMenuStartActivation(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  handleMainMenuStart();
+}
+
+mainMenuStart?.addEventListener("pointerdown", handleMainMenuStartActivation);
+mainMenuStart?.addEventListener("click", handleMainMenuStartActivation);
+mainMenuStart?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
   event.preventDefault();
   event.stopPropagation();
   handleMainMenuStart();

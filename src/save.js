@@ -3,6 +3,11 @@ const SAVE_VERSION = 2;
 const LEGACY_SAVE_VERSION = 1;
 const HUB_LEVEL = -1;
 const PLAYABLE_LEVELS = new Set([HUB_LEVEL, 0, 1, 2, 3, 4, 5, 6, 7, 8, 37]);
+// A normal save is only a few KB.  Do not let a corrupted or legacy payload
+// monopolize the first menu interaction while it is being parsed.
+const MAX_SAVE_CHARS = 1_000_000;
+const MAX_LEVEL_STATES = 32;
+const MAX_STATES_PER_LEVEL = 256;
 
 function normalizeLevelId(level, legacy = false) {
   const normalized = Math.floor(level);
@@ -19,12 +24,21 @@ function safeStorage() {
 }
 
 function safeParse(json) {
-  if (!json) return null;
+  if (!json || json.length > MAX_SAVE_CHARS) return null;
   try {
     return JSON.parse(json);
   } catch {
     return null;
   }
+}
+
+function limitedEntries(value, limit = MAX_LEVEL_STATES) {
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).slice(0, limit);
+}
+
+function limitedArray(value, limit = MAX_STATES_PER_LEVEL) {
+  return Array.isArray(value) ? value.slice(0, limit) : [];
 }
 
 function clampNumber(value, fallback) {
@@ -158,6 +172,7 @@ export function hasSavedGame() {
   if (!storage) return false;
   try {
     const raw = storage.getItem(STORAGE_KEY);
+    if (raw && raw.length > MAX_SAVE_CHARS) return false;
     const parsed = safeParse(raw);
     return Boolean(
       parsed &&
@@ -178,6 +193,7 @@ export function loadSave() {
   } catch {
     return null;
   }
+  if (raw && raw.length > MAX_SAVE_CHARS) return null;
   const parsed = safeParse(raw);
   if (!parsed || (parsed.version !== SAVE_VERSION && parsed.version !== LEGACY_SAVE_VERSION)) return null;
   const legacy = parsed.version === LEGACY_SAVE_VERSION;
@@ -186,20 +202,18 @@ export function loadSave() {
     level: normalizeLevelId(parsed.player?.level ?? 0, legacy),
   });
   if (!player) return null;
-  const inventory = Array.isArray(parsed.inventory)
-    ? parsed.inventory.map(sanitizeInventoryEntry).filter(Boolean)
-    : [];
+  const inventory = limitedArray(parsed.inventory).map(sanitizeInventoryEntry).filter(Boolean);
   const equippedIndex = Math.max(-1, Math.min(inventory.length - 1, Math.floor(parsed.equippedIndex ?? -1)));
   const flashlight = sanitizeFlashlight(parsed.flashlight);
   const detector = sanitizeDetector(parsed.detector);
   const pickups = {};
   if (parsed.pickups && typeof parsed.pickups === "object") {
-    for (const [levelKey, levelPickups] of Object.entries(parsed.pickups)) {
+    for (const [levelKey, levelPickups] of limitedEntries(parsed.pickups)) {
       const levelNum = normalizeLevelId(Number(levelKey), legacy);
       if (!Number.isFinite(levelNum)) continue;
       const sanitized = {};
       if (levelPickups && typeof levelPickups === "object") {
-        for (const [id, state] of Object.entries(levelPickups)) {
+        for (const [id, state] of limitedEntries(levelPickups, MAX_STATES_PER_LEVEL)) {
           const s = sanitizePickupState(state);
           if (s) sanitized[id] = s;
         }
@@ -209,12 +223,12 @@ export function loadSave() {
   }
   const interactions = {};
   if (parsed.interactions && typeof parsed.interactions === "object") {
-    for (const [levelKey, levelInteractions] of Object.entries(parsed.interactions)) {
+    for (const [levelKey, levelInteractions] of limitedEntries(parsed.interactions)) {
       const levelNum = normalizeLevelId(Number(levelKey), legacy);
       if (!Number.isFinite(levelNum)) continue;
       const sanitized = {};
       if (levelInteractions && typeof levelInteractions === "object") {
-        for (const [spotId, state] of Object.entries(levelInteractions)) {
+        for (const [spotId, state] of limitedEntries(levelInteractions, MAX_STATES_PER_LEVEL)) {
           if (typeof spotId === "string" && spotId) {
             sanitized[spotId] = sanitizeInteractionState(state);
           }
@@ -225,7 +239,7 @@ export function loadSave() {
   }
   const objectives = {};
   if (parsed.objectives && typeof parsed.objectives === "object") {
-    for (const [levelKey, value] of Object.entries(parsed.objectives)) {
+    for (const [levelKey, value] of limitedEntries(parsed.objectives)) {
       const levelNum = normalizeLevelId(Number(levelKey), legacy);
       if (!Number.isFinite(levelNum)) continue;
       objectives[levelNum] = { reached: Boolean(value?.reached) };
@@ -233,20 +247,18 @@ export function loadSave() {
   }
   const entities = {};
   if (parsed.entities && typeof parsed.entities === "object") {
-    for (const [levelKey, list] of Object.entries(parsed.entities)) {
+    for (const [levelKey, list] of limitedEntries(parsed.entities)) {
       const levelNum = normalizeLevelId(Number(levelKey), legacy);
       if (!Number.isFinite(levelNum)) continue;
-      if (Array.isArray(list)) {
-        entities[levelNum] = list.map(sanitizeEntityState).filter(Boolean);
-      }
+      entities[levelNum] = limitedArray(list).map(sanitizeEntityState).filter(Boolean);
     }
   }
   const worldItems = {};
   if (parsed.worldItems && typeof parsed.worldItems === "object") {
-    for (const [levelKey, list] of Object.entries(parsed.worldItems)) {
+    for (const [levelKey, list] of limitedEntries(parsed.worldItems)) {
       const levelNum = normalizeLevelId(Number(levelKey), legacy);
       if (!Number.isFinite(levelNum)) continue;
-      if (Array.isArray(list)) worldItems[levelNum] = list.map(sanitizeWorldItem).filter(Boolean);
+      worldItems[levelNum] = limitedArray(list).map(sanitizeWorldItem).filter(Boolean);
     }
   }
   return {

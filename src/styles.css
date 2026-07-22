@@ -165,6 +165,11 @@ body {
   transform: translateX(4px);
 }
 
+.main-menu__button:disabled {
+  cursor: progress;
+  opacity: 0.78;
+}
+
 .main-menu__button:focus-visible,
 .main-menu__language:focus-visible,
 .main-menu__settings-close:focus-visible {
@@ -939,6 +944,7 @@ body {
   letter-spacing: 0.04em;
   background: rgba(8, 18, 10, 0.86);
   box-shadow: 0 0 16px rgba(140, 255, 160, 0.36), inset 0 0 10px rgba(140, 255, 160, 0.1);
+  font: inherit;
   pointer-events: none;
 }
 
@@ -957,6 +963,7 @@ body {
   letter-spacing: 0.05em;
   background: rgba(26, 17, 7, 0.88);
   box-shadow: 0 0 16px rgba(255, 179, 72, 0.3), inset 0 0 10px rgba(255, 198, 100, 0.1);
+  font: inherit;
   pointer-events: none;
 }
 
@@ -2162,7 +2169,22 @@ body {
   }
 
   .use-button {
-    display: grid;
+    display: none;
+  }
+
+  .pickup-prompt,
+  .door-prompt {
+    min-height: 44px;
+    padding: 10px 14px;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: manipulation;
+  }
+
+  .pickup-prompt:active,
+  .door-prompt:active {
+    filter: brightness(1.2);
+    box-shadow: 0 0 22px rgba(220, 255, 160, 0.68), inset 0 0 12px rgba(220, 255, 160, 0.22);
   }
 
   .flashlight-button {
