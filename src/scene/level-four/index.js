@@ -188,8 +188,8 @@ export function createLevelFourScene({ initialState = null } = {}) {
     blockedAabbs: propColliders,
     respawnMin: 18,
     respawnVariance: 12,
-    initialSpawnChance: 0.75,
-    respawnChance: 0.85,
+    initialSpawnChance: 0.8,
+    respawnChance: 0.9,
     initialState: pickupInitial["almond-water-reserve"] ?? null,
   });
   const superAlmondWater = createAlmondWaterPickup(scene, {

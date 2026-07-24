@@ -22,6 +22,9 @@ const DRINK_MOVE_MULTIPLIER = 0.5;
 const DRINK_ON_COMPLETE_EVENT = "backrooms:drink-complete";
 const HEALTH_MAX = 100;
 const DEFAULT_HEALTH_REGEN_DURATION = 5;
+const ZOOM_FOV_FACTOR = 0.58;
+const ZOOM_FOV_MIN = 30;
+const ZOOM_RESPONSE = 18;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -47,6 +50,10 @@ export class FirstPersonControls {
     this.sprintMultiplier = 1.85;
     this.lookSensitivity = 0.0028;
     this.touchSensitivity = 0.004;
+    this.defaultFov = camera.fov;
+    this.zoomFov = Math.max(ZOOM_FOV_MIN, this.defaultFov * ZOOM_FOV_FACTOR);
+    this.zoomRequested = false;
+    this.zoomBlend = 0;
     this.yaw = spawn.yaw;
     this.pitch = -0.02;
     this.lookPointerId = null;
@@ -89,6 +96,10 @@ export class FirstPersonControls {
     this.rollOffset = 0;
     this.isMoving = false;
     this.movementSpeed = 0;
+    this.zoomRequested = false;
+    this.zoomBlend = 0;
+    this.camera.fov = this.defaultFov;
+    this.camera.updateProjectionMatrix();
 
     this.onCanvasPointerDown = this.onCanvasPointerDown.bind(this);
     this.onCanvasPointerMove = this.onCanvasPointerMove.bind(this);
@@ -185,6 +196,8 @@ export class FirstPersonControls {
     this.getFloorHeight = typeof getFloorHeight === "function" ? getFloorHeight : () => 0;
     this.spawn = spawn;
     this.environmentSpeedMultiplier = movementSpeedMultiplier;
+    this.defaultFov = camera.fov;
+    this.zoomFov = Math.max(ZOOM_FOV_MIN, this.defaultFov * ZOOM_FOV_FACTOR);
     this.keys.clear();
     this.resetJoystick();
     this.reset();
@@ -312,6 +325,8 @@ export class FirstPersonControls {
     this.canvas.dataset.cameraZ = this.camera.position.z.toFixed(3);
     this.canvas.dataset.cameraYaw = this.yaw.toFixed(3);
     this.canvas.dataset.cameraPitch = this.pitch.toFixed(3);
+    this.canvas.dataset.cameraFov = this.camera.fov.toFixed(2);
+    this.canvas.dataset.zoomed = String(this.zoomBlend > 0.5);
     this.canvas.dataset.grounded = String(this.isGrounded);
     this.canvas.dataset.floorSupported = String(this.hasFloorSupport);
     this.canvas.dataset.stamina = this.stamina.toFixed(0);
@@ -340,6 +355,17 @@ export class FirstPersonControls {
     this.canvas.dataset.drinkProgress = this.isDrinking
       ? (1 - this.drinkTimer / ALMOND_WATER_DRINK_DURATION).toFixed(3)
       : "0";
+  }
+
+  updateZoom(delta) {
+    const target = this.zoomRequested ? 1 : 0;
+    const blend = 1 - Math.exp(-ZOOM_RESPONSE * Math.max(0, delta));
+    this.zoomBlend += (target - this.zoomBlend) * blend;
+    const nextFov = THREE.MathUtils.lerp(this.defaultFov, this.zoomFov, this.zoomBlend);
+    if (Math.abs(nextFov - this.camera.fov) > 0.001) {
+      this.camera.fov = nextFov;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   clearDrinkCancelled() {
@@ -467,10 +493,21 @@ export class FirstPersonControls {
     ) {
       event.preventDefault();
       this.keys.add(event.code);
+      return;
+    }
+
+    if (event.code === "KeyC") {
+      event.preventDefault();
+      this.zoomRequested = true;
     }
   }
 
   onKeyUp(event) {
+    if (event.code === "KeyC") {
+      event.preventDefault();
+      this.zoomRequested = false;
+      return;
+    }
     this.keys.delete(event.code);
   }
 
@@ -479,6 +516,7 @@ export class FirstPersonControls {
     this.isSprinting = false;
     this.isMoving = false;
     this.movementSpeed = 0;
+    this.zoomRequested = false;
     this.resetJoystick();
     this.syncViewModelMotion();
   }
@@ -743,6 +781,7 @@ export class FirstPersonControls {
 
     this.updateVerticalMotion(delta);
     this.updateHeadBob(delta, horizontalDistance, hasMovementInput);
+    this.updateZoom(delta);
     this.applyRotation();
   }
 

@@ -10,7 +10,7 @@ import { createItemHighlight, setItemHighlight } from "../items/shared.js";
 
 const PICKUP_RADIUS = 3;
 const INSPECT_DISTANCE = 7;
-const LEVEL_KEY_SPAWN_CHANCE = 0.14;
+const LEVEL_KEY_SPAWN_CHANCE = 0.17;
 const HUB_BONUS_LEVEL_KEY_ROLLS = 2;
 const KEY_MODEL_SCALE = 0.1875;
 

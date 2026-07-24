@@ -267,7 +267,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial.firesalt ?? null,
-    initialSpawnChance: 0.68,
+    initialSpawnChance: 0.73,
   });
   const interactions = [
     createInteractionSpot({

@@ -48,7 +48,7 @@ export function createStandardPickupSet(scene, {
   blockedAabbs = [],
   initialState = {},
   includeFiresalt = false,
-  firesaltSpawnChance = 0.5,
+  firesaltSpawnChance = 0.55,
 }) {
   const options = { cols, rows, isCellOpen, getCellCenter, avoidPositions, blockedAabbs };
   const pickups = {

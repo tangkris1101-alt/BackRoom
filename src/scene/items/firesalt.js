@@ -65,7 +65,7 @@ export function createFiresaltPickup(scene, {
   avoidPositions = [],
   blockedAabbs = [],
   initialState = null,
-  initialSpawnChance = 0.5,
+  initialSpawnChance = 0.55,
 } = {}) {
   const candidates = [];
   for (let row = 0; row < rows; row += 1) {
@@ -134,7 +134,7 @@ export function createFiresaltPickup(scene, {
       if (!active) {
         respawnTimer -= delta;
         if (respawnTimer <= 0) {
-          if (Math.random() <= 0.62) place(); else schedule();
+          if (Math.random() <= 0.67) place(); else schedule();
         }
       } else {
         model.rotation.y = elapsed * 0.16;

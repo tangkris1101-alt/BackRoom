@@ -41,6 +41,64 @@ export const DARK_ZONES = [
 
 const ACTIVE_FIXTURE_LIGHTS = 8;
 const LEVEL_ZERO_MIN_FIXTURE_DISTANCE = CELL_SIZE * 1.86;
+export const LEVEL_ZERO_ROOM_TABLE_CELLS = Object.freeze([
+  { col: 4, row: 3, rotation: 0 },
+  { col: 14, row: 5, rotation: Math.PI / 2 },
+  { col: 16, row: 13, rotation: 0 },
+  { col: 21, row: 21, rotation: Math.PI / 2 },
+  { col: 25, row: 4, rotation: 0 },
+  { col: 33, row: 19, rotation: Math.PI / 2 },
+  { col: 41, row: 12, rotation: 0 },
+  { col: 33, row: 33, rotation: Math.PI / 2 },
+  { col: 20, row: 30, rotation: 0 },
+  { col: 7, row: 32, rotation: Math.PI / 2 },
+]);
+
+export const LEVEL_ZERO_ROOM_TABLE_COUNT = LEVEL_ZERO_ROOM_TABLE_CELLS.length;
+
+export function addRoomTables(scene, cellCenter) {
+  const wood = new THREE.MeshStandardMaterial({ color: 0x4b3a28, roughness: 0.9 });
+  const metal = new THREE.MeshStandardMaterial({ color: 0x3b3b34, roughness: 0.74, metalness: 0.3 });
+  const paper = new THREE.MeshStandardMaterial({ color: 0xd8cba8, roughness: 0.96 });
+  const tabletopGeometry = new THREE.BoxGeometry(2.28, 0.12, 1.18);
+  const legGeometry = new THREE.BoxGeometry(0.09, 0.78, 0.09);
+  const colliders = [];
+
+  LEVEL_ZERO_ROOM_TABLE_CELLS.forEach((table, index) => {
+    const center = cellCenter(table.col, table.row);
+    const group = new THREE.Group();
+    group.name = `level-zero-room-table-${index + 1}`;
+    group.position.set(center.x, 0, center.z);
+    group.rotation.y = table.rotation;
+
+    const tabletop = new THREE.Mesh(tabletopGeometry, wood);
+    tabletop.position.y = 0.82;
+    group.add(tabletop);
+    for (const x of [-0.9, 0.9]) {
+      for (const z of [-0.43, 0.43]) {
+        const leg = new THREE.Mesh(legGeometry, metal);
+        leg.position.set(x, 0.39, z);
+        group.add(leg);
+      }
+    }
+    const paperStack = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.025, 0.38), paper);
+    paperStack.position.set(index % 2 === 0 ? -0.34 : 0.34, 0.895, index % 3 === 0 ? -0.14 : 0.14);
+    paperStack.rotation.y = index * 0.37;
+    group.add(paperStack);
+    scene.add(group);
+
+    const halfX = table.rotation % Math.PI === 0 ? 1.14 : 0.59;
+    const halfZ = table.rotation % Math.PI === 0 ? 0.59 : 1.14;
+    colliders.push({
+      minX: center.x - halfX,
+      maxX: center.x + halfX,
+      minZ: center.z - halfZ,
+      maxZ: center.z + halfZ,
+    });
+  });
+
+  return colliders;
+}
 
 export function createLights(scene, fixturePositions) {
   const fixtures = [];

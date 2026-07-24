@@ -379,7 +379,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
     initialState: pickupInitial.firesalt ?? null,
-    initialSpawnChance: 0.56,
+    initialSpawnChance: 0.61,
   });
   const routes = [
     {

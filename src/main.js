@@ -2816,10 +2816,18 @@ function tryFocusedInteraction() {
 
   if (openExitDoor()) return true;
 
+  // Hub lock previews already treat active debug mode as having every level
+  // key. Keep the actual F interaction on that same rule so ?debug=true
+  // opens the focused Hub door instead of showing an unlocked prompt that
+  // still rejects the player for lacking a key.
+  const debugBypassHubLocks = isDebugFeaturesActive() && world?.level === HUB_LEVEL;
+
   const interaction = world?.interact?.(world.camera.position, {
     routeId: focusedInteraction.exitRoute ? focusedInteraction.id : null,
-    hasLevelKey: (targetLevel) => getLevelKeyTarget(getEquipped()?.id) === targetLevel,
+    hasLevelKey: (targetLevel) =>
+      debugBypassHubLocks || getLevelKeyTarget(getEquipped()?.id) === targetLevel,
     consumeLevelKey: (targetLevel) => {
+      if (debugBypassHubLocks) return true;
       const keyId = `level-key-${targetLevel}`;
       if (getEquipped()?.id !== keyId || !removeInventory(keyId)) return false;
       renderInventoryBar();

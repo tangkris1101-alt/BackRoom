@@ -22,6 +22,7 @@ import {
   addExitSign,
   addExitHole,
   addMoodZones,
+  addRoomTables,
   collectWallTransforms,
   createFloorGeometryWithHole,
 } from "./world.js";
@@ -241,12 +242,14 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   addExitSign(scene, exitPosition);
   addMoodZones(scene);
   const manilaRoom = createManilaRoom(scene, MANILA_ROOM, cellCenter);
+  const propColliders = [...manilaRoom.colliders, ...addRoomTables(scene, cellCenter)];
   const almondWater = createAlmondWaterPickup(scene, {
     cols: COLS,
     rows: ROWS,
     isCellOpen: isOpenCell,
     getCellCenter: cellCenter,
     avoidPositions: [spawnCell, exitPosition],
+    blockedAabbs: propColliders,
     initialState: pickupInitial["almond-water"] ?? null,
   });
   const superAlmondWater = createAlmondWaterPickup(scene, {
@@ -255,6 +258,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     isCellOpen: isOpenCell,
     getCellCenter: cellCenter,
     avoidPositions: [spawnCell, exitPosition],
+    blockedAabbs: propColliders,
     variant: "super",
     respawnMin: SUPER_ALMOND_WATER_RESPAWN_MIN,
     respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
@@ -268,6 +272,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     isCellOpen: isOpenCell,
     getCellCenter: cellCenter,
     avoidPositions: [spawnCell, exitPosition],
+    blockedAabbs: propColliders,
     initialState: pickupInitial.flashlight ?? null,
   });
   const compass = createCompassPickup(scene, {
@@ -276,6 +281,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     isCellOpen: isOpenCell,
     getCellCenter: cellCenter,
     avoidPositions: [spawnCell, exitPosition],
+    blockedAabbs: propColliders,
     initialState: pickupInitial.compass ?? null,
   });
   let exitReached = Boolean(objectiveInitial.reached);
@@ -294,10 +300,16 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       [-corner, -corner],
     ];
 
-    return samples.every(([offsetX, offsetZ]) => {
+    const insideLevelGeometry = samples.every(([offsetX, offsetZ]) => {
       const cell = worldToCell(x + offsetX, z + offsetZ);
       return isOpenCell(cell.col, cell.row);
     });
+    return insideLevelGeometry && !propColliders.some((collider) =>
+      x + radius > collider.minX &&
+      x - radius < collider.maxX &&
+      z + radius > collider.minZ &&
+      z - radius < collider.maxZ,
+    );
   }
 
   function getFloorHeight(x, z) {
