@@ -96,7 +96,13 @@ async function inlineJavascriptAssets(source) {
 }
 
 const inlineCss = (await inlineCssAssets(css)).replace(/<\/style/gi, "<\\/style");
-const inlineJavascript = (await inlineJavascriptAssets(javascript)).replace(/<\/script/gi, "<\\/script");
+// The bundle is injected as a classic script, where import.meta is illegal.
+// All asset URLs are already inlined above; any remaining import.meta.url only
+// feeds the (already inlined) dynamic-import preload helper, so a plain
+// location.href is a safe stand-in.
+const inlineJavascript = (await inlineJavascriptAssets(javascript))
+  .replace(/<\/script/gi, "<\\/script")
+  .replaceAll("import.meta.url", "location.href");
 const buildId = createHash("sha256")
   .update(inlineCss)
   .update(inlineJavascript)
