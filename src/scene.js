@@ -1,1 +1,1 @@
-export { createBackroomsScene, getBackroomsLevelInfo } from "./scene/index.js";
+export { createBackroomsScene, getBackroomsLevelInfo, preloadLevelScene } from "./scene/index.js";

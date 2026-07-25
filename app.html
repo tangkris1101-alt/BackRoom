@@ -3,7 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
     <title>Backrooms</title>
+    <style>
+      /* Critical loading-state styles shown before the bundle injects styles.css. */
+      body { margin: 0; background: #14150c; }
+      .main-menu { position: fixed; inset: 0; z-index: 20; display: grid; align-items: end; padding: clamp(28px, 7vw, 112px); background-color: #6d6035; color: #f4f0cd; font-family: system-ui, sans-serif; }
+      .main-menu__shade { position: absolute; inset: 0; background: rgba(10, 10, 4, 0.5); }
+      .main-menu__content { position: relative; z-index: 1; display: grid; gap: 32px; width: min(430px, 100%); }
+      .main-menu__brand { display: grid; gap: 12px; }
+      .main-menu__brand h1 { margin: 0; color: #ffffdf; font-size: clamp(42px, 8vw, 88px); font-weight: 900; line-height: 0.9; }
+      .main-menu__eyebrow, .main-menu__brand p, .main-menu__button small { font-size: 12px; font-weight: 800; }
+      .main-menu__eyebrow { color: #d7e99a; }
+      .main-menu__brand p { margin: 0; color: rgba(244, 240, 205, 0.82); }
+      .main-menu__actions { display: grid; gap: 10px; width: min(310px, 100%); }
+      .main-menu__button { display: grid; gap: 4px; min-height: 64px; padding: 12px 16px; border: 1px solid rgba(239, 243, 186, 0.42); border-radius: 4px; background: rgba(12, 15, 6, 0.56); color: #ecf7c4; font: inherit; text-align: left; cursor: pointer; }
+      .main-menu__button--primary { border-color: rgba(224, 255, 162, 0.82); background: rgba(58, 83, 25, 0.72); color: #f7ffd6; }
+      .main-menu__button:disabled { cursor: progress; opacity: 0.78; }
+      .main-menu__loading { display: grid; gap: 8px; padding: 4px 2px; }
+      .main-menu__loading[hidden] { display: none; }
+      .main-menu__loading-status { font-size: 12px; font-weight: 800; color: #d7e99a; }
+      .main-menu__loading-track { height: 4px; overflow: hidden; border-radius: 2px; background: rgba(244, 240, 205, 0.18); }
+      .main-menu__loading-fill { width: 100%; height: 100%; background: #d7e99a; transform: scaleX(0); transform-origin: left center; }
+    </style>
   </head>
   <body>
     <main id="app" aria-label="Backrooms 3D scene">
@@ -21,9 +43,15 @@
             <p id="main-menu-subtitle">YOU ARE NOT SUPPOSED TO BE HERE.</p>
           </header>
           <div class="main-menu__actions">
-            <button id="main-menu-start" class="main-menu__button main-menu__button--primary" type="button">
-              <strong id="main-menu-start-label">开始游戏</strong>
-              <small id="main-menu-start-hint">进入 LEVEL 0</small>
+            <div id="main-menu-loading" class="main-menu__loading" role="status">
+              <span id="main-menu-loading-status" class="main-menu__loading-status">正在加载资源…</span>
+              <div class="main-menu__loading-track" aria-hidden="true">
+                <div id="main-menu-loading-fill" class="main-menu__loading-fill"></div>
+              </div>
+            </div>
+            <button id="main-menu-start" class="main-menu__button main-menu__button--primary" type="button" disabled aria-busy="true">
+              <strong id="main-menu-start-label">正在加载...</strong>
+              <small id="main-menu-start-hint">正在初始化</small>
             </button>
             <button id="main-menu-settings" class="main-menu__button" type="button" aria-expanded="false" aria-controls="main-menu-settings-panel">
               <strong id="main-menu-settings-label">设置</strong>
@@ -42,9 +70,9 @@
       </section>
 
       <script>
-        // Early bootstrap: localize the menu and capture Start presses before the
-        // main bundle finishes evaluating. Keep strings in sync with
-        // MAIN_MENU_TEXT in src/ui/text.js and LANGUAGE_STORAGE_KEY in src/main.js.
+        // Early bootstrap: localize the menu and animate load progress while the
+        // main bundle evaluates. Keep strings in sync with MAIN_MENU_TEXT in
+        // src/ui/text.js and LANGUAGE_STORAGE_KEY in src/main.js.
         (() => {
           let language = "zh-CN";
           try {
@@ -62,8 +90,10 @@
               settings: "设置",
               settingsHint: "语言",
               language: "语言",
-              loading: "正在加载...",
-              loadingHint: "正在初始化",
+              buttonLoading: "正在加载...",
+              statusLoading: "正在加载资源…",
+              statusReady: "加载完成",
+              statusFailed: "加载失败，请刷新页面",
             },
             en: {
               eyebrow: "LEVEL 0 · NOCLIP ZONE",
@@ -73,8 +103,10 @@
               settings: "SETTINGS",
               settingsHint: "LANGUAGE",
               language: "LANGUAGE",
-              loading: "LOADING...",
-              loadingHint: "INITIALIZING",
+              buttonLoading: "LOADING...",
+              statusLoading: "LOADING ASSETS…",
+              statusReady: "READY",
+              statusFailed: "LOAD FAILED — PLEASE REFRESH",
             },
           }[language];
 
@@ -85,27 +117,77 @@
           };
           setText("main-menu-eyebrow", text.eyebrow);
           setText("main-menu-subtitle", text.subtitle);
-          setText("main-menu-start-label", text.start);
-          setText("main-menu-start-hint", text.startHint);
+          setText("main-menu-start-label", text.buttonLoading);
+          setText("main-menu-start-hint", text.statusLoading);
           setText("main-menu-settings-label", text.settings);
           setText("main-menu-settings-hint", text.settingsHint);
           setText("main-menu-settings-title", text.language);
           document.getElementById("main-menu-language-zh")?.setAttribute("aria-pressed", String(language === "zh-CN"));
           document.getElementById("main-menu-language-en")?.setAttribute("aria-pressed", String(language === "en"));
 
+          const loading = document.getElementById("main-menu-loading");
+          const loadingFill = document.getElementById("main-menu-loading-fill");
+          const loadingStatus = document.getElementById("main-menu-loading-status");
           const startButton = document.getElementById("main-menu-start");
-          if (!startButton) return;
-          const requestEarlyStart = (event) => {
-            if (window.__backroomsMenuReady) return;
-            event.preventDefault();
-            if (window.__backroomsStartRequested) return;
-            window.__backroomsStartRequested = true;
-            startButton.setAttribute("aria-busy", "true");
-            setText("main-menu-start-label", text.loading);
-            setText("main-menu-start-hint", text.loadingHint);
+          if (!loading || !loadingFill || !startButton) return;
+
+          if (loadingStatus) loadingStatus.textContent = text.statusLoading;
+
+          let progress = 0.06;
+          let failed = false;
+          let done = false;
+          const paint = () => {
+            loadingFill.style.transform = `scaleX(${progress.toFixed(3)})`;
           };
-          startButton.addEventListener("pointerdown", requestEarlyStart);
-          startButton.addEventListener("click", requestEarlyStart);
+          paint();
+
+          const poll = window.setInterval(() => {
+            if (window.__backroomsMenuReady) finish();
+          }, 120);
+
+          const cleanup = () => {
+            window.clearInterval(poll);
+            window.removeEventListener("backrooms:menu-ready", finish);
+            window.removeEventListener("error", fail, true);
+            window.removeEventListener("unhandledrejection", fail);
+          };
+
+          function finish() {
+            if (done || failed) return;
+            done = true;
+            cleanup();
+            progress = 1;
+            paint();
+            if (loadingStatus) loadingStatus.textContent = text.statusReady;
+            window.setTimeout(() => {
+              loading.setAttribute("hidden", "");
+              startButton.disabled = false;
+              startButton.removeAttribute("aria-busy");
+              setText("main-menu-start-label", text.start);
+              setText("main-menu-start-hint", text.startHint);
+            }, 260);
+          }
+
+          function fail() {
+            if (done || failed || window.__backroomsMenuReady) return;
+            failed = true;
+            cleanup();
+            loading.classList.add("is-failed");
+            if (loadingStatus) loadingStatus.textContent = text.statusFailed;
+          }
+          window.addEventListener("backrooms:menu-ready", finish);
+          window.addEventListener("error", fail, true);
+          window.addEventListener("unhandledrejection", fail);
+
+          // Cosmetic progress only; readiness is driven by the event/interval above.
+          const tick = () => {
+            if (done || failed) return;
+            progress += (0.9 - progress) * 0.035;
+            paint();
+            window.requestAnimationFrame(tick);
+          };
+          window.requestAnimationFrame(tick);
+          if (window.__backroomsMenuReady) finish();
         })();
       </script>
 

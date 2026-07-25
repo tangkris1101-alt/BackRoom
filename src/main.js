@@ -2,7 +2,7 @@ import * as THREE from "three";
 import "./styles.css";
 import { createAmbientHum } from "./ambient-audio.js";
 import { DebugMode, DEBUG_PLAYABLE_LEVELS } from "./debug-mode.js";
-import { createBackroomsScene, getBackroomsLevelInfo } from "./scene.js";
+import { createBackroomsScene, getBackroomsLevelInfo, preloadLevelScene } from "./scene.js";
 import { FirstPersonControls } from "./first-person-controls.js";
 import { syncFirstPersonHeldItem } from "./scene/common/view-model.js";
 import { createFiresaltEffectManager } from "./scene/items/index.js";
@@ -1465,13 +1465,7 @@ async function bootstrapWorld(level, save) {
     nextWorld = await createBackroomsScene(level, { initialState });
   } catch (error) {
     console.error("Failed to load level scene", error);
-showMainMenu();
-
-window.__backroomsMenuReady = true;
-if (window.__backroomsStartRequested) {
-  window.__backroomsStartRequested = false;
-  handleMainMenuStart();
-}
+    showMainMenu();
     return;
   }
   world = nextWorld;
@@ -3901,6 +3895,20 @@ mainMenuSettingsClose?.addEventListener("pointerdown", (event) => {
 let pendingSaveForPrompt = null;
 
 showMainMenu();
+
+// Signal the inline menu bootstrap (app.html) that handlers are attached and
+// the Start button can be enabled, then warm the first level's chunk so a
+// fresh session starts without an extra module-fetch stall.
+window.__backroomsMenuReady = true;
+window.dispatchEvent(new Event("backrooms:menu-ready"));
+window.setTimeout(() => {
+  try {
+    const savedLevel = hasSavedGame() ? getInitialLevelFromSave(loadSave()) : null;
+    preloadLevelScene(savedLevel ?? getInitialLevel());
+  } catch {
+    // Scene preload is best-effort.
+  }
+}, 0);
 
 window.setInterval(() => {
   if (!isResettingProgress && world && !gameFailed) {

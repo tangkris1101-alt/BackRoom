@@ -170,6 +170,46 @@ body {
   opacity: 0.78;
 }
 
+.main-menu__loading {
+  display: grid;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.main-menu__loading[hidden] {
+  display: none;
+}
+
+.main-menu__loading-status {
+  font-size: 12px;
+  font-weight: 800;
+  color: #d7e99a;
+}
+
+.main-menu__loading-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(244, 240, 205, 0.18);
+}
+
+.main-menu__loading-fill {
+  width: 100%;
+  height: 100%;
+  background: #d7e99a;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 120ms linear;
+}
+
+.main-menu__loading.is-failed .main-menu__loading-status {
+  color: #ff8f80;
+}
+
+.main-menu__loading.is-failed .main-menu__loading-fill {
+  background: #ff6b57;
+}
+
 .main-menu__button:focus-visible,
 .main-menu__language:focus-visible,
 .main-menu__settings-close:focus-visible {

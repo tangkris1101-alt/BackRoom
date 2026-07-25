@@ -90,15 +90,21 @@ export function createAmbientHum() {
     breathAudio.play().catch(() => {});
   }
 
+  // Chrome logs an autoplay warning for every resume() attempt made before a
+  // real user gesture, so only try once interaction has actually occurred.
+  function tryUnlockContext() {
+    if (!context || context.state !== "suspended") return;
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+    try {
+      context.resume?.();
+    } catch {
+      // ignore
+    }
+  }
+
   function playFootstep({ sprinting }) {
     if (!context || !stepFilter || !stepNoiseBuffer) return;
-    if (context.state === "suspended") {
-      try {
-        context.resume?.();
-      } catch {
-        // ignore
-      }
-    }
+    tryUnlockContext();
     const now = context.currentTime;
 
     const noise = context.createBufferSource();
@@ -128,13 +134,7 @@ export function createAmbientHum() {
 
   function update(flicker, movementState = {}) {
     if (!context || !flickerGain) return;
-    if (context.state === "suspended" && !suspendedByPause) {
-      try {
-        context.resume?.();
-      } catch {
-        // ignore
-      }
-    }
+    if (!suspendedByPause) tryUnlockContext();
     const now = context.currentTime;
     const level = 0.055 + (1 - flicker) * 0.08;
     flickerGain.gain.setTargetAtTime(level, now, 0.035);
@@ -177,7 +177,7 @@ export function createAmbientHum() {
   function resume() {
     if (!context) return;
     suspendedByPause = false;
-    if (context.state === "suspended") context.resume?.();
+    tryUnlockContext();
   }
 
   function isSuspended() {

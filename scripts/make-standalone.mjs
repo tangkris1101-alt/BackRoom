@@ -111,6 +111,7 @@ const buildId = createHash("sha256")
 const updateCheck = `<script>
 (() => {
   const buildId = "${buildId}";
+  if (window.location.protocol === "file:") return;
   const manifest = new URL("./backrooms-version.json", window.location.href);
   fetch(manifest, { cache: "no-store" })
     .then((response) => (response.ok ? response.json() : null))

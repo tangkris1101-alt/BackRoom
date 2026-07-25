@@ -1,19 +1,34 @@
 import { getBackroomsLevelInfo, HUB_LEVEL } from "./constants.js";
 
+const LEVEL_SCENE_LOADERS = new Map([
+  [0, [() => import("./level-zero/index.js"), "createLevelZeroScene"]],
+  [1, [() => import("./level-one/index.js"), "createLevelOneScene"]],
+  [2, [() => import("./level-two/index.js"), "createLevelTwoScene"]],
+  [3, [() => import("./level-three/index.js"), "createLevelThreeScene"]],
+  [4, [() => import("./level-four/index.js"), "createLevelFourScene"]],
+  [5, [() => import("./level-five/index.js"), "createLevelFiveScene"]],
+  [6, [() => import("./level-six/index.js"), "createLevelSixScene"]],
+  [7, [() => import("./level-seven/index.js"), "createLevelSevenScene"]],
+  [8, [() => import("./level-eight/index.js"), "createLevelEightScene"]],
+  [37, [() => import("./level-thirty-seven/index.js"), "createLevelThirtySevenScene"]],
+  [HUB_LEVEL, [() => import("./hub/index.js"), "createHubScene"]],
+]);
+
+function getLevelSceneLoader(level) {
+  return LEVEL_SCENE_LOADERS.get(level) ?? LEVEL_SCENE_LOADERS.get(0);
+}
+
 export async function createBackroomsScene(level = 0, { initialState = null } = {}) {
   const levelInfo = getBackroomsLevelInfo(level);
-  const options = { initialState };
-  if (levelInfo.level === 1) return (await import("./level-one/index.js")).createLevelOneScene(options);
-  if (levelInfo.level === 2) return (await import("./level-two/index.js")).createLevelTwoScene(options);
-  if (levelInfo.level === 3) return (await import("./level-three/index.js")).createLevelThreeScene(options);
-  if (levelInfo.level === 4) return (await import("./level-four/index.js")).createLevelFourScene(options);
-  if (levelInfo.level === 5) return (await import("./level-five/index.js")).createLevelFiveScene(options);
-  if (levelInfo.level === 6) return (await import("./level-six/index.js")).createLevelSixScene(options);
-  if (levelInfo.level === 7) return (await import("./level-seven/index.js")).createLevelSevenScene(options);
-  if (levelInfo.level === 8) return (await import("./level-eight/index.js")).createLevelEightScene(options);
-  if (levelInfo.level === 37) return (await import("./level-thirty-seven/index.js")).createLevelThirtySevenScene(options);
-  if (levelInfo.level === HUB_LEVEL) return (await import("./hub/index.js")).createHubScene(options);
-  return (await import("./level-zero/index.js")).createLevelZeroScene(options);
+  const [importScene, factoryName] = getLevelSceneLoader(levelInfo.level);
+  const sceneModule = await importScene();
+  return sceneModule[factoryName]({ initialState });
+}
+
+export function preloadLevelScene(level = 0) {
+  const levelInfo = getBackroomsLevelInfo(level);
+  const [importScene] = getLevelSceneLoader(levelInfo.level);
+  return importScene().catch(() => {});
 }
 
 export { getBackroomsLevelInfo } from "./constants.js";
