@@ -2236,7 +2236,7 @@ body {
   }
 
   .item-info {
-    bottom: max(290px, calc(env(safe-area-inset-bottom) + 282px));
+    bottom: max(272px, calc(env(safe-area-inset-bottom) + 264px));
     min-width: min(78vw, 320px);
   }
 
@@ -3009,9 +3009,19 @@ body {
 
   .inventory-bar.is-visible {
     display: inline-flex;
-    bottom: max(22px, calc(env(safe-area-inset-bottom) + clamp(18px, 5svh, 54px)));
+    bottom: max(152px, calc(env(safe-area-inset-bottom) + 144px));
+    max-width: min(calc(100vw - 32px), 320px);
     padding: 7px 9px;
     gap: 6px;
+  }
+
+  .joystick,
+  .jump-button,
+  .action-button,
+  .flashlight-button,
+  .detector-button,
+  .pause-button {
+    z-index: 8;
   }
 
   .inventory-nav {
