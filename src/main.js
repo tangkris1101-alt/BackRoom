@@ -1396,7 +1396,7 @@ function markDirty() {
   }, SAVE_DEBOUNCE_MS);
 }
 
-function loadLevel(level, { updateUrl = false } = {}) {
+async function loadLevel(level, { updateUrl = false } = {}) {
   if (world && !gameFailed) {
     writeSaveSnapshot();
   }
@@ -1408,7 +1408,14 @@ function loadLevel(level, { updateUrl = false } = {}) {
   const save = loadSave();
   const initialStateForLevel = buildLevelInitialState(level, save);
 
-  world = createBackroomsScene(level, { initialState: initialStateForLevel });
+  let nextWorld;
+  try {
+    nextWorld = await createBackroomsScene(level, { initialState: initialStateForLevel });
+  } catch (error) {
+    console.error("Failed to load level scene", error);
+    return;
+  }
+  world = nextWorld;
   firesaltEffects = createFiresaltEffectManager(world.scene, world.isWalkable);
   worldItems = createWorldItemManager(
     world.scene,
@@ -1450,10 +1457,24 @@ function loadLevel(level, { updateUrl = false } = {}) {
   disposeWorld(previousWorld);
 }
 
-function bootstrapWorld(level, save) {
+async function bootstrapWorld(level, save) {
   applySaveToRuntime(save);
   const initialState = buildLevelInitialState(level, save);
-  world = createBackroomsScene(level, { initialState });
+  let nextWorld;
+  try {
+    nextWorld = await createBackroomsScene(level, { initialState });
+  } catch (error) {
+    console.error("Failed to load level scene", error);
+showMainMenu();
+
+window.__backroomsMenuReady = true;
+if (window.__backroomsStartRequested) {
+  window.__backroomsStartRequested = false;
+  handleMainMenuStart();
+}
+    return;
+  }
+  world = nextWorld;
   firesaltEffects = createFiresaltEffectManager(world.scene, world.isWalkable);
   worldItems = createWorldItemManager(
     world.scene,
@@ -1779,14 +1800,14 @@ function updateLevelTransition(delta) {
   canvas.dataset.exitReached = "false";
 }
 
-function continueExploringFromExit() {
+async function continueExploringFromExit() {
   if (!world || !controls || !exitComplete || gameFailed || levelTransition) return;
   expireCompassAtExit({ silent: true });
   writeSaveSnapshot();
   exitComplete = false;
   canvas.dataset.exitReached = "false";
   hideExitOverlay();
-  loadLevel(HUB_LEVEL, { updateUrl: true });
+  await loadLevel(HUB_LEVEL, { updateUrl: true });
   writeSaveSnapshot();
 }
 

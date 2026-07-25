@@ -6,6 +6,11 @@ export default defineConfig({
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       input: "app.html",
+      output: {
+        // Keep the production bundle as a single file so make-standalone.mjs
+        // can inline it; dynamic imports are still split in dev mode.
+        inlineDynamicImports: true,
+      },
     },
   },
 });

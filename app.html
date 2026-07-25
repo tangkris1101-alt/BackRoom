@@ -41,6 +41,74 @@
         </section>
       </section>
 
+      <script>
+        // Early bootstrap: localize the menu and capture Start presses before the
+        // main bundle finishes evaluating. Keep strings in sync with
+        // MAIN_MENU_TEXT in src/ui/text.js and LANGUAGE_STORAGE_KEY in src/main.js.
+        (() => {
+          let language = "zh-CN";
+          try {
+            const saved = window.localStorage?.getItem("backrooms-language");
+            if (saved === "zh-CN" || saved === "en") language = saved;
+          } catch {
+            // localStorage may be unavailable.
+          }
+          const text = {
+            "zh-CN": {
+              eyebrow: "LEVEL 0 · NOCLIP ZONE",
+              subtitle: "你不该来到这里。",
+              start: "开始游戏",
+              startHint: "进入 LEVEL 0",
+              settings: "设置",
+              settingsHint: "语言",
+              language: "语言",
+              loading: "正在加载...",
+              loadingHint: "正在初始化",
+            },
+            en: {
+              eyebrow: "LEVEL 0 · NOCLIP ZONE",
+              subtitle: "YOU ARE NOT SUPPOSED TO BE HERE.",
+              start: "START GAME",
+              startHint: "ENTER LEVEL 0",
+              settings: "SETTINGS",
+              settingsHint: "LANGUAGE",
+              language: "LANGUAGE",
+              loading: "LOADING...",
+              loadingHint: "INITIALIZING",
+            },
+          }[language];
+
+          document.documentElement.lang = language;
+          const setText = (id, value) => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = value;
+          };
+          setText("main-menu-eyebrow", text.eyebrow);
+          setText("main-menu-subtitle", text.subtitle);
+          setText("main-menu-start-label", text.start);
+          setText("main-menu-start-hint", text.startHint);
+          setText("main-menu-settings-label", text.settings);
+          setText("main-menu-settings-hint", text.settingsHint);
+          setText("main-menu-settings-title", text.language);
+          document.getElementById("main-menu-language-zh")?.setAttribute("aria-pressed", String(language === "zh-CN"));
+          document.getElementById("main-menu-language-en")?.setAttribute("aria-pressed", String(language === "en"));
+
+          const startButton = document.getElementById("main-menu-start");
+          if (!startButton) return;
+          const requestEarlyStart = (event) => {
+            if (window.__backroomsMenuReady) return;
+            event.preventDefault();
+            if (window.__backroomsStartRequested) return;
+            window.__backroomsStartRequested = true;
+            startButton.setAttribute("aria-busy", "true");
+            setText("main-menu-start-label", text.loading);
+            setText("main-menu-start-hint", text.loadingHint);
+          };
+          startButton.addEventListener("pointerdown", requestEarlyStart);
+          startButton.addEventListener("click", requestEarlyStart);
+        })();
+      </script>
+
       <header class="hud hud--top" hidden>
         <div class="hud-top-left">
           <div class="signal">
