@@ -1,12 +1,9 @@
 import * as THREE from "three";
-import { CELL_SIZE, CEILING_Y } from "../constants.js";
-import { addInstancedBoxes, createStableLightState } from "../common/lighting.js";
+import { CELL_SIZE } from "../constants.js";
+import { createStableLightState } from "../common/lighting.js";
 import {
-  collectGridWallTransforms,
   createGridWalkability,
   createStandardPickupSet,
-  eastWestWallGeometry,
-  northSouthWallGeometry,
 } from "../common/grid-world.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createExitNetwork } from "../common/exit-network.js";
@@ -18,10 +15,11 @@ import {
   LEVEL_NINE_START_CELL,
   LEVEL_NINE_TARGET_CELL,
   isLevelNineOpenCell,
+  isLevelNineRoadCell,
   levelNineCellCenter,
   levelNineWorldToCell,
 } from "./layout.js";
-import { createLevelNineCeilingTexture, createLevelNineRoadTexture, createLevelNineWallTexture } from "./textures.js";
+import { createLevelNineGrassTexture, createLevelNineRoadTexture } from "./textures.js";
 import { addLevelNineDetails } from "./props.js";
 import { enableAoUv } from "../common/texture-utils.js";
 
@@ -38,31 +36,35 @@ export function createLevelNineScene({ initialState = null } = {}) {
   const spawn = { ...spawnCell, yaw: LEVEL_NINE_START_CELL.yaw };
   const coarse = window.matchMedia?.("(pointer: coarse), (max-width: 800px)").matches;
 
-  const floorMaterial = new THREE.MeshStandardMaterial({
+  const grassMaterial = new THREE.MeshStandardMaterial({
+    map: createLevelNineGrassTexture(), color: 0x496b51, emissive: 0x08120c, emissiveIntensity: 0.34, roughness: 0.95,
+  });
+  const roadMaterial = new THREE.MeshStandardMaterial({
     map: createLevelNineRoadTexture(), color: 0x74808d, emissive: 0x0b111a, emissiveIntensity: 0.42, roughness: 0.36, metalness: 0.08,
   });
-  const wallMaterial = new THREE.MeshStandardMaterial({
-    map: createLevelNineWallTexture(), color: 0xa8a7a1, emissive: 0x101722, emissiveIntensity: 0.16, roughness: 0.92,
-  });
-  const ceilingMaterial = new THREE.MeshStandardMaterial({
-    map: createLevelNineCeilingTexture(), color: 0x27313d, emissive: 0x060a10, emissiveIntensity: 0.22, roughness: 0.96,
-  });
-  const floor = new THREE.Mesh(enableAoUv(new THREE.PlaneGeometry(LEVEL_NINE_COLS * CELL_SIZE, LEVEL_NINE_ROWS * CELL_SIZE)), floorMaterial);
+  const floor = new THREE.Mesh(enableAoUv(new THREE.PlaneGeometry(LEVEL_NINE_COLS * CELL_SIZE, LEVEL_NINE_ROWS * CELL_SIZE)), grassMaterial);
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(LEVEL_NINE_COLS * CELL_SIZE, LEVEL_NINE_ROWS * CELL_SIZE), ceilingMaterial);
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.y = CEILING_Y;
-  scene.add(ceiling);
-
-  const walls = collectGridWallTransforms({
-    cols: LEVEL_NINE_COLS,
-    rows: LEVEL_NINE_ROWS,
-    isOpen: isLevelNineOpenCell,
-    cellCenter: levelNineCellCenter,
+  const roadGeometry = new THREE.PlaneGeometry(CELL_SIZE + 0.025, CELL_SIZE + 0.025);
+  const roadCells = [];
+  for (let row = 0; row < LEVEL_NINE_ROWS; row += 1) {
+    for (let col = 0; col < LEVEL_NINE_COLS; col += 1) {
+      if (!isLevelNineRoadCell(col, row)) continue;
+      const center = levelNineCellCenter(col, row);
+      roadCells.push(center);
+    }
+  }
+  const roads = new THREE.InstancedMesh(roadGeometry, roadMaterial, roadCells.length);
+  const roadTransform = new THREE.Object3D();
+  roadTransform.rotation.x = -Math.PI / 2;
+  roadCells.forEach((center, index) => {
+    roadTransform.position.set(center.x, 0.012, center.z);
+    roadTransform.updateMatrix();
+    roads.setMatrixAt(index, roadTransform.matrix);
   });
-  addInstancedBoxes(scene, northSouthWallGeometry, wallMaterial, walls.northSouth);
-  addInstancedBoxes(scene, eastWestWallGeometry, wallMaterial, walls.eastWest);
+  roads.instanceMatrix.needsUpdate = true;
+  roads.name = "level-nine-asphalt-roads";
+  scene.add(roads);
   scene.add(new THREE.HemisphereLight(0x5e7695, 0x020407, 0.74));
   const moonlight = new THREE.DirectionalLight(0x7795c4, 0.18);
   moonlight.position.set(-42, 32, -28);

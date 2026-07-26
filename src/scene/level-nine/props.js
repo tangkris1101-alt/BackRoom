@@ -1,6 +1,4 @@
 import * as THREE from "three";
-import { CEILING_Y } from "../constants.js";
-
 const HOUSE_CELLS = [
   { col: 7, row: 26, rotation: Math.PI },
   { col: 17, row: 26, rotation: Math.PI },
@@ -25,7 +23,7 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
   const windowMaterial = new THREE.MeshStandardMaterial({ color: 0xb9a766, emissive: 0xd19c3d, emissiveIntensity: 0.35, roughness: 0.42 });
   const porchMaterial = new THREE.MeshStandardMaterial({ color: 0x6a6257, roughness: 0.88 });
   const lampMetal = new THREE.MeshStandardMaterial({ color: 0x242b30, roughness: 0.8, metalness: 0.68 });
-  const lampGlass = new THREE.MeshStandardMaterial({ color: 0xffd68c, emissive: 0xffa83e, emissiveIntensity: 1.65, roughness: 0.26 });
+  const lampGlass = new THREE.MeshStandardMaterial({ color: 0xffe7ac, emissive: 0xffbd52, emissiveIntensity: 3.2, roughness: 0.2 });
   const roadReflector = new THREE.MeshBasicMaterial({ color: 0xc6b98c, transparent: true, opacity: 0.52 });
   const colliders = [];
 
@@ -35,24 +33,27 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
     group.name = `level-nine-house-${index + 1}`;
     group.position.set(center.x, 0, center.z);
     group.rotation.y = house.rotation;
-    const facade = new THREE.Mesh(new THREE.BoxGeometry(5.5, 2.7, 0.22), houseWall);
-    facade.position.set(0, 1.35, 0);
+    const facade = new THREE.Mesh(new THREE.BoxGeometry(5.5, 2.7, 4.6), houseWall);
+    facade.position.set(0, 1.35, 0.55);
     const roof = new THREE.Mesh(new THREE.ConeGeometry(3.25, 1.65, 4), roofMaterial);
-    roof.position.set(0, 3.02, 0.08);
+    roof.position.set(0, 3.02, 0.55);
     roof.rotation.y = Math.PI / 4;
     const porch = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.16, 1.3), porchMaterial);
-    porch.position.set(0, 0.08, -0.72);
+    porch.position.set(0, 0.08, -2.28);
     group.add(facade, roof, porch);
     for (const x of [-1.72, 1.72]) {
       const window = new THREE.Mesh(new THREE.PlaneGeometry(0.82, 0.7), windowMaterial);
-      window.position.set(x, 1.52, -0.125);
+      window.position.set(x, 1.52, -1.76);
       group.add(window);
     }
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.82, 1.65, 0.08), roofMaterial);
-    door.position.set(0, 0.84, -0.13);
+    door.position.set(0, 0.84, -1.78);
     group.add(door);
     scene.add(group);
-    colliders.push({ minX: center.x - 2.75, maxX: center.x + 2.75, minZ: center.z - 0.58, maxZ: center.z + 0.58 });
+    const turnedSideways = Math.abs(Math.sin(house.rotation)) > 0.7;
+    const halfX = turnedSideways ? 2.35 : 2.8;
+    const halfZ = turnedSideways ? 2.8 : 2.65;
+    colliders.push({ minX: center.x - halfX, maxX: center.x + halfX, minZ: center.z - halfZ, maxZ: center.z + halfZ });
   });
 
   const lamps = [];
@@ -65,10 +66,11 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
     pole.position.y = 1.775;
     const arm = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.06, 0.06), lampMetal);
     arm.position.set(0.3, 3.38, 0);
-    const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), lampGlass);
+    const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), lampGlass);
     bulb.position.set(0.63, 3.19, 0);
     group.add(pole, arm, bulb);
-    const light = new THREE.PointLight(0xffc87a, 0, 15, 2.0);
+    // A broad, gently decaying pool reaches the asphalt beneath every visible fixture.
+    const light = new THREE.PointLight(0xffd18b, 0, 38, 1.15);
     light.position.set(0.62, 3.05, 0);
     group.add(light);
     scene.add(group);
@@ -82,20 +84,37 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
     scene.add(reflector);
   }
 
-  const distantGlow = new THREE.PointLight(0x7896be, 0.42, 22, 2.2);
-  distantGlow.position.set(0, CEILING_Y - 0.48, -20);
-  scene.add(distantGlow);
+  // A tree line and scattered hedges hide the gameplay rim in mist instead of
+  // turning the suburbs into a boxed room.
+  const foliage = new THREE.MeshStandardMaterial({ color: 0x172d20, emissive: 0x061109, emissiveIntensity: 0.38, roughness: 1 });
+  const trunk = new THREE.MeshStandardMaterial({ color: 0x1e1b16, roughness: 1 });
+  const treeGeometry = new THREE.ConeGeometry(1.4, 4.4, 7);
+  const trunkGeometry = new THREE.CylinderGeometry(0.11, 0.18, 1.7, 6);
+  const edgeCells = [];
+  for (let col = 1; col < 51; col += 3) edgeCells.push({ col, row: 1 }, { col, row: 38 });
+  for (let row = 4; row < 37; row += 4) edgeCells.push({ col: 1, row }, { col: 50, row });
+  edgeCells.forEach((cell, index) => {
+    const center = cellCenter(cell.col, cell.row);
+    const group = new THREE.Group();
+    group.name = `level-nine-tree-line-${index + 1}`;
+    group.position.set(center.x + ((index % 3) - 1) * 0.42, 0, center.z + ((index % 5) - 2) * 0.28);
+    const treeTrunk = new THREE.Mesh(trunkGeometry, trunk);
+    treeTrunk.position.y = 0.85;
+    const crown = new THREE.Mesh(treeGeometry, foliage);
+    crown.position.y = 3.1;
+    group.add(treeTrunk, crown);
+    scene.add(group);
+  });
 
   return {
     colliders,
     update(elapsed, fogSurge) {
       lamps.forEach(({ light, bulb, phase }) => {
         const flicker = Math.sin(elapsed * 2.3 + phase) > 0.94 ? 0.18 : 1;
-        const strength = (fogSurge ? 0.38 : 0.82) * flicker;
-        light.intensity = strength * 1.6;
-        bulb.material.emissiveIntensity = 1.2 + strength * 1.45;
+        const strength = (fogSurge ? 0.7 : 1.14) * flicker;
+        light.intensity = strength * 10.5;
+        bulb.material.emissiveIntensity = 2.1 + strength * 4.2;
       });
-      distantGlow.intensity = fogSurge ? 0.16 : 0.42;
     },
   };
 }

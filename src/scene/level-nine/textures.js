@@ -21,5 +21,4 @@ function suburbTexture(base, repeatX, repeatY, seed, lineColor) {
 }
 
 export const createLevelNineRoadTexture = () => suburbTexture("#1f252d", 18, 14, 901, "#5e6670");
-export const createLevelNineWallTexture = () => suburbTexture("#363b43", 15, 7, 902, "#9b9a8a");
-export const createLevelNineCeilingTexture = () => suburbTexture("#10151d", 18, 14, 903, "#3d4652");
+export const createLevelNineGrassTexture = () => suburbTexture("#1c3026", 18, 14, 902, "#40543d");

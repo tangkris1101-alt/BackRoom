@@ -8,16 +8,21 @@ export const LEVEL_NINE_ORIGIN_X = -(LEVEL_NINE_COLS * CELL_SIZE) / 2;
 export const LEVEL_NINE_ORIGIN_Z = -(LEVEL_NINE_ROWS * CELL_SIZE) / 2;
 
 function buildLayout() {
-  const grid = Array.from({ length: LEVEL_NINE_ROWS }, () => Array(LEVEL_NINE_COLS).fill("#"));
-  const carveRoom = (col, row, width, height) => {
+  // This is an outdoor space: every interior cell is grass or asphalt, rather
+  // than an enclosed maze. The one-cell rim remains a soft play boundary only.
+  const grid = Array.from({ length: LEVEL_NINE_ROWS }, (_, row) => Array.from(
+    { length: LEVEL_NINE_COLS }, (_, col) => (row === 0 || row === LEVEL_NINE_ROWS - 1 || col === 0 || col === LEVEL_NINE_COLS - 1 ? "#" : "."),
+  ));
+  const roads = Array.from({ length: LEVEL_NINE_ROWS }, () => Array(LEVEL_NINE_COLS).fill(false));
+  const carveRoad = (col, row, width, height) => {
     for (let z = row; z < row + height; z += 1) {
       for (let x = col; x < col + width; x += 1) {
-        if (z > 0 && z < LEVEL_NINE_ROWS - 1 && x > 0 && x < LEVEL_NINE_COLS - 1) grid[z][x] = ".";
+        if (z > 0 && z < LEVEL_NINE_ROWS - 1 && x > 0 && x < LEVEL_NINE_COLS - 1) roads[z][x] = true;
       }
     }
   };
-  const carveRoadH = (row, from, to, width = 3) => carveRoom(Math.min(from, to), row, Math.abs(to - from) + 1, width);
-  const carveRoadV = (col, from, to, width = 3) => carveRoom(col, Math.min(from, to), width, Math.abs(to - from) + 1);
+  const carveRoadH = (row, from, to, width = 3) => carveRoad(Math.min(from, to), row, Math.abs(to - from) + 1, width);
+  const carveRoadV = (col, from, to, width = 3) => carveRoad(col, Math.min(from, to), width, Math.abs(to - from) + 1);
 
   // The primary arrow-sign route runs from the southern street to the north-east exit.
   carveRoadH(32, 2, 47);
@@ -26,34 +31,20 @@ function buildLayout() {
   carveRoadV(24, 19, 34);
   carveRoadH(7, 24, 47);
 
-  // House lots branch off the streets; only some carry a porch opening.
-  carveRoom(4, 24, 8, 6);
-  carveRoadV(8, 28, 33, 2);
-  carveRoom(14, 24, 7, 6);
-  carveRoadV(17, 28, 33, 2);
-  carveRoom(29, 24, 8, 6);
-  carveRoadV(33, 28, 33, 2);
-  carveRoom(6, 11, 8, 6);
-  carveRoadV(10, 16, 20, 2);
-  carveRoom(16, 11, 7, 6);
-  carveRoadV(19, 16, 20, 2);
-  carveRoom(29, 11, 8, 6);
-  carveRoadV(33, 16, 20, 2);
-  carveRoom(38, 11, 7, 6);
-  carveRoadV(41, 16, 20, 2);
-  carveRoom(29, 2, 8, 4);
-  carveRoadV(33, 5, 8, 2);
-  carveRoom(38, 2, 8, 4);
-  carveRoadV(41, 5, 8, 2);
-
   grid[LEVEL_NINE_TARGET_CELL.row][LEVEL_NINE_TARGET_CELL.col] = "E";
-  return grid.map((row) => row.join(""));
+  return { map: grid.map((row) => row.join("")), roads };
 }
 
-export const LEVEL_NINE_MAP = buildLayout();
+const layout = buildLayout();
+export const LEVEL_NINE_MAP = layout.map;
+export const LEVEL_NINE_ROADS = layout.roads;
 
 export function isLevelNineOpenCell(col, row) {
   return row >= 0 && row < LEVEL_NINE_ROWS && col >= 0 && col < LEVEL_NINE_COLS && LEVEL_NINE_MAP[row][col] !== "#";
+}
+
+export function isLevelNineRoadCell(col, row) {
+  return row >= 0 && row < LEVEL_NINE_ROWS && col >= 0 && col < LEVEL_NINE_COLS && LEVEL_NINE_ROADS[row][col];
 }
 
 export function levelNineCellCenter(col, row) {

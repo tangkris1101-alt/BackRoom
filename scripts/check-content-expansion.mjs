@@ -72,6 +72,9 @@ assert.deepEqual(
 assert.equal(canReach({ cols: 52, rows: 40, start: levelEight.LEVEL_EIGHT_START_CELL, target: levelEight.LEVEL_EIGHT_TARGET_CELL, isOpen: levelEight.isLevelEightOpenCell }), true);
 assert.deepEqual([levelNine.LEVEL_NINE_COLS, levelNine.LEVEL_NINE_ROWS], [52, 40]);
 assert.equal(canReach({ cols: 52, rows: 40, start: levelNine.LEVEL_NINE_START_CELL, target: levelNine.LEVEL_NINE_TARGET_CELL, isOpen: levelNine.isLevelNineOpenCell }), true);
+assert.equal(levelNine.isLevelNineOpenCell(2, 2), true);
+assert.equal(levelNine.isLevelNineOpenCell(0, 0), false);
+assert.equal(levelNine.isLevelNineRoadCell(levelNine.LEVEL_NINE_START_CELL.col, levelNine.LEVEL_NINE_START_CELL.row), true);
 assert.equal(canReach({ cols: 48, rows: 36, start: levelThirtySeven.LEVEL_THIRTY_SEVEN_START_CELL, target: levelThirtySeven.LEVEL_THIRTY_SEVEN_TARGET_CELL, isOpen: levelThirtySeven.isLevelThirtySevenOpenCell }), true);
 assert.equal(loadFixture(1, 8).player.level, -1);
 assert.equal(loadFixture(2, 8).player.level, 8);
@@ -181,5 +184,10 @@ const levelNineSource = await readFile(new URL("../src/scene/level-nine/index.js
 assert.match(levelEightSource, /targetLevel:\s*9/);
 assert.match(sceneIndexSource, /level-nine\/index\.js/);
 assert.match(levelNineSource, /targetLevel:\s*null/);
+assert.match(levelNineSource, /level-nine-asphalt-roads/);
+assert.doesNotMatch(levelNineSource, /collectGridWallTransforms|CEILING_Y|createLevelNineCeilingTexture/);
+const levelNinePropsSource = await readFile(new URL("../src/scene/level-nine/props.js", import.meta.url), "utf8");
+assert.match(levelNinePropsSource, /new THREE\.PointLight\(0xffd18b, 0, 38, 1\.15\)/);
+assert.match(levelNinePropsSource, /light\.intensity = strength \* 10\.5/);
 
 console.log("content expansion checks passed");

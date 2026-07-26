@@ -6,9 +6,9 @@ const THING_CONTACT_RADIUS = 1.38;
 const THING_RECOMPUTE_INTERVAL = 0.68;
 const THING_STUCK_THRESHOLD = 0.92;
 const THING_DIRECT_CHASE_DISTANCE = 7.8;
-// The deep-water Thing must be able to overtake a walking player, while a
-// sprint still remains a reliable escape option.
-const THING_SPEED = 1.95;
+// The waterborne pulse averages about 3.2 world units per second: it can edge
+// past walking pace without becoming a guaranteed catch.
+const THING_SPEED = 1.78;
 
 function createLevelSevenThingModel() {
   const group = new THREE.Group();
