@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as THREE from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 globalThis.ProgressEvent ??= class ProgressEvent {
   constructor(type, init = {}) {
@@ -158,8 +159,14 @@ function bakeLeftArmGeometry(model) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  geometry.computeVertexNormals();
-  return geometry;
+  // The source needs to be non-indexed while selecting triangles, but
+  // calculating normals in that state assigns one normal per triangle and
+  // makes the hands visibly faceted. Restore shared vertices first, compute
+  // smooth normals, then expand again because the compact runtime format does
+  // not store an index buffer.
+  const smoothGeometry = mergeVertices(geometry, 1e-5);
+  smoothGeometry.computeVertexNormals();
+  return smoothGeometry.toNonIndexed();
 }
 
 function createBinaryGeometry(geometry) {

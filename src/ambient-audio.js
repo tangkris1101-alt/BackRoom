@@ -1,4 +1,5 @@
 import breathingTiredUrl from "./assets/audio/breathing-tired.ogg?url";
+import levelFiveJazzUrl from "./assets/audio/level-five-jazz-improv.mp3?url";
 
 export function createAmbientHum() {
   let context = null;
@@ -11,6 +12,8 @@ export function createAmbientHum() {
   let suspendedByPause = false;
   let breathAudio = null;
   let breathGain = null;
+  let hotelJazzAudio = null;
+  let hotelJazzGain = null;
 
   function start() {
     if (started) return;
@@ -88,6 +91,22 @@ export function createAmbientHum() {
     breathFilter.connect(breathGain);
     breathGain.connect(master);
     breathAudio.play().catch(() => {});
+
+    hotelJazzAudio = new Audio(levelFiveJazzUrl);
+    hotelJazzAudio.loop = true;
+    hotelJazzAudio.preload = "auto";
+    hotelJazzAudio.crossOrigin = "anonymous";
+    hotelJazzAudio.volume = 1;
+    const hotelJazzSource = context.createMediaElementSource(hotelJazzAudio);
+    const hotelJazzFilter = context.createBiquadFilter();
+    hotelJazzFilter.type = "lowpass";
+    hotelJazzFilter.frequency.value = 1680;
+    hotelJazzGain = context.createGain();
+    hotelJazzGain.gain.value = 0;
+    hotelJazzSource.connect(hotelJazzFilter);
+    hotelJazzFilter.connect(hotelJazzGain);
+    hotelJazzGain.connect(master);
+    hotelJazzAudio.play().catch(() => {});
   }
 
   // Chrome logs an autoplay warning for every resume() attempt made before a
@@ -166,6 +185,15 @@ export function createAmbientHum() {
       playFootstep({ sprinting });
       lastStepAt = now;
     }
+  }
+
+  function updateLevelAudio(level) {
+    if (!context || !hotelJazzGain || !hotelJazzAudio) return;
+    const now = context.currentTime;
+    const inHotel = Number(level) === 5;
+    hotelJazzGain.gain.setTargetAtTime(inHotel ? 0.66 : 0, now, inHotel ? 1.5 : 0.65);
+    hotelJazzAudio.playbackRate = inHotel ? 0.92 : 1;
+    if (inHotel) hotelJazzAudio.play().catch(() => {});
   }
 
   function suspend() {
@@ -331,7 +359,7 @@ export function createAmbientHum() {
     for (const entity of entities ?? []) {
       if (!entity || !entity.active || entity.contact) continue;
       if (!Number.isFinite(entity.distance)) continue;
-      if (entity.id === "bacteria" || entity.id === "super-bacteria") {
+      if (entity.id === "bacteria") {
         if (!nearestBacteria || entity.distance < nearestBacteria.distance) {
           nearestBacteria = entity;
         }
@@ -373,9 +401,7 @@ export function createAmbientHum() {
     if (ratio < 0) ratio = 0;
     if (ratio > 1) ratio = 1;
 
-    const isSuper = nearest.id === "super-bacteria";
-    const intensity = isSuper ? config.superIntensity : 1;
-    const target = ratio * ratio * voice.baseLevel * intensity;
+    const target = ratio * ratio * voice.baseLevel;
 
     voice.baseGain.gain.setTargetAtTime(target, now, 0.08);
   }
@@ -389,6 +415,7 @@ export function createAmbientHum() {
   return {
     start,
     update,
+    updateLevelAudio,
     suspend,
     resume,
     isSuspended,
@@ -401,16 +428,13 @@ const ENTITY_AUDIO_CONFIG = {
   bacteria: {
     nearDistance: 1.8,
     maxAudible: 30,
-    superIntensity: 1.45,
   },
   hound: {
     nearDistance: 2.6,
     maxAudible: 36,
-    superIntensity: 1,
   },
   smiler: {
     nearDistance: 2.2,
     maxAudible: 28,
-    superIntensity: 0.72,
   },
 };

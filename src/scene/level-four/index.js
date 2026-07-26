@@ -253,7 +253,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
         spawnPosition: spawnCell,
       })[0] ?? targetPosition,
     isWalkable,
-    speed: 0.92,
+    speed: 1.83,
     initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
     cols: LEVEL_ONE_COLS,
     rows: LEVEL_ONE_ROWS,

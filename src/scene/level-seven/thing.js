@@ -6,6 +6,9 @@ const THING_CONTACT_RADIUS = 1.38;
 const THING_RECOMPUTE_INTERVAL = 0.68;
 const THING_STUCK_THRESHOLD = 0.92;
 const THING_DIRECT_CHASE_DISTANCE = 7.8;
+// The deep-water Thing must be able to overtake a walking player, while a
+// sprint still remains a reliable escape option.
+const THING_SPEED = 1.95;
 
 function createLevelSevenThingModel() {
   const group = new THREE.Group();
@@ -69,7 +72,7 @@ export function createLevelSevenThingEntity(
   {
     spawnPosition,
     isWalkable,
-    speed = 0.92,
+    speed = THING_SPEED,
     initialState = null,
     cols,
     rows,

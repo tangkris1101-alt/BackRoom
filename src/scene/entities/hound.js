@@ -98,7 +98,7 @@ export function createHoundEntity(
   {
     spawnPosition,
     isWalkable,
-    speed = 1.45,
+    speed = 1.83,
     id = "hound",
     type = "hound",
     dormant = false,

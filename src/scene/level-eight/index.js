@@ -119,7 +119,7 @@ export function createLevelEightScene({ initialState = null } = {}) {
   const isWalkable = createGridWalkability({ worldToCell: levelEightWorldToCell, isOpen: isLevelEightOpenCell, colliders });
   const interactionInitial = initialState?.interactions ?? {};
   const routes = [
-    { id: "level-eight-road-end", targetLevel: null, targetLabel: "9TH ROAD", label: "9TH ROAD", kind: "door", position: targetPosition, rotation: 0 },
+    { id: "level-eight-road-end", targetLevel: 9, targetLabel: "LEVEL 9", label: "9TH ROAD", kind: "door", position: targetPosition, rotation: 0 },
     { id: "level-eight-vent-level-two", targetLevel: 2, targetLabel: "LEVEL 2", label: "VENT", kind: "door", position: levelEightCellCenter(7, 22), rotation: Math.PI / 2 },
     { id: "level-eight-pool-level-seven", targetLevel: 7, targetLabel: "LEVEL 7", label: "DISTILLED POOL", kind: "stair", position: levelEightCellCenter(41, 27), rotation: Math.PI },
   ];

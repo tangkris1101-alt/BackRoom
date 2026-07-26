@@ -20,6 +20,8 @@ import {
   LEVEL_FIVE_START_CELL,
   LEVEL_FIVE_TARGET_CELL,
   LEVEL_FIVE_DARK_ZONES,
+  LEVEL_FIVE_BEVERLY_ROOM,
+  LEVEL_FIVE_BOILER_ROOM,
   isLevelFiveOpenCell,
   levelFiveCellCenter,
   levelFiveWorldToCell,
@@ -28,6 +30,7 @@ import {
   createLevelFiveCarpetTexture,
   createLevelFiveWallpaperTexture,
   createLevelFiveCeilingTexture,
+  createLevelFivePbrMaps,
 } from "./textures.js";
 import {
   collectLevelFiveTransforms,
@@ -43,7 +46,7 @@ import {
 } from "../items/index.js";
 import {
   createHoundEntity,
-  chooseBacteriaSpawn,
+  pickBacteriaSpawnPositions,
   getPickupTarget,
   tryPickupItems,
   getFocusedEntity,
@@ -108,6 +111,38 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     emissiveIntensity: 0.22,
     roughness: 0.88,
   });
+  const woodFloorMaterial = new THREE.MeshStandardMaterial({
+    ...createLevelFivePbrMaps("wood", 7, 2.2),
+    color: 0x9d6b55,
+    roughness: 0.48,
+    metalness: 0.02,
+  });
+  const marbleFloorMaterial = new THREE.MeshStandardMaterial({
+    ...createLevelFivePbrMaps("marble", 6, 2.4),
+    color: 0xd6c7ad,
+    roughness: 0.34,
+    metalness: 0,
+  });
+  const boilerMaterial = new THREE.MeshStandardMaterial({
+    ...createLevelFivePbrMaps("boiler", 8, 3.8),
+    color: 0x8e7061,
+    emissive: 0x160905,
+    emissiveIntensity: 0.16,
+    roughness: 0.76,
+    metalness: 0.68,
+  });
+
+  const addFloorPatch = ({ col, row, width, height }, material, y = 0.012) => {
+    const first = levelFiveCellCenter(col, row);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width * CELL_SIZE, height * CELL_SIZE), material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(
+      first.x + (width - 1) * CELL_SIZE / 2,
+      y,
+      first.z + (height - 1) * CELL_SIZE / 2,
+    );
+    scene.add(mesh);
+  };
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(LEVEL_FIVE_COLS * CELL_SIZE, LEVEL_FIVE_ROWS * CELL_SIZE),
@@ -115,6 +150,9 @@ export function createLevelFiveScene({ initialState = null } = {}) {
   );
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
+  addFloorPatch({ col: 2, row: 13, width: 13, height: 3 }, woodFloorMaterial);
+  addFloorPatch({ col: 28, row: 13, width: 14, height: 3 }, marbleFloorMaterial);
+  addFloorPatch(LEVEL_FIVE_BOILER_ROOM, boilerMaterial, 0.018);
 
   const ceiling = new THREE.Mesh(
     new THREE.PlaneGeometry(LEVEL_FIVE_COLS * CELL_SIZE, LEVEL_FIVE_ROWS * CELL_SIZE),
@@ -123,8 +161,20 @@ export function createLevelFiveScene({ initialState = null } = {}) {
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.set(0, CEILING_Y, 0);
   scene.add(ceiling);
+  const boilerCeiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(LEVEL_FIVE_BOILER_ROOM.width * CELL_SIZE, LEVEL_FIVE_BOILER_ROOM.height * CELL_SIZE),
+    boilerMaterial,
+  );
+  boilerCeiling.rotation.x = Math.PI / 2;
+  const boilerCenter = levelFiveCellCenter(LEVEL_FIVE_BOILER_ROOM.col, LEVEL_FIVE_BOILER_ROOM.row);
+  boilerCeiling.position.set(
+    boilerCenter.x + (LEVEL_FIVE_BOILER_ROOM.width - 1) * CELL_SIZE / 2,
+    CEILING_Y - 0.016,
+    boilerCenter.z + (LEVEL_FIVE_BOILER_ROOM.height - 1) * CELL_SIZE / 2,
+  );
+  scene.add(boilerCeiling);
 
-  const { northSouth, eastWest, fixturePositions } = collectLevelFiveTransforms();
+  const { northSouth, eastWest, boilerNorthSouth, boilerEastWest, fixturePositions } = collectLevelFiveTransforms();
   const wallMaterials = [
     wallMaterial,
     wallMaterial,
@@ -144,6 +194,18 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
     wallMaterials,
     eastWest,
+  );
+  addInstancedBoxes(
+    scene,
+    new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
+    boilerMaterial,
+    boilerNorthSouth,
+  );
+  addInstancedBoxes(
+    scene,
+    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
+    boilerMaterial,
+    boilerEastWest,
   );
 
   scene.add(new THREE.HemisphereLight(0xffe0b2, 0x3a160c, 1.9));
@@ -235,26 +297,30 @@ export function createLevelFiveScene({ initialState = null } = {}) {
   ];
   const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
 
-  const houndSpawn =
-    chooseBacteriaSpawn({
-      cols: LEVEL_FIVE_COLS,
-      rows: LEVEL_FIVE_ROWS,
-      isCellOpen: isLevelFiveOpenCell,
-      getCellCenter: levelFiveCellCenter,
-      targetPosition,
-      spawnPosition: spawnCell,
-    })[0] ?? targetPosition;
-  const hound = createHoundEntity(scene, {
-    spawnPosition: houndSpawn,
-    isWalkable,
-    speed: 1.28,
-    initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
+  const LEVEL_FIVE_HOUND_COUNT = 3;
+  const savedHoundStates = entityInitial.filter((entity) => entity.type === "hound");
+  const hounds = pickBacteriaSpawnPositions({
     cols: LEVEL_FIVE_COLS,
     rows: LEVEL_FIVE_ROWS,
     isCellOpen: isLevelFiveOpenCell,
-    worldToCell: levelFiveWorldToCell,
-    cellCenter: levelFiveCellCenter,
-  });
+    getCellCenter: levelFiveCellCenter,
+    targetPosition,
+    spawnPosition: spawnCell,
+    count: LEVEL_FIVE_HOUND_COUNT,
+  }).map((houndSpawn, index) =>
+    createHoundEntity(scene, {
+      spawnPosition: houndSpawn,
+      isWalkable,
+      speed: 1.83,
+      id: `level-five-hound-${index + 1}`,
+      initialState: savedHoundStates[index] ?? null,
+      cols: LEVEL_FIVE_COLS,
+      rows: LEVEL_FIVE_ROWS,
+      isCellOpen: isLevelFiveOpenCell,
+      worldToCell: levelFiveWorldToCell,
+      cellCenter: levelFiveCellCenter,
+    }),
+  );
 
   let objectiveReached = Boolean(objectiveInitial.reached);
 
@@ -276,7 +342,7 @@ export function createLevelFiveScene({ initialState = null } = {}) {
       return isLevelFiveOpenCell(cell.col, cell.row);
     });
     if (!isInOpenCells) return false;
-    return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
+    return !propColliders.some((collider) => collider.active !== false && circleIntersectsAabb(x, z, radius, collider));
   }
 
   function update(delta, elapsed, playerPosition, effects = {}) {
@@ -303,8 +369,7 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     const detectorState = detector.update(delta, elapsed, playerPosition);
     const compassState = compass.update(delta, elapsed, playerPosition);
     const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
-    const houndState = hound.update(delta, elapsed, playerPosition, effects);
-    const entities = [houndState];
+    const entities = hounds.map((hound) => hound.update(delta, elapsed, playerPosition, effects));
     const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
 
     return {
@@ -356,8 +421,8 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     targetPosition,
     isWalkable,
     decorativeItemSpawns: [
-      { id: "hotel-token", position: { ...levelFiveCellCenter(20, 12), y: 0.1 }, rotation: 0.45, tiltZ: 0.08 },
-      { id: "crumpled-note", position: { ...levelFiveCellCenter(28, 14), y: 0.08 }, rotation: -0.3, tiltX: 0.05 },
+      { id: "hotel-token", position: levelFiveCellCenter(20, 12), grounded: true, rotation: 0.45 },
+      { id: "crumpled-note", position: levelFiveCellCenter(28, 14), grounded: true, rotation: -0.3, tiltX: 0.05 },
     ],
     update,
     getPickupTarget: (playerPosition) =>
@@ -380,7 +445,7 @@ export function createLevelFiveScene({ initialState = null } = {}) {
           ...Object.fromEntries(interactions.map((spot) => [spot.id, spot.getState()])),
         },
         objectives: { reached: objectiveReached },
-        entities: [hound.getState()],
+        entities: hounds.map((hound) => hound.getState()),
       };
     },
   };

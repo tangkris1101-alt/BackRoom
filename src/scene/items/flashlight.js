@@ -86,6 +86,9 @@ export function createFlashlightModel() {
   group.add(button);
 
   const baseShadow = new THREE.Mesh(new THREE.CircleGeometry(0.54, 28), shadowMaterial);
+  // World-only decoration. The first-person holder removes it so a ground
+  // shadow never becomes a dark disc floating in front of the camera.
+  baseShadow.name = "flashlight-ground-shadow";
   baseShadow.rotation.x = -Math.PI / 2;
   baseShadow.scale.z = 0.42;
   baseShadow.position.y = 0.011;

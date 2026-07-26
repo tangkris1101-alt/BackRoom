@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CELL_SIZE, CEILING_Y, WALL_HEIGHT } from "../constants.js";
+import { CELL_SIZE, CEILING_Y, WALL_HEIGHT, WALL_THICKNESS } from "../constants.js";
 import { createFixturePointLight } from "../common/lighting.js";
 import { createWideSignTexture } from "../common/textures.js";
 import { createInteractionSpot } from "../entities/interactions.js";
@@ -16,13 +16,34 @@ import {
   levelFiveCellCenter,
   levelFiveCellType,
   countLevelFiveOpenNeighbors,
-  getLevelFiveTargetMount,
   CELL_BALLROOM,
   CELL_BOILER,
   CELL_STAFF,
 } from "./layout.js";
 
 const S = CELL_SIZE;
+
+const WALL_MOUNT_OFFSETS = Object.freeze({
+  north: { col: 0, row: -1, x: 0, z: -1, rotation: 0 },
+  south: { col: 0, row: 1, x: 0, z: 1, rotation: Math.PI },
+  west: { col: -1, row: 0, x: -1, z: 0, rotation: Math.PI / 2 },
+  east: { col: 1, row: 0, x: 1, z: 0, rotation: -Math.PI / 2 },
+});
+
+function getLevelFiveWallMount({ col, row, side }) {
+  const offset = WALL_MOUNT_OFFSETS[side];
+  if (!offset) throw new Error(`Unknown Level 5 wall side: ${side}`);
+  if (isLevelFiveOpenCell(col + offset.col, row + offset.row)) {
+    throw new Error(`Level 5 ${side} mount at ${col},${row} is not backed by a wall`);
+  }
+  const center = levelFiveCellCenter(col, row);
+  const inset = S / 2 - WALL_THICKNESS * 0.72;
+  return {
+    x: center.x + offset.x * inset,
+    z: center.z + offset.z * inset,
+    rotation: offset.rotation,
+  };
+}
 
 function isInAnyZone(col, row, zones) {
   return zones.some(
@@ -73,6 +94,8 @@ function createPortraitTexture(seed = 1) {
 export function collectLevelFiveTransforms() {
   const northSouth = [];
   const eastWest = [];
+  const boilerNorthSouth = [];
+  const boilerEastWest = [];
   const fixtureCandidates = [];
 
   for (let row = 0; row < LEVEL_FIVE_ROWS; row += 1) {
@@ -80,18 +103,21 @@ export function collectLevelFiveTransforms() {
       if (!isLevelFiveOpenCell(col, row)) continue;
       const center = levelFiveCellCenter(col, row);
       const type = levelFiveCellType(col, row);
+      const isBoilerCell = type === CELL_BOILER || type === CELL_STAFF;
+      const northSouthWalls = isBoilerCell ? boilerNorthSouth : northSouth;
+      const eastWestWalls = isBoilerCell ? boilerEastWest : eastWest;
 
       if (!isLevelFiveOpenCell(col, row - 1)) {
-        northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - S / 2));
+        northSouthWalls.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - S / 2));
       }
       if (!isLevelFiveOpenCell(col, row + 1)) {
-        northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + S / 2));
+        northSouthWalls.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + S / 2));
       }
       if (!isLevelFiveOpenCell(col - 1, row)) {
-        eastWest.push(new THREE.Vector3(center.x - S / 2, WALL_HEIGHT / 2, center.z));
+        eastWestWalls.push(new THREE.Vector3(center.x - S / 2, WALL_HEIGHT / 2, center.z));
       }
       if (!isLevelFiveOpenCell(col + 1, row)) {
-        eastWest.push(new THREE.Vector3(center.x + S / 2, WALL_HEIGHT / 2, center.z));
+        eastWestWalls.push(new THREE.Vector3(center.x + S / 2, WALL_HEIGHT / 2, center.z));
       }
 
       const isDark = isInAnyZone(col, row, LEVEL_FIVE_DARK_ZONES);
@@ -130,7 +156,7 @@ export function collectLevelFiveTransforms() {
       if (!tooClose) fixturePositions.push(candidate);
     });
 
-  return { northSouth, eastWest, fixturePositions };
+  return { northSouth, eastWest, boilerNorthSouth, boilerEastWest, fixturePositions };
 }
 
 export function createLevelFiveLights(scene, fixturePositions) {
@@ -192,7 +218,7 @@ export function createLevelFiveLights(scene, fixturePositions) {
 }
 
 export function addLevelFiveExitDoor(scene, position) {
-  const mount = getLevelFiveTargetMount(position);
+  const mount = getLevelFiveWallMount({ col: LEVEL_FIVE_TARGET_CELL.col, row: LEVEL_FIVE_TARGET_CELL.row, side: "south" });
   const doorMaterial = new THREE.MeshStandardMaterial({
     color: 0x2b2019,
     emissive: 0x120704,
@@ -334,44 +360,103 @@ export function addLevelFiveHotelDetails(scene, interactionInitial = {}) {
     }),
   );
 
-  [
-    { col: 4, row: 13, text: "118" },
-    { col: 13, row: 13, text: "009" },
-    { col: 24, row: 13, text: "312" },
-    { col: 34, row: 13, text: "041" },
-    { col: 36, row: 17, text: "STAFF ONLY" },
-  ].forEach((spot) => {
-    const center = levelFiveCellCenter(spot.col, spot.row);
-    const mount = getLevelFiveTargetMount(center);
-    const door = new THREE.Mesh(new THREE.PlaneGeometry(1.38, 2.28), new THREE.MeshStandardMaterial({
+  function addHotelDoor(spot) {
+    const mount = getLevelFiveWallMount(spot);
+    const width = spot.text === "STAFF ONLY" ? 1.56 : 1.38;
+    const height = 2.28;
+    const depth = 0.1;
+    const frameMaterial = new THREE.MeshStandardMaterial({
+      color: 0x160b08,
+      emissive: 0x050201,
+      emissiveIntensity: 0.12,
+      roughness: 0.67,
+    });
+    const doorMaterial = new THREE.MeshStandardMaterial({
       color: spot.text === "STAFF ONLY" ? 0x201714 : 0x362018,
       emissive: 0x0c0402,
       emissiveIntensity: 0.1,
       roughness: 0.74,
-      side: THREE.DoubleSide,
-    }));
-    door.position.set(mount.x, 1.18, mount.z);
-    door.rotation.y = mount.rotation;
-    scene.add(door);
+    });
+    const assembly = new THREE.Group();
+    assembly.position.set(mount.x, 0, mount.z);
+    assembly.rotation.y = mount.rotation;
+    scene.add(assembly);
 
-    const placard = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.24), new THREE.MeshStandardMaterial({
+    const frameTop = new THREE.Mesh(new THREE.BoxGeometry(width + 0.28, 0.13, 0.18), frameMaterial);
+    frameTop.position.y = height + 0.08;
+    const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.14, height + 0.16, 0.18), frameMaterial);
+    frameLeft.position.x = -(width / 2 + 0.07);
+    frameLeft.position.y = height / 2;
+    const frameRight = frameLeft.clone();
+    frameRight.position.x = width / 2 + 0.07;
+    assembly.add(frameTop, frameLeft, frameRight);
+
+    const leaf = new THREE.Group();
+    leaf.position.x = -width / 2;
+    assembly.add(leaf);
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), doorMaterial);
+    panel.position.set(width / 2, height / 2, 0);
+    leaf.add(panel);
+
+    const placard = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(0.78, width - 0.28), 0.24), new THREE.MeshStandardMaterial({
       map: createWideSignTexture(spot.text, "#806026", "#180b04"),
       color: 0xffffff,
       roughness: 0.5,
       side: THREE.DoubleSide,
     }));
-    placard.position.set(mount.x, 1.82, mount.z);
-    placard.rotation.y = mount.rotation;
-    scene.add(placard);
-  });
+    placard.position.set(width / 2, 1.82, -depth / 2 - 0.006);
+    leaf.add(placard);
+    const handle = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), brassMaterial);
+    handle.position.set(width - 0.2, 1.12, -depth / 2 - 0.065);
+    leaf.add(handle);
+
+    if (!spot.interactive) return;
+    const horizontal = Math.abs(Math.sin(mount.rotation)) > 0.5;
+    const collider = horizontal
+      ? { minX: mount.x - 0.14, maxX: mount.x + 0.14, minZ: mount.z - width / 2, maxZ: mount.z + width / 2, active: true }
+      : { minX: mount.x - width / 2, maxX: mount.x + width / 2, minZ: mount.z - 0.14, maxZ: mount.z + 0.14, active: true };
+    colliders.push(collider);
+    let opened = Boolean(interactionInitial[spot.id]?.opened);
+    const setOpened = (nextOpened) => {
+      opened = Boolean(nextOpened);
+      leaf.rotation.y = opened ? spot.openAngle ?? -1.24 : 0;
+      collider.active = !opened;
+    };
+    setOpened(opened);
+    interactions.push(
+      createInteractionSpot({
+        id: spot.id,
+        position: mount,
+        radius: 2.35,
+        inspectHeight: 1.34,
+        inspectRadius: 0.86,
+        responseKey: spot.responseKey,
+        initialState: interactionInitial[spot.id] ?? null,
+        getInspectState: () => ({ opened }),
+        getInteractionState: () => ({ opened }),
+        onInteract: () => {
+          setOpened(!opened);
+          return { opened };
+        },
+      }),
+    );
+  }
 
   [
-    { col: 16, row: 8, id: "level-five-portrait-a", seed: 1 },
-    { col: 27, row: 12, id: "level-five-portrait-b", seed: 2 },
-    { col: 39, row: 14, id: "level-five-portrait-c", seed: 3 },
+    { col: 4, row: 13, side: "north", text: "118", id: "level-five-door-118", interactive: true },
+    { col: 13, row: 13, side: "north", text: "009", id: "level-five-door-009", interactive: true, openAngle: 1.24 },
+    // The original 312 marker was in the open ballroom, so it could not be mounted to a wall.
+    { col: 30, row: 13, side: "north", text: "312", id: "level-five-door-312", interactive: true },
+    { col: 34, row: 13, side: "north", text: "041" },
+    { col: 36, row: 17, side: "north", text: "STAFF ONLY" },
+  ].forEach(addHotelDoor);
+
+  [
+    { col: 15, row: 8, side: "west", id: "level-five-portrait-a", seed: 1 },
+    { col: 28, row: 12, side: "east", id: "level-five-portrait-b", seed: 2 },
+    { col: 39, row: 13, side: "north", id: "level-five-portrait-c", seed: 3 },
   ].forEach((spot) => {
-    const center = levelFiveCellCenter(spot.col, spot.row);
-    const mount = getLevelFiveTargetMount(center);
+    const mount = getLevelFiveWallMount(spot);
     const portrait = new THREE.Mesh(new THREE.PlaneGeometry(0.82, 1.22), new THREE.MeshStandardMaterial({
       map: createPortraitTexture(spot.seed),
       color: 0xffffff,
@@ -386,7 +471,7 @@ export function addLevelFiveHotelDetails(scene, interactionInitial = {}) {
     interactions.push(
       createInteractionSpot({
         id: spot.id,
-        position: center,
+        position: mount,
         inspectHeight: 1.62,
         inspectRadius: 0.82,
         responseKey: "levelFivePortraitResponse",
@@ -396,34 +481,24 @@ export function addLevelFiveHotelDetails(scene, interactionInitial = {}) {
   });
 
   [
-    { col: 6, row: 5 },
-    { col: 28, row: 5 },
-    { col: 39, row: 8 },
+    { col: 6, row: 5, side: "north" },
+    { col: 28, row: 5, side: "north" },
+    { col: 39, row: 8, side: "east" },
   ].forEach((spot) => {
-    const center = levelFiveCellCenter(spot.col, spot.row);
-    const mount = getLevelFiveTargetMount(center);
+    const mount = getLevelFiveWallMount(spot);
     const windowMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.05), glassMaterial);
     windowMesh.position.set(mount.x, 1.76, mount.z);
     windowMesh.rotation.y = mount.rotation;
     scene.add(windowMesh);
   });
 
-  const boilerFloor = new THREE.Mesh(
-    new THREE.PlaneGeometry(LEVEL_FIVE_BOILER_ROOM.width * S, LEVEL_FIVE_BOILER_ROOM.height * S),
-    new THREE.MeshBasicMaterial({ color: 0x1a120f, transparent: true, opacity: 0.48, depthWrite: false }),
-  );
-  boilerFloor.rotation.x = -Math.PI / 2;
-  boilerFloor.position.set(
-    levelFiveCellCenter(LEVEL_FIVE_BOILER_ROOM.col, LEVEL_FIVE_BOILER_ROOM.row).x + (LEVEL_FIVE_BOILER_ROOM.width - 1) * S / 2,
-    0.035,
-    levelFiveCellCenter(LEVEL_FIVE_BOILER_ROOM.col, LEVEL_FIVE_BOILER_ROOM.row).z + (LEVEL_FIVE_BOILER_ROOM.height - 1) * S / 2,
-  );
-  scene.add(boilerFloor);
-
   [
     { col: 36, row: 21, axis: "z", length: 4.2 },
     { col: 39, row: 21, axis: "z", length: 4.8 },
     { col: 37, row: 24, axis: "x", length: 5.6 },
+    { col: 35, row: 20, axis: "x", length: 5.1 },
+    { col: 41, row: 22, axis: "z", length: 3.5 },
+    { col: 38, row: 20, axis: "x", length: 4.3 },
   ].forEach((pipe) => {
     const center = levelFiveCellCenter(pipe.col, pipe.row);
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, pipe.length, 12), boilerMaterial);
@@ -436,8 +511,31 @@ export function addLevelFiveHotelDetails(scene, interactionInitial = {}) {
   [
     { col: 35, row: 22 },
     { col: 41, row: 21 },
+    { col: 35, row: 20 },
+    { col: 40, row: 20 },
   ].forEach((tank) => {
     addBox({ ...tank, width: 1.05, depth: 1.05, height: 1.84, y: 0.92, material: boilerMaterial });
+  });
+
+  [
+    { col: 37, row: 21, rotation: 0.15 },
+    { col: 40, row: 22, rotation: -0.22 },
+  ].forEach((furnace) => {
+    const center = levelFiveCellCenter(furnace.col, furnace.row);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 1.72, 16), boilerMaterial);
+    drum.position.set(center.x, 0.96, center.z);
+    drum.rotation.z = Math.PI / 2;
+    drum.rotation.y = furnace.rotation;
+    scene.add(drum);
+    addCollider(center.x, center.z, 0.74, 0.74);
+
+    const furnaceGlow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.19, 12),
+      new THREE.MeshBasicMaterial({ color: 0xff6e2e, transparent: true, opacity: 0.68 }),
+    );
+    furnaceGlow.position.set(center.x, 0.98, center.z - 0.58);
+    furnaceGlow.rotation.x = -Math.PI / 2;
+    scene.add(furnaceGlow);
   });
 
   const valveCenter = levelFiveCellCenter(38, 22);
@@ -458,7 +556,6 @@ export function addLevelFiveHotelDetails(scene, interactionInitial = {}) {
 
   [
     { col: 6, row: 21, id: "level-five-dining-cart", responseKey: "levelFiveDiningCartResponse" },
-    { col: 36, row: 17, id: "level-five-staff-door", responseKey: "levelFiveStaffDoorResponse" },
   ].forEach((spot) => {
     const center = levelFiveCellCenter(spot.col, spot.row);
     if (spot.id.includes("cart")) {
@@ -468,7 +565,7 @@ export function addLevelFiveHotelDetails(scene, interactionInitial = {}) {
       createInteractionSpot({
         id: spot.id,
         position: center,
-        inspectHeight: spot.id.includes("door") ? 1.54 : 0.76,
+        inspectHeight: 0.76,
         inspectRadius: 0.82,
         responseKey: spot.responseKey,
         initialState: interactionInitial[spot.id] ?? null,

@@ -53,13 +53,16 @@ export function createInteractionSpot({
   inspectRadius = 0.68,
   responseKey,
   initialState = null,
+  getInspectState = null,
+  getInteractionState = null,
+  onInteract = null,
 }) {
   let interactionCount =
     initialState && Number.isFinite(initialState.count) ? Math.max(0, Math.floor(initialState.count)) : 0;
   return {
     id,
     getState() {
-      return { count: interactionCount };
+      return { count: interactionCount, ...(getInteractionState?.() ?? {}) };
     },
     inspect(camera, playerPosition) {
       const aimDistance = inspectWorldPoint(camera, position, {
@@ -75,6 +78,7 @@ export function createInteractionSpot({
         distance: aimDistance,
         available: distance <= radius,
         rangeDistance: distance,
+        ...(getInspectState?.() ?? {}),
       };
     },
     interact(playerPosition) {
@@ -86,6 +90,7 @@ export function createInteractionSpot({
         id,
         textKey: responseKey ?? `${id}Response`,
         count: interactionCount,
+        ...(onInteract?.({ id, position, count: interactionCount }) ?? {}),
       };
     },
   };
@@ -93,6 +98,7 @@ export function createInteractionSpot({
 
 export function getFocusedInteraction(camera, playerPosition, interactions = []) {
   return interactions
+    .filter((interaction) => typeof interaction?.inspect === "function")
     .map((interaction) => interaction.inspect(camera, playerPosition))
     .filter(Boolean)
     .sort((a, b) => a.distance - b.distance)[0] ?? null;
@@ -100,6 +106,7 @@ export function getFocusedInteraction(camera, playerPosition, interactions = [])
 
 export function tryInteractWithSpots(playerPosition, ...interactions) {
   for (const interaction of interactions) {
+    if (typeof interaction?.interact !== "function") continue;
     const result = interaction.interact(playerPosition);
     if (result?.interacted) return result;
   }

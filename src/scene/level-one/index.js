@@ -422,7 +422,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
   const bacteria = createBacteriaEntity(scene, {
     spawnPosition: bacteriaSpawn,
     isWalkable,
-    speed: 1.16,
+    speed: 1.48,
     initialState: bacteriaInitial,
     cols: LEVEL_ONE_COLS,
     rows: LEVEL_ONE_ROWS,

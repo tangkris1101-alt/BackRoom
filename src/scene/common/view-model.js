@@ -15,6 +15,8 @@ let bakedArmMaterial = null;
 const motionEuler = new THREE.Euler(0, 0, 0, "YXZ");
 const motionQuaternion = new THREE.Quaternion();
 const HELD_ITEM_NAME = "first-person-held-item";
+const FLASHLIGHT_LENS_AXIS = new THREE.Vector3(1, 0, 0);
+const HELD_FLASHLIGHT_DIRECTION = new THREE.Vector3(-0.08, -0.14, -1).normalize();
 
 export function createLimbSegment(start, end, radiusTop, radiusBottom, material) {
   const startVector = new THREE.Vector3(...start);
@@ -67,16 +69,22 @@ function decodeBakedArmGeometry() {
 function getBakedArmMaterial() {
   if (bakedArmMaterial) return bakedArmMaterial;
   bakedArmMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    vertexColors: true,
-    roughness: 0.88,
-    metalness: 0.02,
-    emissive: 0x15130b,
-    emissiveIntensity: 0.42,
-    depthTest: false,
-    depthWrite: false,
+    // The baked vertex colours were intended for the source suit preview,
+    // but make the first-person gloves look dirty under the flashlight.
+    // Use one material colour while retaining smooth normal-based shading.
+    color: 0xffd92f,
+    vertexColors: false,
+    roughness: 0.92,
+    metalness: 0,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
+    flatShading: false,
+    // Preserve normal self-occlusion: disabling depth completely made hidden
+    // backfaces render through the palms as dirty-looking colour patches.
+    depthTest: true,
+    depthWrite: true,
     toneMapped: false,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
   });
   return bakedArmMaterial;
 }
@@ -148,9 +156,14 @@ function positionHeldItem(item, itemId) {
   item.scale.setScalar(0.8);
 
   if (itemId === "flashlight") {
-    item.position.set(0.2, -0.52, -0.69);
-    item.rotation.set(0.12, Math.PI / 2, -0.16);
-    item.scale.setScalar(0.84);
+    // The baked arms do not expose wrist or palm bones. This camera-space
+    // pose is therefore calibrated to overlap the right palm. The model's
+    // lens is on local +X, so align that axis with the camera forward vector
+    // instead of leaving the barrel pointed down-right across the screen.
+    item.position.set(0.15, -0.58, -0.74);
+    item.quaternion.setFromUnitVectors(FLASHLIGHT_LENS_AXIS, HELD_FLASHLIGHT_DIRECTION);
+    item.rotateX(-0.38);
+    item.scale.setScalar(0.32);
   } else if (itemId === "detector") {
     item.position.set(0.19, -0.51, -0.63);
     item.rotation.set(-0.82, 0.16, -0.14);
@@ -191,6 +204,9 @@ export function syncFirstPersonHeldItem(camera, itemId) {
 
   const heldItem = createWorldItemModel(heldItemId);
   heldItem.name = HELD_ITEM_NAME;
+  if (heldItemId === "flashlight") {
+    heldItem.getObjectByName("flashlight-ground-shadow")?.removeFromParent();
+  }
   setHeldItemMaterialState(heldItem);
   positionHeldItem(heldItem, heldItemId);
   viewModel.add(heldItem);

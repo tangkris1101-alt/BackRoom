@@ -2,7 +2,7 @@ const STORAGE_KEY = "backrooms-save";
 const SAVE_VERSION = 2;
 const LEGACY_SAVE_VERSION = 1;
 const HUB_LEVEL = -1;
-const PLAYABLE_LEVELS = new Set([HUB_LEVEL, 0, 1, 2, 3, 4, 5, 6, 7, 8, 37]);
+const PLAYABLE_LEVELS = new Set([HUB_LEVEL, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 37]);
 // A normal save is only a few KB.  Do not let a corrupted or legacy payload
 // monopolize the first menu interaction while it is being parsed.
 const MAX_SAVE_CHARS = 1_000_000;
@@ -69,8 +69,11 @@ function sanitizeEntityState(raw) {
   const type = typeof raw.type === "string" && /^[a-z0-9-]{1,48}$/.test(raw.type)
     ? raw.type
     : "unknown";
+  const savedId = typeof raw.id === "string" && raw.id ? raw.id : type;
   return {
-    id: typeof raw.id === "string" && raw.id ? raw.id : type,
+    // Older Level 3 saves used a separate super-bacteria ID. It is now the
+    // same entity as bacteria, so normalize it while preserving its position.
+    id: savedId === "super-bacteria" ? "bacteria" : savedId,
     type,
     position: { x: position.x, z: position.z },
     contact: Boolean(raw.contact),

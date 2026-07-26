@@ -296,7 +296,6 @@ export function createWorldItemModel(id) {
     group.add(spool);
   } else if (definition.shape === "token") {
     const token = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.045, 20), material);
-    token.rotation.z = Math.PI / 2;
     group.add(token);
   } else if (definition.shape === "shell") {
     const shell = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 10), material);
@@ -369,14 +368,31 @@ export function createWorldItemManager(scene, defaultSpawns = [], initialState =
   }
   const items = [];
 
+  function getFloorOffset(shape) {
+    if (shape === "token") return 0.028;
+    if (shape === "note" || shape === "badge") return 0.022;
+    if (shape === "file") return 0.028;
+    return 0;
+  }
+
+  function getHighlightOptions(shape) {
+    if (shape === "token") return { width: 0.48, height: 0.12, depth: 0.48, y: 0.06 };
+    if (shape === "note" || shape === "badge") return { width: 0.62, height: 0.12, depth: 0.5, y: 0.06 };
+    if (shape === "file") return { width: 0.74, height: 0.14, depth: 0.56, y: 0.07 };
+    return { width: 0.76, height: 0.72, depth: 0.76, y: 0.34 };
+  }
+
   function addItem(raw) {
     if (!raw?.id || !raw.position) return null;
     const model = createWorldItemModel(raw.id);
-    model.position.set(raw.position.x, raw.position.y ?? 0.24, raw.position.z);
+    const definition = getItemDefinition(raw.id);
+    const grounded = raw.grounded === true || definition.shape === "token";
+    const y = grounded ? (raw.groundOffset ?? getFloorOffset(definition.shape)) : (raw.position.y ?? 0.24);
+    model.position.set(raw.position.x, y, raw.position.z);
     model.rotation.set(raw.tiltX ?? 0, raw.rotation ?? 0, raw.tiltZ ?? 0);
     model.visible = raw.active !== false;
     scene.add(model);
-    const highlight = createItemHighlight({ color: 0xc9f7aa, width: 0.76, height: 0.72, depth: 0.76, y: 0.34 });
+    const highlight = createItemHighlight({ color: 0xc9f7aa, ...getHighlightOptions(definition.shape) });
     model.add(highlight);
     const item = { id: raw.id, model, highlight, active: raw.active !== false, data: raw.data ?? null };
     items.push(item);

@@ -6,6 +6,7 @@ const DEFAULT_RECOMPUTE_INTERVAL = 0.52;
 const DEFAULT_STUCK_THRESHOLD = 0.72;
 const DEFAULT_STUCK_MIN_PROGRESS = 0.22;
 const DEFAULT_DIRECT_CHASE_DISTANCE = 7.5;
+const PLAYER_DIRECT_LOOK_MINIMUM_DOT = 0.985;
 
 function smoothAngle(current, target, maxStep) {
   let delta = ((target - current + Math.PI) % (Math.PI * 2)) - Math.PI;
@@ -22,6 +23,39 @@ function tryResolveDirections(position, directions, step, isWalkable) {
     }
   }
   return { x: position.x, z: position.z };
+}
+
+function hasClearCellLine(origin, target, worldToCell, isCellOpen) {
+  if (!worldToCell || !isCellOpen) return true;
+  const distance = Math.hypot(target.x - origin.x, target.z - origin.z);
+  const samples = Math.max(2, Math.ceil(distance / 0.45));
+  for (let index = 1; index < samples; index += 1) {
+    const ratio = index / samples;
+    const cell = worldToCell(
+      origin.x + (target.x - origin.x) * ratio,
+      origin.z + (target.z - origin.z) * ratio,
+    );
+    if (!isCellOpen(cell.col, cell.row)) return false;
+  }
+  return true;
+}
+
+function playerDirectlyLooksAtEntity(playerView, group, worldToCell, isCellOpen) {
+  const origin = playerView?.origin;
+  const direction = playerView?.direction;
+  if (!origin || !direction) return false;
+
+  const targetY = group.position.y + (playerView.entityLookHeight ?? 0.9);
+  const dx = group.position.x - origin.x;
+  const dy = targetY - origin.y;
+  const dz = group.position.z - origin.z;
+  const distance = Math.hypot(dx, dy, dz);
+  const directionLength = Math.hypot(direction.x, direction.y, direction.z);
+  if (distance < 0.2 || directionLength < 0.001) return false;
+
+  const dot = (dx * direction.x + dy * direction.y + dz * direction.z) / (distance * directionLength);
+  if (dot < (playerView.minimumDot ?? PLAYER_DIRECT_LOOK_MINIMUM_DOT)) return false;
+  return hasClearCellLine(origin, group.position, worldToCell, isCellOpen);
 }
 
 export function createEntityMover({
@@ -90,7 +124,12 @@ export function createEntityMover({
       if (firesaltStunned) firesaltStunTimer = FIRESALT_STUN_DURATION;
       else firesaltStunTimer = Math.max(0, firesaltStunTimer - delta);
       const isDormant = Boolean(options.dormant || firesaltStunTimer > 0);
-      const directChaseAllowed = distance <= directChaseDistance && stuckTimer <= stuckThreshold * 0.6;
+      const directGazeChase =
+        !isDormant &&
+        playerDirectlyLooksAtEntity(effects.playerView, group, worldToCell, isCellOpen);
+      const directChaseAllowed =
+        (distance <= directChaseDistance || directGazeChase) &&
+        stuckTimer <= stuckThreshold * 0.6;
 
       if (repelActive || isDormant) {
         clearPath();

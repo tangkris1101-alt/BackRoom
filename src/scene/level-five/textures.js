@@ -1,4 +1,38 @@
+import * as THREE from "three";
 import { createSeededRandom, makeTexture, drawSpeckles } from "../common/texture-utils.js";
+import darkWoodColorUrl from "../../assets/textures/level-five/dark-wood/diffuse.jpg?url";
+import darkWoodNormalUrl from "../../assets/textures/level-five/dark-wood/normal.jpg?url";
+import darkWoodRoughnessUrl from "../../assets/textures/level-five/dark-wood/roughness.jpg?url";
+import marbleColorUrl from "../../assets/textures/level-five/marble-01/diffuse.jpg?url";
+import marbleNormalUrl from "../../assets/textures/level-five/marble-01/normal.jpg?url";
+import marbleRoughnessUrl from "../../assets/textures/level-five/marble-01/roughness.jpg?url";
+import rustyMetalColorUrl from "../../assets/textures/level-five/rusty-metal-05/diffuse.jpg?url";
+import rustyMetalNormalUrl from "../../assets/textures/level-five/rusty-metal-05/normal.jpg?url";
+import rustyMetalRoughnessUrl from "../../assets/textures/level-five/rusty-metal-05/roughness.jpg?url";
+
+const PBR_SOURCES = {
+  wood: [darkWoodColorUrl, darkWoodNormalUrl, darkWoodRoughnessUrl],
+  marble: [marbleColorUrl, marbleNormalUrl, marbleRoughnessUrl],
+  boiler: [rustyMetalColorUrl, rustyMetalNormalUrl, rustyMetalRoughnessUrl],
+};
+
+export function createLevelFivePbrMaps(kind, repeatX, repeatY) {
+  const [colorUrl, normalUrl, roughnessUrl] = PBR_SOURCES[kind];
+  const loader = new THREE.TextureLoader();
+  const configure = (texture, color = false) => {
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(repeatX, repeatY);
+    texture.anisotropy = 6;
+    if (color) texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  };
+  return {
+    map: configure(loader.load(colorUrl), true),
+    normalMap: configure(loader.load(normalUrl)),
+    roughnessMap: configure(loader.load(roughnessUrl)),
+  };
+}
 
 export function createLevelFiveCarpetTexture() {
   const random = createSeededRandom(0x5e1f05);

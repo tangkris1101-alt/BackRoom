@@ -39,6 +39,7 @@ const mimeTypes = {
   ".gif": "image/gif",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".mp3": "audio/mpeg",
   ".png": "image/png",
   ".ogg": "audio/ogg",
   ".svg": "image/svg+xml",

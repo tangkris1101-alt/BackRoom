@@ -61,10 +61,28 @@
         </div>
         <section id="main-menu-settings-panel" class="main-menu__settings" aria-labelledby="main-menu-settings-title" hidden>
           <button id="main-menu-settings-close" class="main-menu__settings-close" type="button" aria-label="Close settings">×</button>
-          <span id="main-menu-settings-title" class="main-menu__settings-title">语言</span>
-          <div class="main-menu__language-options" role="group" aria-label="Language">
-            <button id="main-menu-language-zh" class="main-menu__language" type="button" data-language="zh-CN">简体中文</button>
-            <button id="main-menu-language-en" class="main-menu__language" type="button" data-language="en">English</button>
+          <span id="main-menu-settings-title" class="main-menu__settings-title">设置</span>
+          <div class="settings-option-group">
+            <span id="main-menu-language-title" class="settings-option-group__label">语言</span>
+            <div class="main-menu__language-options" role="group" aria-labelledby="main-menu-language-title">
+              <button id="main-menu-language-zh" class="main-menu__language" type="button" data-language="zh-CN">简体中文</button>
+              <button id="main-menu-language-en" class="main-menu__language" type="button" data-language="en">English</button>
+            </div>
+          </div>
+          <div class="settings-option-group">
+            <span id="main-menu-frame-rate-title" class="settings-option-group__label">帧数</span>
+            <div class="frame-rate-options" role="group" aria-labelledby="main-menu-frame-rate-title">
+              <button class="frame-rate-option" type="button" data-frame-rate="auto">自动</button>
+              <button class="frame-rate-option" type="button" data-frame-rate="30">30</button>
+              <button class="frame-rate-option" type="button" data-frame-rate="60">60</button>
+              <button class="frame-rate-option" type="button" data-frame-rate="90">90</button>
+              <button class="frame-rate-option" type="button" data-frame-rate="120">120</button>
+              <button class="frame-rate-option" type="button" data-frame-rate="144">144</button>
+            </div>
+          </div>
+          <div class="settings-quality-row">
+            <span id="main-menu-quality-label">画质</span>
+            <output id="main-menu-quality-value">自动</output>
           </div>
         </section>
       </section>
@@ -88,8 +106,12 @@
               start: "开始游戏",
               startHint: "进入 LEVEL 0",
               settings: "设置",
-              settingsHint: "语言",
+              settingsHint: "语言 · 帧数",
+              settingsTitle: "设置",
               language: "语言",
+              frameRate: "帧数",
+              automatic: "自动",
+              quality: "画质",
               buttonLoading: "正在加载...",
               statusLoading: "正在加载资源…",
               statusReady: "加载完成",
@@ -101,8 +123,12 @@
               start: "START GAME",
               startHint: "ENTER LEVEL 0",
               settings: "SETTINGS",
-              settingsHint: "LANGUAGE",
+              settingsHint: "LANGUAGE · FRAME RATE",
+              settingsTitle: "SETTINGS",
               language: "LANGUAGE",
+              frameRate: "FRAME RATE",
+              automatic: "AUTO",
+              quality: "QUALITY",
               buttonLoading: "LOADING...",
               statusLoading: "LOADING ASSETS…",
               statusReady: "READY",
@@ -121,9 +147,24 @@
           setText("main-menu-start-hint", text.statusLoading);
           setText("main-menu-settings-label", text.settings);
           setText("main-menu-settings-hint", text.settingsHint);
-          setText("main-menu-settings-title", text.language);
+          setText("main-menu-settings-title", text.settingsTitle);
+          setText("main-menu-language-title", text.language);
+          setText("main-menu-frame-rate-title", text.frameRate);
+          setText("main-menu-quality-label", text.quality);
+          setText("main-menu-quality-value", text.automatic);
+          document.querySelector('[data-frame-rate="auto"]')?.replaceChildren(text.automatic);
           document.getElementById("main-menu-language-zh")?.setAttribute("aria-pressed", String(language === "zh-CN"));
           document.getElementById("main-menu-language-en")?.setAttribute("aria-pressed", String(language === "en"));
+          let frameRate = "auto";
+          try {
+            const savedFrameRate = window.localStorage?.getItem("backrooms-frame-rate-limit");
+            if (["30", "60", "90", "120", "144"].includes(savedFrameRate)) frameRate = savedFrameRate;
+          } catch {
+            // localStorage may be unavailable.
+          }
+          document.querySelectorAll("[data-frame-rate]").forEach((button) => {
+            button.setAttribute("aria-pressed", String(button.dataset.frameRate === frameRate));
+          });
 
           const loading = document.getElementById("main-menu-loading");
           const loadingFill = document.getElementById("main-menu-loading-fill");
@@ -381,12 +422,30 @@
         </button>
         <section id="pause-settings-panel" class="pause-overlay__settings-panel" aria-labelledby="pause-settings-title" hidden>
           <div class="pause-overlay__settings-header">
-            <span id="pause-settings-title">语言</span>
+            <span id="pause-settings-title">设置</span>
             <button id="pause-settings-close" class="pause-overlay__settings-close" type="button" aria-label="关闭设置">×</button>
           </div>
-          <div class="pause-overlay__language-options" role="group" aria-label="Language">
-            <button id="pause-language-zh" class="pause-overlay__language" type="button" data-language="zh-CN">简体中文</button>
-            <button id="pause-language-en" class="pause-overlay__language" type="button" data-language="en">English</button>
+          <div class="settings-option-group">
+            <span id="pause-language-title" class="settings-option-group__label">语言</span>
+            <div class="pause-overlay__language-options" role="group" aria-labelledby="pause-language-title">
+              <button id="pause-language-zh" class="pause-overlay__language" type="button" data-language="zh-CN">简体中文</button>
+              <button id="pause-language-en" class="pause-overlay__language" type="button" data-language="en">English</button>
+            </div>
+          </div>
+          <div class="settings-option-group">
+            <span id="pause-frame-rate-title" class="settings-option-group__label">帧数</span>
+            <div class="frame-rate-options" role="group" aria-labelledby="pause-frame-rate-title">
+              <button class="frame-rate-option" type="button" data-frame-rate="auto">自动</button>
+              <button class="frame-rate-option" type="button" data-frame-rate="30">30</button>
+              <button class="frame-rate-option" type="button" data-frame-rate="60">60</button>
+              <button class="frame-rate-option" type="button" data-frame-rate="90">90</button>
+              <button class="frame-rate-option" type="button" data-frame-rate="120">120</button>
+              <button class="frame-rate-option" type="button" data-frame-rate="144">144</button>
+            </div>
+          </div>
+          <div class="settings-quality-row">
+            <span id="pause-quality-label">画质</span>
+            <output id="pause-quality-value">自动</output>
           </div>
         </section>
         <button id="pause-reset" class="pause-overlay__reset" type="button" aria-label="重置进度">

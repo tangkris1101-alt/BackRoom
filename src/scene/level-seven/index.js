@@ -207,6 +207,7 @@ function addLevelSevenExit(scene, targetPosition) {
 function addLevelSevenDetails(scene, interactionInitial = {}) {
   const colliders = [];
   const interactions = [];
+  const buoyStates = new Map();
   const addCollider = (x, z, halfX, halfZ) => {
     colliders.push({ minX: x - halfX, maxX: x + halfX, minZ: z - halfZ, maxZ: z + halfZ });
   };
@@ -222,6 +223,11 @@ function addLevelSevenDetails(scene, interactionInitial = {}) {
     emissive: 0x230604,
     emissiveIntensity: 0.28,
     roughness: 0.58,
+  });
+  const buoyRopeMaterial = new THREE.MeshStandardMaterial({
+    color: 0x151b1c,
+    roughness: 0.94,
+    metalness: 0.05,
   });
   const darkPatchMaterial = new THREE.MeshBasicMaterial({
     color: 0x000000,
@@ -259,11 +265,70 @@ function addLevelSevenDetails(scene, interactionInitial = {}) {
   ].forEach((spot) => {
     const center = levelSevenCellCenter(spot.col, spot.row);
     const buoy = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.55, 16), buoyMaterial);
+    buoy.name = `level-seven-buoy-${spot.col}-${spot.row}`;
     buoy.position.set(center.x, 0.32, center.z);
     buoy.rotation.x = (Math.random() - 0.5) * 0.28;
     buoy.rotation.z = (Math.random() - 0.5) * 0.28;
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 4.3, 8), buoyRopeMaterial);
+    rope.name = `${buoy.name}-rope`;
+    rope.position.y = -2.28;
+    buoy.add(rope);
     scene.add(buoy);
+    buoyStates.set(buoy.name, {
+      buoy,
+      rope,
+      baseY: buoy.position.y,
+      baseRotationX: buoy.rotation.x,
+      baseRotationZ: buoy.rotation.z,
+      phase: Math.random() * Math.PI * 2,
+      animationToken: 0,
+      isAnimating: false,
+    });
   });
+
+  function applyBuoyPose(state, elapsed, submerge = 0) {
+    const bob = Math.sin(elapsed * 1.55 + state.phase) * 0.035 * (1 - submerge);
+    state.buoy.position.y = state.baseY + bob - submerge * 2.15;
+    state.buoy.rotation.x = state.baseRotationX + Math.sin(elapsed * 1.9 + state.phase) * 0.045 + submerge * 0.14;
+    state.buoy.rotation.z = state.baseRotationZ + Math.cos(elapsed * 1.35 + state.phase) * 0.05 - submerge * 0.12;
+    state.rope.scale.y = 1 + submerge * 0.42;
+  }
+
+  function triggerBuoyDescent(id) {
+    const state = buoyStates.get(id);
+    if (!state) return;
+    state.animationToken += 1;
+    state.isAnimating = true;
+    const token = state.animationToken;
+    const startedAt = performance.now();
+    const animateDescent = (now) => {
+      if (token !== state.animationToken) return;
+      const elapsed = (now - startedAt) / 1000;
+      let submerge;
+      if (elapsed < 0.36) {
+        const t = elapsed / 0.36;
+        submerge = 1 - (1 - t) ** 3;
+      } else if (elapsed < 1.55) {
+        submerge = 1;
+      } else if (elapsed < 2.35) {
+        const t = (elapsed - 1.55) / 0.8;
+        submerge = (1 - t) ** 2;
+      } else {
+        state.isAnimating = false;
+        applyBuoyPose(state, now / 1000);
+        return;
+      }
+      applyBuoyPose(state, now / 1000, submerge);
+      requestAnimationFrame(animateDescent);
+    };
+    requestAnimationFrame(animateDescent);
+  }
+
+  function updateBuoys(delta, elapsed) {
+    for (const state of buoyStates.values()) {
+      if (!state.isAnimating) applyBuoyPose(state, elapsed);
+    }
+  }
 
   [
     { col: 4, row: 3, id: "level-seven-room" },
@@ -275,15 +340,41 @@ function addLevelSevenDetails(scene, interactionInitial = {}) {
       createInteractionSpot({
         id: spot.id,
         position: center,
-        inspectHeight: spot.id === "level-seven-buoy" ? 0.6 : 1.25,
-        inspectRadius: 0.8,
+        // The buoy sits low in moving water, so use a forgiving vertical
+        // target and interaction radius instead of the small prop defaults.
+        ...(spot.id === "level-seven-buoy"
+          ? {
+              radius: CELL_SIZE * 1.35,
+              inspectDistance: 11,
+              onInteract: ({ count }) => {
+                triggerBuoyDescent("level-seven-buoy-32-23");
+                return {
+                  feedbackDuration: 2800,
+                  i18n: {
+                    "zh-CN": {
+                      response: count === 1
+                        ? "浮标猛地下沉，绳索一直延伸到看不见的下方。"
+                        : "绳索仍在水下绷紧，另一端没有任何回应。",
+                    },
+                    en: {
+                      response: count === 1
+                        ? "The buoy jerks downward. Its rope continues into unseen depth."
+                        : "The rope remains taut below the water. Nothing answers from the other end.",
+                    },
+                  },
+                };
+              },
+            }
+          : {}),
+        inspectHeight: spot.id === "level-seven-buoy" ? 0.38 : 1.25,
+        inspectRadius: spot.id === "level-seven-buoy" ? 1.25 : 0.8,
         responseKey: `${spot.id}Response`,
         initialState: interactionInitial[spot.id] ?? null,
       }),
     );
   });
 
-  return { colliders, interactions };
+  return { colliders, interactions, updateBuoys };
 }
 
 export function createLevelSevenScene({ initialState = null } = {}) {
@@ -304,7 +395,11 @@ export function createLevelSevenScene({ initialState = null } = {}) {
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
 
-  const { colliders: propColliders, interactions: propInteractions } = addLevelSevenDetails(scene, interactionInitial);
+  const {
+    colliders: propColliders,
+    interactions: propInteractions,
+    updateBuoys,
+  } = addLevelSevenDetails(scene, interactionInitial);
   const entityInitial = snapEntityStates(
     Array.isArray(initialState?.entities) ? initialState.entities : [],
     isWalkable,
@@ -378,10 +473,17 @@ export function createLevelSevenScene({ initialState = null } = {}) {
     normalDelay: 1.1,
   });
 
-  const interactions = [...propInteractions];
+  // Keep every downstream interaction path (focus, F handling and snapshot)
+  // free of optional prop entries. A null entry previously crashed the save
+  // snapshot after checking the buoy because it accessed `spot.id` directly.
+  const interactions = propInteractions.filter(
+    (spot) => spot && typeof spot.id === "string" && typeof spot.getState === "function",
+  );
   const routes = [
-    { id: "level-seven-terminal-exit", targetLevel: null, targetLabel: "EXIT", label: "EXIT", kind: "door", position: targetPosition, rotation: 0 },
-    { id: "level-seven-hidden-hub-door", targetLevel: HUB_LEVEL, targetLabel: "THE HUB", kind: "door", hidden: true, position: levelSevenCellCenter(8, 3), rotation: Math.PI },
+    { id: "level-seven-terminal-exit", targetLevel: 8, targetLabel: "LEVEL 8", label: "DESCENT", kind: "door", position: targetPosition, rotation: 0 },
+    // Concealed at the far, unlit edge of the flooded maze rather than beside
+    // the starting room. It is still on an open boundary cell and reachable.
+    { id: "level-seven-hidden-hub-door", targetLevel: HUB_LEVEL, targetLabel: "THE HUB", kind: "door", hidden: true, position: levelSevenCellCenter(12, 26), rotation: 0 },
   ];
   const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
 
@@ -449,7 +551,6 @@ export function createLevelSevenScene({ initialState = null } = {}) {
   const thing = createLevelSevenThingEntity(scene, {
     spawnPosition: thingSpawn,
     isWalkable,
-    speed: 1.0,
     initialState: entityInitial.find((entity) => entity.id === "level-seven-thing") ?? null,
     cols: LEVEL_SEVEN_COLS,
     rows: LEVEL_SEVEN_ROWS,
@@ -498,6 +599,7 @@ export function createLevelSevenScene({ initialState = null } = {}) {
     if (enteredExit) objectiveReached = true;
     scene.fog.density = 0.0105 + (1 - flicker) * 0.005 + (exitDistance > 80 ? 0.0015 : 0);
     cameraMistLight.intensity = 0.36 + Math.sin(elapsed * 0.58) * 0.055;
+    updateBuoys(delta, elapsed);
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
 
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
@@ -580,7 +682,11 @@ export function createLevelSevenScene({ initialState = null } = {}) {
         },
         interactions: {
           ...exitNetwork.getState(),
-          ...Object.fromEntries(interactions.map((spot) => [spot.id, spot.getState()])),
+          ...Object.fromEntries(
+            interactions
+              .filter((spot) => spot && typeof spot.id === "string" && typeof spot.getState === "function")
+              .map((spot) => [spot.id, spot.getState()]),
+          ),
         },
         objectives: { reached: objectiveReached },
         entities: [thing.getState()],

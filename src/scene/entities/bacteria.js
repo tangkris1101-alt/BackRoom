@@ -6,6 +6,8 @@ import { createEntityMover } from "./behavior.js";
 const BACTERIA_RECOMPUTE_INTERVAL = 0.48;
 const BACTERIA_STUCK_THRESHOLD = 0.66;
 const BACTERIA_DIRECT_CHASE_DISTANCE = 8.8;
+const BACTERIA_PURSUIT_SPEED = 1.48;
+const BACTERIA_PURSUIT_TENSION = 1.16;
 
 export function createBacteriaModel() {
   const group = new THREE.Group();
@@ -144,7 +146,7 @@ export function createBacteriaEntity(
   {
     spawnPosition,
     isWalkable,
-    speed = 1.05,
+    speed = BACTERIA_PURSUIT_SPEED,
     id = "bacteria",
     initialState = null,
     cols,
@@ -157,10 +159,6 @@ export function createBacteriaEntity(
   const group = createBacteriaModel();
   group.position.set(spawnPosition.x, 0, spawnPosition.z);
   group.rotation.y = Math.random() * Math.PI * 2;
-  if (id === "super-bacteria") {
-    group.scale.setScalar(1.14);
-    group.userData.baseScale?.setScalar(1.14);
-  }
   scene.add(group);
 
   let contact = false;
@@ -194,9 +192,8 @@ export function createBacteriaEntity(
       };
     },
     update(delta, elapsed, playerPosition, effects = {}) {
-      const tension = id === "super-bacteria" ? 1.16 : 1;
       const moveState = mover.update(delta, elapsed, playerPosition, effects, {
-        speedScale: tension * (1 + Math.sin(elapsed * 2.4) * 0.035),
+        speedScale: BACTERIA_PURSUIT_TENSION * (1 + Math.sin(elapsed * 2.4) * 0.035),
       });
       contact = moveState.contact;
 

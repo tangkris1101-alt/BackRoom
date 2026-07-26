@@ -197,9 +197,11 @@ export function createLevelSixScene({ initialState = null } = {}) {
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
-  const entityInitial = snapEntityStates(initialState?.entities ?? [], isWalkable);
-
   const { colliders: propColliders, interactions: propInteractions } = addLevelSixDetails(scene, interactionInitial);
+  // isWalkable consults propColliders, so construct the props before using it
+  // to restore saved entity positions. Otherwise a Level 6 load hits the
+  // temporal-dead-zone error "Cannot access ... before initialization".
+  const entityInitial = snapEntityStates(initialState?.entities ?? [], isWalkable);
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     map: createLevelSixFloorTexture(),

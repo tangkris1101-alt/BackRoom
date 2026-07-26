@@ -183,8 +183,7 @@ node scripts/validate-sb3.mjs    # 输出: VALIDATION OK
 | `SUPER_ALMOND_WATER_SPEED_MULTIPLIER` | 1.5 | 超级杏仁水 buff 期间角色移速倍率(走/跑) |
 | `WATER_LONG_PRESS_MS` | 600ms | 长按 E 触发饮水 |
 | `HEALTH_MAX` | 100 | 玩家满血 |
-| `BACTERIA_DAMAGE` | 50 | 普通细菌单次扣血 |
-| `SUPER_BACTERIA_DAMAGE` | 60 | 超级细菌单次扣血 |
+| `BACTERIA_DAMAGE` | 50 | 细菌单次扣血 |
 | `HOUND_DAMAGE` | 30 | Hound 单次扣血 |
 | `HOUND_SLOW_DURATION` | 3.0s | Hound 受击后减速持续时间 |
 | `DAMAGE_COOLDOWN_S` | 1.0s | 受到任意伤害后的无敌帧时长 |

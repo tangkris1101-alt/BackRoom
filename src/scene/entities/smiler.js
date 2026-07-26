@@ -3,8 +3,6 @@ import { createLimbSegment } from "../common/view-model.js";
 import { createEntityMover } from "./behavior.js";
 
 const CONTACT_RADIUS = 0.82;
-const lookDirection = new THREE.Vector3();
-const toSmiler = new THREE.Vector3();
 
 export function createSmilerModel() {
   const group = new THREE.Group();
@@ -96,9 +94,6 @@ export function createSmilerEntity(scene, {
     },
     update(delta, elapsed, playerPosition, effects = {}) {
       const distance = Math.hypot(playerPosition.x - group.position.x, playerPosition.z - group.position.z);
-      camera.getWorldDirection(lookDirection);
-      toSmiler.set(group.position.x, 1.9, group.position.z).sub(camera.position).normalize();
-      const watched = distance < 20 && lookDirection.dot(toSmiler) > 0.965;
       const noisy = Boolean(effects.playerSprinting && distance < 18) || Boolean(effects.playerMoving && distance < 8);
       const lit = Boolean(effects.flashlightOn && distance < 24);
       if (noisy || lit || distance < 6.5) alertTimer = Math.max(alertTimer, 7);
@@ -108,9 +103,11 @@ export function createSmilerEntity(scene, {
         stunnedTimer = 4;
       }
       stunnedTimer = Math.max(0, stunnedTimer - delta);
-      const dormant = stunnedTimer > 0 || watched || alertTimer <= 0;
+      // A Smiler only moves after it has perceived the player. While active,
+      // the mover applies the shared clear-line direct-gaze chase rule.
+      const dormant = stunnedTimer > 0 || alertTimer <= 0;
       const moveState = mover.update(delta, elapsed, playerPosition, effects, { dormant, speedScale: lit ? 1.16 : 1 });
-      contact = !watched && stunnedTimer <= 0 && moveState.contact;
+      contact = !dormant && moveState.contact;
       group.position.y = Math.sin(elapsed * 2.8) * 0.015;
       group.rotation.z = Math.sin(elapsed * 2.1) * 0.025;
       if (group.userData.head) group.userData.head.rotation.z = Math.sin(elapsed * 1.7) * 0.09;
@@ -120,7 +117,6 @@ export function createSmilerEntity(scene, {
         active: true,
         contact,
         distance: moveState.distance,
-        watched,
         stunned: stunnedTimer > 0,
         x: group.position.x,
         y: 1.92,

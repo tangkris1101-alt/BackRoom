@@ -19,6 +19,7 @@ const { collectLevelOneTransforms } = await import("../src/scene/level-one/props
 const levelThree = await import("../src/scene/level-three/layout.js");
 const levelSix = await import("../src/scene/level-six/layout.js");
 const levelEight = await import("../src/scene/level-eight/layout.js");
+const levelNine = await import("../src/scene/level-nine/layout.js");
 const levelThirtySeven = await import("../src/scene/level-thirty-seven/layout.js");
 const levelZero = await import("../src/scene/level-zero/layout.js");
 const levelZeroWorld = await import("../src/scene/level-zero/world.js");
@@ -69,9 +70,12 @@ assert.deepEqual(
   [52, 40, 48, 36],
 );
 assert.equal(canReach({ cols: 52, rows: 40, start: levelEight.LEVEL_EIGHT_START_CELL, target: levelEight.LEVEL_EIGHT_TARGET_CELL, isOpen: levelEight.isLevelEightOpenCell }), true);
+assert.deepEqual([levelNine.LEVEL_NINE_COLS, levelNine.LEVEL_NINE_ROWS], [52, 40]);
+assert.equal(canReach({ cols: 52, rows: 40, start: levelNine.LEVEL_NINE_START_CELL, target: levelNine.LEVEL_NINE_TARGET_CELL, isOpen: levelNine.isLevelNineOpenCell }), true);
 assert.equal(canReach({ cols: 48, rows: 36, start: levelThirtySeven.LEVEL_THIRTY_SEVEN_START_CELL, target: levelThirtySeven.LEVEL_THIRTY_SEVEN_TARGET_CELL, isOpen: levelThirtySeven.isLevelThirtySevenOpenCell }), true);
 assert.equal(loadFixture(1, 8).player.level, -1);
 assert.equal(loadFixture(2, 8).player.level, 8);
+assert.equal(loadFixture(2, 9).player.level, 9);
 assert.equal(loadFixture(2, 37).player.level, 37);
 
 const savedSmiler = loadFixture(2, 8, {
@@ -171,5 +175,11 @@ for (const level of ["one", "two", "three", "four", "five", "six", "seven"]) {
   const source = await readFile(new URL(`../src/scene/level-${level}/index.js`, import.meta.url), "utf8");
   assert.match(source, /interact:\s*\(playerPosition, access\)\s*=>\s*exitNetwork\.interact\(playerPosition, access\)/);
 }
+const levelEightSource = await readFile(new URL("../src/scene/level-eight/index.js", import.meta.url), "utf8");
+const sceneIndexSource = await readFile(new URL("../src/scene/index.js", import.meta.url), "utf8");
+const levelNineSource = await readFile(new URL("../src/scene/level-nine/index.js", import.meta.url), "utf8");
+assert.match(levelEightSource, /targetLevel:\s*9/);
+assert.match(sceneIndexSource, /level-nine\/index\.js/);
+assert.match(levelNineSource, /targetLevel:\s*null/);
 
 console.log("content expansion checks passed");

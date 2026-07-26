@@ -58,6 +58,10 @@ const mainMenuSettingsHint = document.querySelector("#main-menu-settings-hint");
 const mainMenuSettingsPanel = document.querySelector("#main-menu-settings-panel");
 const mainMenuSettingsTitle = document.querySelector("#main-menu-settings-title");
 const mainMenuSettingsClose = document.querySelector("#main-menu-settings-close");
+const mainMenuLanguageTitle = document.querySelector("#main-menu-language-title");
+const mainMenuFrameRateTitle = document.querySelector("#main-menu-frame-rate-title");
+const mainMenuQualityLabel = document.querySelector("#main-menu-quality-label");
+const mainMenuQualityValue = document.querySelector("#main-menu-quality-value");
 const mainMenuLanguageZh = document.querySelector("#main-menu-language-zh");
 const mainMenuLanguageEn = document.querySelector("#main-menu-language-en");
 const joystick = document.querySelector("#joystick");
@@ -137,8 +141,13 @@ const pauseSettingsHint = document.querySelector("#pause-settings-hint");
 const pauseSettingsPanel = document.querySelector("#pause-settings-panel");
 const pauseSettingsTitle = document.querySelector("#pause-settings-title");
 const pauseSettingsClose = document.querySelector("#pause-settings-close");
+const pauseLanguageTitle = document.querySelector("#pause-language-title");
+const pauseFrameRateTitle = document.querySelector("#pause-frame-rate-title");
+const pauseQualityLabel = document.querySelector("#pause-quality-label");
+const pauseQualityValue = document.querySelector("#pause-quality-value");
 const pauseLanguageZh = document.querySelector("#pause-language-zh");
 const pauseLanguageEn = document.querySelector("#pause-language-en");
+const frameRateButtons = [...document.querySelectorAll("[data-frame-rate]")];
 const pauseResetButton = document.querySelector("#pause-reset");
 const pauseResetLabel = document.querySelector("#pause-reset-label");
 const pauseResetHint = document.querySelector("#pause-reset-hint");
@@ -194,12 +203,19 @@ const LEVEL_TRANSITION_FADE_OUT_MS = 760;
 const LEVEL_TRANSITION_LOAD_AT_MS = LEVEL_TRANSITION_FADE_IN_MS + LEVEL_TRANSITION_HOLD_MS;
 const LEVEL_TRANSITION_MS = LEVEL_TRANSITION_LOAD_AT_MS + LEVEL_TRANSITION_FADE_OUT_MS;
 const FLASHLIGHT_BATTERY_MAX = 100;
-const FLASHLIGHT_DRAIN_RATE = 4.2;
+const FLASHLIGHT_DRAIN_RATE = 1;
 const FLASHLIGHT_MAX_STACK = 3;
+const FLASHLIGHT_BASE_INTENSITY = 96;
+const FLASHLIGHT_MIN_DISTANCE = 112;
+const FLASHLIGHT_MAX_DISTANCE = 220;
 const DETECTOR_SCAN_DURATION = 5;
 const DETECTOR_COOLDOWN_DURATION = 60;
 const DETECTOR_RANGE = 112;
 const LANGUAGE_STORAGE_KEY = "backrooms-language";
+const FRAME_RATE_STORAGE_KEY = "backrooms-frame-rate-limit";
+const FRAME_RATE_OPTIONS = new Set([0, 30, 60, 90, 120, 144]);
+const FRAME_RATE_REFRESH_SAMPLE_MS = 700;
+const FRAME_RATE_REFRESH_TOLERANCE = 2;
 const PROGRESS_VERSION_KEY = "backrooms-progress-version";
 const PROGRESS_VERSION = 2;
 const ALMOND_WATER_DURATION = 45;
@@ -213,7 +229,6 @@ const PAUSE_RESET_ARM_TIMEOUT_MS = 3000;
 const PAUSE_TUTORIAL_RETURN_DELAY_MS = 220;
 const HEALTH_MAX = 100;
 const BACTERIA_DAMAGE = 50;
-const SUPER_BACTERIA_DAMAGE = 60;
 const HOUND_DAMAGE = 30;
 const SMILER_DAMAGE = 45;
 const LEVEL_SEVEN_THING_DAMAGE = 68;
@@ -224,6 +239,155 @@ const DAMAGE_FLASH_MS = 600;
 const EXIT_DOOR_INTERACT_RADIUS = 4.2;
 const EXIT_ELEVATOR_ENTER_RADIUS = 1.65;
 const ALMOND_WATER_HEAL_DURATION = 5;
+const SUPER_ALMOND_WATER_HEAL_DURATION = 5;
+
+function normalizeFrameRateLimit(value) {
+  if (value === "auto" || value === null || value === undefined) return 0;
+  const parsed = Number(value);
+  return FRAME_RATE_OPTIONS.has(parsed) ? parsed : 0;
+}
+
+function loadFrameRateLimit() {
+  try {
+    return normalizeFrameRateLimit(window.localStorage?.getItem(FRAME_RATE_STORAGE_KEY));
+  } catch {
+    return 0;
+  }
+}
+
+let frameRateLimit = loadFrameRateLimit();
+let frameRateSelectionPending = false;
+let scheduledAnimationHandle = 0;
+let scheduledAnimationKind = null;
+let nextFixedFrameAt = 0;
+
+function updateFrameRateControls() {
+  const activeValue = frameRateLimit === 0 ? "auto" : String(frameRateLimit);
+  frameRateButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.frameRate === activeValue));
+  });
+  canvas.dataset.frameRateLimit = activeValue;
+}
+
+function setFrameRateLimit(nextLimit) {
+  frameRateLimit = normalizeFrameRateLimit(nextLimit);
+  updateFrameRateControls();
+  try {
+    window.localStorage?.setItem(
+      FRAME_RATE_STORAGE_KEY,
+      frameRateLimit === 0 ? "auto" : String(frameRateLimit),
+    );
+  } catch {
+    // Frame-rate selection is still usable for the current session.
+  }
+  if (animationFrameStarted) scheduleNextAnimation();
+}
+
+function setFrameRateSelectionPending(nextPending) {
+  frameRateSelectionPending = Boolean(nextPending);
+  frameRateButtons.forEach((button) => {
+    button.disabled = frameRateSelectionPending;
+    button.toggleAttribute("aria-busy", frameRateSelectionPending);
+  });
+}
+
+function measureDisplayRefreshRate() {
+  return new Promise((resolve) => {
+    const frameIntervals = [];
+    let startedAt = 0;
+    let previousTimestamp = 0;
+
+    function sample(timestamp) {
+      if (startedAt === 0) startedAt = timestamp;
+      if (previousTimestamp > 0) frameIntervals.push(timestamp - previousTimestamp);
+      previousTimestamp = timestamp;
+
+      if (timestamp - startedAt < FRAME_RATE_REFRESH_SAMPLE_MS) {
+        requestAnimationFrame(sample);
+        return;
+      }
+
+      const sorted = frameIntervals
+        .filter((interval) => interval > 0 && interval < 100)
+        .sort((first, second) => first - second);
+      if (!sorted.length) {
+        resolve(0);
+        return;
+      }
+      const medianInterval = sorted[Math.floor(sorted.length / 2)];
+      resolve(Math.round(1000 / medianInterval));
+    }
+
+    requestAnimationFrame(sample);
+  });
+}
+
+function formatFrameRateWarning(selectedRate, detectedRate) {
+  if (currentLanguage === "en") {
+    return `This display/browser is currently refreshing at about ${detectedRate} Hz, below ${selectedRate} FPS. The game will still attempt ${selectedRate} FPS internal updates and renders, but the screen cannot visibly present ${selectedRate} distinct frames each second. Continue anyway?`;
+  }
+  return `当前显示器/浏览器实测约为 ${detectedRate} Hz，低于 ${selectedRate} FPS。游戏仍会尽可能按 ${selectedRate} FPS 进行内部更新和渲染，但屏幕无法每秒实际呈现 ${selectedRate} 张不同画面，仍要继续开启吗？`;
+}
+
+async function requestFrameRateLimit(nextLimit) {
+  const normalizedLimit = normalizeFrameRateLimit(nextLimit);
+  if (frameRateSelectionPending || normalizedLimit === frameRateLimit) return;
+  if (normalizedLimit === 0) {
+    setFrameRateLimit(0);
+    return;
+  }
+
+  setFrameRateSelectionPending(true);
+  const detectedRate = await measureDisplayRefreshRate();
+  setFrameRateSelectionPending(false);
+  canvas.dataset.displayRefreshRate = String(detectedRate || "unknown");
+
+  if (
+    detectedRate > 0 &&
+    detectedRate + FRAME_RATE_REFRESH_TOLERANCE < normalizedLimit &&
+    !window.confirm(formatFrameRateWarning(normalizedLimit, detectedRate))
+  ) {
+    return;
+  }
+
+  setFrameRateLimit(normalizedLimit);
+}
+
+function cancelScheduledAnimation() {
+  if (!scheduledAnimationHandle) return;
+  if (scheduledAnimationKind === "animation-frame") {
+    cancelAnimationFrame(scheduledAnimationHandle);
+  } else {
+    window.clearTimeout(scheduledAnimationHandle);
+  }
+  scheduledAnimationHandle = 0;
+  scheduledAnimationKind = null;
+}
+
+function scheduleNextAnimation() {
+  cancelScheduledAnimation();
+  if (frameRateLimit === 0) {
+    nextFixedFrameAt = 0;
+    scheduledAnimationKind = "animation-frame";
+    scheduledAnimationHandle = requestAnimationFrame((timestamp) => {
+      scheduledAnimationHandle = 0;
+      scheduledAnimationKind = null;
+      animate(timestamp);
+    });
+    return;
+  }
+
+  const now = performance.now();
+  const frameInterval = 1000 / frameRateLimit;
+  nextFixedFrameAt = Math.max(now, nextFixedFrameAt) + frameInterval;
+  scheduledAnimationKind = "timeout";
+  scheduledAnimationHandle = window.setTimeout(() => {
+    scheduledAnimationHandle = 0;
+    scheduledAnimationKind = null;
+    animate(performance.now());
+  }, Math.max(0, nextFixedFrameAt - performance.now()));
+}
+
 const gameplayUiElements = [
   document.querySelector(".hud"),
   joystick,
@@ -261,7 +425,7 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.18;
 
-const flashlightLight = new THREE.SpotLight(0xfff2c5, 0, 86, 0.56, 0.74, 1.42);
+const flashlightLight = new THREE.SpotLight(0xfff2c5, 0, FLASHLIGHT_MAX_DISTANCE, 0.56, 0.74, 1.42);
 flashlightLight.position.set(0.18, -0.12, -0.16);
 flashlightLight.name = "player-flashlight";
 const flashlightTarget = new THREE.Object3D();
@@ -367,12 +531,14 @@ let flashlightBattery = 0;
 let detectorOwned = false;
 let detectorActiveTimer = 0;
 let detectorCooldownTimer = 0;
+let gameplayUiHidden = false;
 let currentLanguage = "zh-CN";
 const detectorProjection = new THREE.Vector3();
 const compassToExit = new THREE.Vector3();
 const pickupPromptProjection = new THREE.Vector3();
 const doorPromptProjection = new THREE.Vector3();
 const flashlightBeamDirection = new THREE.Vector3();
+const playerViewDirection = new THREE.Vector3();
 const debugExitProjection = new THREE.Vector3();
 let lastMetrics = null;
 
@@ -687,10 +853,18 @@ function updateMainMenuText() {
   }
   if (mainMenuSettingsLabel) mainMenuSettingsLabel.textContent = text.settings;
   if (mainMenuSettingsHint) mainMenuSettingsHint.textContent = text.settingsHint;
-  if (mainMenuSettingsTitle) mainMenuSettingsTitle.textContent = text.language;
+  if (mainMenuSettingsTitle) mainMenuSettingsTitle.textContent = text.settingsTitle;
+  if (mainMenuLanguageTitle) mainMenuLanguageTitle.textContent = text.language;
+  if (mainMenuFrameRateTitle) mainMenuFrameRateTitle.textContent = text.frameRate;
+  if (mainMenuQualityLabel) mainMenuQualityLabel.textContent = text.quality;
+  if (mainMenuQualityValue) mainMenuQualityValue.textContent = text.automatic;
   if (mainMenuSettingsClose) mainMenuSettingsClose.setAttribute("aria-label", text.close);
+  frameRateButtons.forEach((button) => {
+    if (button.dataset.frameRate === "auto") button.textContent = text.automatic;
+  });
   mainMenuLanguageZh?.setAttribute("aria-pressed", String(currentLanguage === "zh-CN"));
   mainMenuLanguageEn?.setAttribute("aria-pressed", String(currentLanguage === "en"));
+  updateFrameRateControls();
 }
 
 function setMainMenuSettingsOpen(open) {
@@ -1674,8 +1848,16 @@ function updatePauseOverlay() {
   if (pauseSettingsHint) pauseSettingsHint.textContent = formatLocalizedStatus("pauseSettingsHint");
   if (pauseSettingsTitle) pauseSettingsTitle.textContent = formatLocalizedStatus("pauseSettingsTitle");
   if (pauseSettingsClose) pauseSettingsClose.setAttribute("aria-label", formatLocalizedStatus("pauseSettingsClose"));
+  if (pauseLanguageTitle) pauseLanguageTitle.textContent = formatLocalizedStatus("settingsLanguage");
+  if (pauseFrameRateTitle) pauseFrameRateTitle.textContent = formatLocalizedStatus("settingsFrameRate");
+  if (pauseQualityLabel) pauseQualityLabel.textContent = formatLocalizedStatus("settingsQuality");
+  if (pauseQualityValue) pauseQualityValue.textContent = formatLocalizedStatus("settingsAutomatic");
+  frameRateButtons.forEach((button) => {
+    if (button.dataset.frameRate === "auto") button.textContent = formatLocalizedStatus("settingsAutomatic");
+  });
   pauseLanguageZh?.setAttribute("aria-pressed", String(currentLanguage === "zh-CN"));
   pauseLanguageEn?.setAttribute("aria-pressed", String(currentLanguage === "en"));
+  updateFrameRateControls();
 }
 
 function setPauseSettingsOpen(open) {
@@ -1880,15 +2062,26 @@ function setRenderPixelRatio(nextPixelRatio) {
   resize();
 }
 
+function getAdaptiveFpsThresholds() {
+  if (frameRateLimit > 0 && frameRateLimit < FPS_HIGH_THRESHOLD) {
+    return {
+      low: frameRateLimit * 0.8,
+      high: frameRateLimit - 1,
+    };
+  }
+  return { low: FPS_LOW_THRESHOLD, high: FPS_HIGH_THRESHOLD };
+}
+
 function updatePerformanceReadout(delta) {
   sampleFrameCount += 1;
   sampleElapsed += delta;
   if (sampleElapsed < FPS_SAMPLE_INTERVAL) return;
 
   displayedFps = Math.round(sampleFrameCount / sampleElapsed);
-  if (displayedFps < FPS_LOW_THRESHOLD) {
+  const thresholds = getAdaptiveFpsThresholds();
+  if (displayedFps < thresholds.low) {
     setRenderPixelRatio(renderPixelRatio - 0.1);
-  } else if (displayedFps > FPS_HIGH_THRESHOLD) {
+  } else if (displayedFps > thresholds.high) {
     setRenderPixelRatio(renderPixelRatio + 0.05);
   }
 
@@ -2052,9 +2245,11 @@ function updateFlashlight(delta) {
     : 1;
   flashlightLight.intensity =
     flashlightOwned && flashlightOn && flashlightBattery > 0
-      ? 34 * Math.max(0.5, ratio) * levelEffectiveness
+      ? FLASHLIGHT_BASE_INTENSITY * Math.max(0.5, ratio) * levelEffectiveness
       : 0;
-  flashlightLight.distance = (38 + ratio * 36) * Math.min(1.45, levelEffectiveness);
+  flashlightLight.distance = (
+    FLASHLIGHT_MIN_DISTANCE + (FLASHLIGHT_MAX_DISTANCE - FLASHLIGHT_MIN_DISTANCE) * ratio
+  ) * Math.min(1.45, levelEffectiveness);
   updateFlashlightHud();
 }
 
@@ -2205,7 +2400,6 @@ function updateEntityMarkers(metrics) {
 
         const marker = document.createElement("div");
         marker.className = "entity-marker";
-        if (entity.id === "super-bacteria") marker.classList.add("entity-marker--super");
         if (entity.id?.includes("hound")) marker.classList.add("entity-marker--hound");
         if (entity.id === "level-seven-thing") marker.classList.add("entity-marker--thing");
         const name = document.createElement("strong");
@@ -2558,10 +2752,22 @@ function acquireFlashlight(count) {
   return true;
 }
 
-function acquireDetector(count) {
+function acquireDetector(count, droppedState = null) {
   const wasFirst = !detectorOwned;
   addInventory("detector");
   detectorOwned = true;
+  if (wasFirst && droppedState) {
+    if (Number.isFinite(droppedState.activeTimer)) {
+      detectorActiveTimer = Math.max(0, droppedState.activeTimer);
+    }
+    if (Number.isFinite(droppedState.cooldownTimer)) {
+      detectorCooldownTimer = Math.max(0, droppedState.cooldownTimer);
+    }
+  } else if (!wasFirst) {
+    // Duplicate detectors instantly restore a fully charged, ready-to-use scan.
+    detectorActiveTimer = 0;
+    detectorCooldownTimer = 0;
+  }
   pickupFlashText = formatLocalizedStatus(wasFirst ? "detectorAcquired" : "detectorReadyHint");
   pickupFlashUntil = clock.elapsedTime + 1.7;
   canvas.dataset.detectorPickups = String(count ?? 1);
@@ -2851,14 +3057,15 @@ function tryFocusedInteraction() {
     },
   });
 
-  if (interaction?.interacted) {
-    const localized = getLocalizedText(INTERACTION_TEXT, interaction.id);
+  const interactionId = typeof interaction?.id === "string" ? interaction.id : null;
+  if (interaction?.interacted && interactionId) {
+    const localized = getLocalizedText(INTERACTION_TEXT, interactionId);
     const embedded = interaction.i18n?.[currentLanguage] ?? interaction.i18n?.en ?? {};
-    pickupFlashText = localized.response ?? localized.name ?? embedded.response ?? embedded.name ?? "INTERACTION";
-    pickupFlashUntil = clock.elapsedTime + 1.9;
+    pickupFlashText = embedded.response ?? embedded.name ?? localized.response ?? localized.name ?? "INTERACTION";
+    pickupFlashUntil = clock.elapsedTime + (interaction.feedbackDuration ?? 1900) / 1000;
     useButton?.classList.add("is-active");
     window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
-    canvas.dataset.lastInteraction = interaction.id;
+    canvas.dataset.lastInteraction = interactionId;
     canvas.dataset.lastInteractionCount = String(interaction.count ?? 1);
     writeSaveSnapshot();
     return true;
@@ -2881,7 +3088,9 @@ function usePickup() {
   if (isDoorInteraction(lastMetrics?.focusInteraction) && tryFocusedInteraction()) return;
   const focusedPickup = getFocusedPickupable(lastMetrics);
   const looseTarget = focusedPickup ? worldItems?.getPickupTarget(world.camera.position) : null;
-  if (looseTarget?.id === focusedPickup?.id) {
+  // Do not compare two optional ids directly: when both are absent, undefined
+  // equals undefined and the branch below would dereference looseTarget.id.
+  if (focusedPickup && looseTarget?.id === focusedPickup.id) {
     if (looseTarget.id === "firesalt" && getInventoryCount("firesalt") >= 3) {
       flashPickupHint("inventoryFull", 1200);
       return;
@@ -2896,9 +3105,7 @@ function usePickup() {
         }
         added = true;
       } else if (result.itemId === "detector") {
-        acquireDetector(1);
-        if (Number.isFinite(result.data?.activeTimer)) detectorActiveTimer = Math.max(0, result.data.activeTimer);
-        if (Number.isFinite(result.data?.cooldownTimer)) detectorCooldownTimer = Math.max(0, result.data.cooldownTimer);
+        acquireDetector(1, result.data);
         added = true;
       } else if (result.itemId === "compass") {
         acquireCompass(1);
@@ -2936,7 +3143,9 @@ function usePickup() {
     flashPickupHint("inventoryFull", 1200);
     return;
   }
-  const pickup = liveTarget?.id === focusedPickup?.id ? world.tryPickup?.(world.camera.position) : null;
+  const pickup = focusedPickup && liveTarget?.id === focusedPickup.id
+    ? world.tryPickup?.(world.camera.position)
+    : null;
   if (!pickup?.pickedUp) {
     if (tryFocusedInteraction()) return;
     flashPickupHint("pickupEmpty", 900);
@@ -3147,7 +3356,6 @@ function applyEntityContactDamage(delta, metrics) {
   const id = hit.id ?? "";
   let damage;
   if (id === "level-seven-thing") damage = LEVEL_SEVEN_THING_DAMAGE;
-  else if (id === "super-bacteria") damage = SUPER_BACTERIA_DAMAGE;
   else if (id.includes("hound")) damage = HOUND_DAMAGE;
   else if (id.includes("smiler")) damage = SMILER_DAMAGE;
   else damage = BACTERIA_DAMAGE;
@@ -3170,13 +3378,13 @@ function applyEntityContactDamage(delta, metrics) {
 function animate(timestamp) {
   clock.update(timestamp);
   if (!gameStarted || !world || !controls) {
-    requestAnimationFrame(animate);
+    scheduleNextAnimation();
     return;
   }
   const rawDelta = clock.getDelta();
   if (isPaused || isDocumentReaderOpen()) {
     tickLongPressProgress();
-    requestAnimationFrame(animate);
+    scheduleNextAnimation();
     return;
   }
   const delta = Math.min(rawDelta, 0.05);
@@ -3199,7 +3407,7 @@ function animate(timestamp) {
     frameCount += 1;
     canvas.dataset.sceneReady = "true";
     canvas.dataset.frameCount = String(frameCount);
-    requestAnimationFrame(animate);
+    scheduleNextAnimation();
     return;
   }
 
@@ -3218,6 +3426,7 @@ function animate(timestamp) {
     lastDrinkCancelledUntil = clock.elapsedTime + 1.4;
   }
   const firesaltState = firesaltEffects?.update(delta) ?? { active: false, position: null, radius: 0 };
+  world.camera.getWorldDirection(playerViewDirection);
   let metrics = world.update(delta, elapsed, world.camera.position, {
     entityRepelActive: Boolean(controlState.silenceLiquidActive),
     repelRadius: SILENCE_LIQUID_REPEL_RADIUS,
@@ -3237,6 +3446,12 @@ function animate(timestamp) {
       };
     })(),
     flashlightOn: flashlightOwned && flashlightOn && flashlightBattery > 0,
+    playerView: {
+      origin: world.camera.position,
+      direction: playerViewDirection,
+      minimumDot: 0.985,
+      entityLookHeight: 0.9,
+    },
     playerSprinting: controlState.sprinting,
     playerMoving: controlState.moving,
     firesaltActive: firesaltState.active,
@@ -3278,6 +3493,7 @@ function animate(timestamp) {
     ambientHum.stopAllEntityAudio();
   } else {
     ambientHum.update(metrics.flicker, controlState);
+    ambientHum.updateLevelAudio(world.level);
     ambientHum.updateEntityAudio(metrics.entities);
   }
   updateHud(metrics, controlState, elapsed);
@@ -3289,7 +3505,7 @@ function animate(timestamp) {
   frameCount += 1;
   canvas.dataset.sceneReady = "true";
   canvas.dataset.frameCount = String(frameCount);
-  requestAnimationFrame(animate);
+  scheduleNextAnimation();
 }
 
 function startAudioOnce() {
@@ -3336,6 +3552,16 @@ function onUseKeyDown(event) {
     return;
   }
   if (isTypingTarget(event.target)) return;
+  if (event.code === "KeyO") {
+    const mobileLayout = window.matchMedia?.("(pointer: coarse), (max-width: 800px)").matches;
+    if (!mobileLayout && !event.repeat) {
+      event.preventDefault();
+      gameplayUiHidden = !gameplayUiHidden;
+      appRoot?.classList.toggle("is-ui-hidden", gameplayUiHidden);
+      canvas.dataset.uiHidden = String(gameplayUiHidden);
+    }
+    return;
+  }
   if (event.code === "KeyX" && debugMode.queryEnabled) {
     event.preventDefault();
     if (!event.repeat) toggleDebugFeatures();
@@ -3869,6 +4095,13 @@ mainMenuStart?.addEventListener("keydown", (event) => {
   event.preventDefault();
   event.stopPropagation();
   handleMainMenuStart();
+});
+frameRateButtons.forEach((button) => {
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    requestFrameRateLimit(button.dataset.frameRate);
+  });
 });
 
 mainMenuSettings?.addEventListener("pointerdown", (event) => {
