@@ -17,6 +17,23 @@ const LAMP_CELLS = [
   { col: 32, row: 20 }, { col: 24, row: 20 }, { col: 30, row: 8 }, { col: 40, row: 8 },
 ];
 
+function createLampPoolTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  const gradient = context.createRadialGradient(64, 64, 4, 64, 64, 64);
+  gradient.addColorStop(0, "rgba(255, 232, 177, 0.9)");
+  gradient.addColorStop(0.28, "rgba(255, 196, 105, 0.45)");
+  gradient.addColorStop(0.68, "rgba(255, 174, 76, 0.1)");
+  gradient.addColorStop(1, "rgba(255, 174, 76, 0)");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 128, 128);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) {
   const houseWall = new THREE.MeshStandardMaterial({ color: 0x41444c, emissive: 0x07090c, emissiveIntensity: 0.26, roughness: 0.92 });
   const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x171b22, roughness: 0.94 });
@@ -25,6 +42,8 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
   const lampMetal = new THREE.MeshStandardMaterial({ color: 0x242b30, roughness: 0.8, metalness: 0.68 });
   const lampGlass = new THREE.MeshStandardMaterial({ color: 0xffe7ac, emissive: 0xffbd52, emissiveIntensity: 3.2, roughness: 0.2 });
   const roadReflector = new THREE.MeshBasicMaterial({ color: 0xc6b98c, transparent: true, opacity: 0.52 });
+  const lampPoolTexture = createLampPoolTexture();
+  const lampPoolGeometry = new THREE.CircleGeometry(4.15, 32);
   const colliders = [];
 
   HOUSE_CELLS.forEach((house, index) => {
@@ -69,12 +88,24 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
     const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), lampGlass);
     bulb.position.set(0.63, 3.19, 0);
     group.add(pole, arm, bulb);
-    // A broad, gently decaying pool reaches the asphalt beneath every visible fixture.
-    const light = new THREE.PointLight(0xffd18b, 0, 38, 1.15);
+    // Keep the physical light local; the separate radial pool is its visible wet-asphalt reflection.
+    const light = new THREE.PointLight(0xffd18b, 0, 16, 2.05);
     light.position.set(0.62, 3.05, 0);
-    group.add(light);
+    const poolMaterial = new THREE.MeshBasicMaterial({
+      map: lampPoolTexture,
+      color: 0xffcf83,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const pool = new THREE.Mesh(lampPoolGeometry, poolMaterial);
+    pool.name = `level-nine-lamp-pool-${index + 1}`;
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(0.62, 0.018, 0);
+    group.add(light, pool);
     scene.add(group);
-    lamps.push({ light, bulb, phase: index * 1.71 + lamp.col * 0.13 });
+    lamps.push({ light, bulb, pool, phase: index * 1.71 + lamp.col * 0.13 });
   });
 
   for (let index = 0; index < 18; index += 1) {
@@ -109,11 +140,13 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
   return {
     colliders,
     update(elapsed, fogSurge) {
-      lamps.forEach(({ light, bulb, phase }) => {
+      lamps.forEach(({ light, bulb, pool, phase }) => {
         const flicker = Math.sin(elapsed * 2.3 + phase) > 0.94 ? 0.18 : 1;
-        const strength = (fogSurge ? 0.7 : 1.14) * flicker;
-        light.intensity = strength * 10.5;
+        const strength = (fogSurge ? 0.52 : 0.88) * flicker;
+        light.intensity = strength * 2.8;
         bulb.material.emissiveIntensity = 2.1 + strength * 4.2;
+        pool.material.opacity = (fogSurge ? 0.18 : 0.34) * flicker;
+        pool.scale.setScalar(fogSurge ? 0.84 : 1);
       });
     },
   };

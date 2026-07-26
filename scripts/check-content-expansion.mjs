@@ -187,7 +187,8 @@ assert.match(levelNineSource, /targetLevel:\s*null/);
 assert.match(levelNineSource, /level-nine-asphalt-roads/);
 assert.doesNotMatch(levelNineSource, /collectGridWallTransforms|CEILING_Y|createLevelNineCeilingTexture/);
 const levelNinePropsSource = await readFile(new URL("../src/scene/level-nine/props.js", import.meta.url), "utf8");
-assert.match(levelNinePropsSource, /new THREE\.PointLight\(0xffd18b, 0, 38, 1\.15\)/);
-assert.match(levelNinePropsSource, /light\.intensity = strength \* 10\.5/);
+assert.match(levelNinePropsSource, /new THREE\.PointLight\(0xffd18b, 0, 16, 2\.05\)/);
+assert.match(levelNinePropsSource, /new THREE\.CircleGeometry\(4\.15, 32\)/);
+assert.match(levelNinePropsSource, /pool\.material\.opacity = \(fogSurge \? 0\.18 : 0\.34\) \* flicker/);
 
 console.log("content expansion checks passed");
