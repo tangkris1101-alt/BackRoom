@@ -85,5 +85,8 @@ export function createStandardPickupSet(scene, {
   };
 }
 
-export const northSouthWallGeometry = enableAoUv(new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS));
-export const eastWestWallGeometry = enableAoUv(new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS));
+// Adjacent wall sections meet at their edges. Extending each box by its
+// thickness made their visible faces coplanar at joins, causing depth-buffer
+// flicker (Z-fighting) while preserving no useful visual detail.
+export const northSouthWallGeometry = enableAoUv(new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS));
+export const eastWestWallGeometry = enableAoUv(new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE));

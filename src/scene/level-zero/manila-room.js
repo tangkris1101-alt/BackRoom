@@ -66,6 +66,7 @@ function addTableAndDocumentation(scene, center) {
     maxX: tableX + 1.275,
     minZ: tableZ - 0.66,
     maxZ: tableZ + 0.66,
+    topY: 1.11,
   }];
 }
 

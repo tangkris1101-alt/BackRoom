@@ -94,6 +94,7 @@ export function addRoomTables(scene, cellCenter) {
       maxX: center.x + halfX,
       minZ: center.z - halfZ,
       maxZ: center.z + halfZ,
+      topY: 0.88,
     });
   });
 

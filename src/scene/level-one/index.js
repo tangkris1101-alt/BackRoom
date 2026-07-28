@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { colliderBlocksAtFeetHeight, getPlatformFloorHeight, resolvePlatformOverlap } from "../common/platform-collision.js";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -12,7 +13,7 @@ import {
   HUB_LEVEL,
 } from "../constants.js";
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
-import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
+import { attachFirstPersonViewModel, getViewModelName, setFirstPersonViewModelLighting, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import {
   LEVEL_ONE_COLS,
   LEVEL_ONE_ROWS,
@@ -107,10 +108,23 @@ function createLevelOneLightField(fixturePositions) {
   texture.magFilter = THREE.LinearFilter;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
-  return { texture, width, height };
+  const sample = (worldX, worldZ) => THREE.MathUtils.clamp(
+    fixturePositions.reduce((total, fixture) => {
+      const radius = Math.max((24 / size) * width, fixture.range * 1.42);
+      const distance = Math.hypot(fixture.x - worldX, fixture.z - worldZ);
+      const falloff = THREE.MathUtils.clamp(1 - distance / radius, 0, 1);
+      const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.8, 0.42, 1);
+      return total + falloff * falloff * strength;
+    }, 0),
+    0,
+    1,
+  );
+  return { texture, width, height, sample };
 }
 
 function applyLevelOneLightField(material, lightField, intensity) {
+  if (!material?.isMeshStandardMaterial || material.userData.levelOneLightFieldIntensity != null) return;
+  material.userData.levelOneLightFieldIntensity = intensity;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.levelOneLightField = { value: lightField.texture };
     shader.uniforms.levelOneLightFieldBounds = {
@@ -149,6 +163,24 @@ function applyLevelOneLightField(material, lightField, intensity) {
       );
   };
   material.customProgramCacheKey = () => `level-one-light-field-${intensity}`;
+}
+
+function isFirstPersonViewModelMesh(object) {
+  for (let current = object; current; current = current.parent) {
+    if (typeof current.name === "string" && current.name.startsWith("first-person-")) return true;
+  }
+  return false;
+}
+
+function applyLevelOnePropLightField(scene, lightField) {
+  scene.traverse((object) => {
+    if (!object.isMesh || isFirstPersonViewModelMesh(object)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.filter(Boolean).forEach((material) => {
+      if (material.emissiveIntensity > 0.5) return;
+      applyLevelOneLightField(material, lightField, 0.72);
+    });
+  });
 }
 
 function addLevelOneDoorwayWall(scene, mount, material) {
@@ -278,32 +310,32 @@ export function createLevelOneScene({ initialState = null } = {}) {
 
   addInstancedBoxes(
     scene,
-    new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
+    new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS),
     wallMaterials,
     northSouth,
   );
   addInstancedBoxes(
     scene,
-    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
+    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE),
     wallMaterials,
     eastWest,
   );
   addInstancedBoxes(
     scene,
-    new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
+    new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS),
     wallMaterials,
     corridorNorthSouth,
   );
   addInstancedBoxes(
     scene,
-    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
+    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE),
     wallMaterials,
     corridorEastWest,
   );
   addLevelOneDoorwayWall(scene, elevatorMount, wallMaterials);
   addLevelOneDoorwayWall(scene, hubMount, wallMaterials);
 
-  const fixtures = createLevelOneLights(scene, fixturePositions);
+  const fixtures = createLevelOneLights(scene, fixturePositions, { dynamicPointLights: true });
   const updateLightState = createStableLightState("HUM", {
     dimBelow: 0.48,
     normalAbove: 0.62,
@@ -430,10 +462,11 @@ export function createLevelOneScene({ initialState = null } = {}) {
     worldToCell: levelOneWorldToCell,
     cellCenter: levelOneCellCenter,
   });
+  applyLevelOnePropLightField(scene, lightField);
 
   let objectiveReached = Boolean(objectiveInitial.reached);
 
-  function isWalkable(x, z, radius = 0.36) {
+  function isWalkable(x, z, radius = 0.36, feetY = 0) {
     const corner = radius * 0.72;
     const samples = [
       [0, 0],
@@ -453,7 +486,17 @@ export function createLevelOneScene({ initialState = null } = {}) {
     });
     if (!isInOpenCells) return false;
 
-    return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
+    return !propColliders.some((collider) =>
+      colliderBlocksAtFeetHeight(collider, feetY) && circleIntersectsAabb(x, z, radius, collider),
+    );
+  }
+
+  function getFloorHeight(x, z, feetY) {
+    return getPlatformFloorHeight({ colliders: propColliders, x, z, feetY });
+  }
+
+  function resolvePosition(x, z, radius, feetY, maxCorrection) {
+    return resolvePlatformOverlap({ colliders: propColliders, x, z, radius, feetY, maxCorrection });
   }
 
   function update(delta, elapsed, playerPosition, effects = {}) {
@@ -463,6 +506,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
       const brokenCut = fixture.broken && Math.sin(elapsed * fixture.speed + fixture.phase) > 0.93 ? 0.52 : 1;
       const pulse = Math.max(0.38, hum * brokenCut - fixture.weak);
       fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.55;
+      fixture.pulse = pulse;
       updateFixturePointLight(fixture, pulse, 1.05);
       lightTotal += pulse;
     });
@@ -475,6 +519,13 @@ export function createLevelOneScene({ initialState = null } = {}) {
     )));
     if (enteredExit) objectiveReached = true;
     scene.fog.density = 0.012 + (1 - flicker) * 0.009;
+    fixtures.updatePointLights?.(playerPosition, delta, elapsed);
+    const localExposure = lightField.sample(playerPosition.x, playerPosition.z);
+    setFirstPersonViewModelLighting(viewModel, {
+      intensity: (0.075 + localExposure * 0.3) * (0.74 + flicker * 0.26),
+      skyColor: 0xe6efdf,
+      groundColor: 0x31463c,
+    });
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
     const superAlmondWaterState = superAlmondWater.update(delta, elapsed, playerPosition);
@@ -550,6 +601,8 @@ export function createLevelOneScene({ initialState = null } = {}) {
     spawn,
     targetPosition,
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     decorativeItemSpawns: [
       { id: "empty-can", position: { ...levelOneCellCenter(10, 20), y: 0.2 }, rotation: 0.7, tiltZ: 0.12 },
       { id: "crumpled-note", position: { ...levelOneCellCenter(27, 18), y: 0.08 }, rotation: -0.35, tiltX: 0.04 },

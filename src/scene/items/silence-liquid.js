@@ -12,6 +12,7 @@ import {
 } from "../constants.js";
 import {
   createItemHighlight,
+  createItemGroundShadow,
   createPickupState,
   getPickupDistance,
   inspectForward,
@@ -62,12 +63,6 @@ export function createSilenceLiquidModel() {
     opacity: 0.86,
     side: THREE.DoubleSide,
   });
-  const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x080514,
-    transparent: true,
-    opacity: 0.28,
-    depthWrite: false,
-  });
 
   const bottleProfile = [
     new THREE.Vector2(0.074, 0.02),
@@ -109,11 +104,6 @@ export function createSilenceLiquidModel() {
   cap.position.y = 0.89;
   group.add(cap);
 
-  const baseShadow = new THREE.Mesh(new THREE.CircleGeometry(0.25, 28), shadowMaterial);
-  baseShadow.rotation.x = -Math.PI / 2;
-  baseShadow.position.y = 0.01;
-  group.add(baseShadow);
-
   markItemMeshes(group, "silence-liquid");
   return group;
 }
@@ -150,6 +140,7 @@ export function createSilenceLiquidPickup(
   const model = createSilenceLiquidModel();
   model.scale.setScalar(SILENCE_LIQUID_MODEL_SCALE);
   group.add(model);
+  group.add(createItemGroundShadow({ radius: 0.25, color: 0x080514, opacity: 0.28, y: 0.01 }));
   const highlight = createItemHighlight({
     color: 0xb9b0ff,
     width: 0.34,

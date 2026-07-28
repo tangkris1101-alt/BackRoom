@@ -3,9 +3,11 @@ import { SILENCE_LIQUID_DURATION } from "./scene/constants.js";
 
 const PLAYER_RADIUS = 0.36;
 const GRAVITY = 11.5;
-const JUMP_VELOCITY = 4.4;
+// 5.15 reaches roughly 1.15m, enough for the game\'s 0.9–1.1m tables while
+// keeping the jump below wall and shelf height.
+const JUMP_VELOCITY = 5.15;
 const MAX_STAMINA = 100;
-const STAMINA_DRAIN_RATE = 15;
+const STAMINA_DRAIN_RATE = 10;
 const STAMINA_RECOVERY_RATE = 20;
 const STAMINA_RECOVERY_DELAY = 0.55;
 const MIN_SPRINT_STAMINA = 0;
@@ -35,7 +37,7 @@ function clampPitch(pitch) {
 }
 
 export class FirstPersonControls {
-  constructor({ camera, canvas, joystick, jumpButton, isWalkable, getFloorHeight, spawn, movementSpeedMultiplier = 1 }) {
+  constructor({ camera, canvas, joystick, jumpButton, isWalkable, getFloorHeight, resolvePosition, spawn, movementSpeedMultiplier = 1 }) {
     this.camera = camera;
     this.canvas = canvas;
     this.joystick = joystick;
@@ -43,6 +45,7 @@ export class FirstPersonControls {
     this.jumpButton = jumpButton;
     this.isWalkable = isWalkable;
     this.getFloorHeight = typeof getFloorHeight === "function" ? getFloorHeight : () => 0;
+    this.resolvePosition = typeof resolvePosition === "function" ? resolvePosition : null;
     this.spawn = spawn;
     this.environmentSpeedMultiplier = movementSpeedMultiplier;
     this.eyeHeight = 1.62;
@@ -190,10 +193,11 @@ export class FirstPersonControls {
     this.camera.userData.firstPersonMotion = motion;
   }
 
-  setWorld({ camera, isWalkable, getFloorHeight, spawn, movementSpeedMultiplier = 1 }) {
+  setWorld({ camera, isWalkable, getFloorHeight, resolvePosition, spawn, movementSpeedMultiplier = 1 }) {
     this.camera = camera;
     this.isWalkable = isWalkable;
     this.getFloorHeight = typeof getFloorHeight === "function" ? getFloorHeight : () => 0;
+    this.resolvePosition = typeof resolvePosition === "function" ? resolvePosition : null;
     this.spawn = spawn;
     this.environmentSpeedMultiplier = movementSpeedMultiplier;
     this.defaultFov = camera.fov;
@@ -377,11 +381,11 @@ export class FirstPersonControls {
   }
 
   canStandAt(x, z) {
-    return this.isWalkable(x, z, PLAYER_RADIUS);
+    return this.isWalkable(x, z, PLAYER_RADIUS, this.bodyY - this.eyeHeight);
   }
 
   resolveFloorHeight(x, z) {
-    const floorHeight = this.getFloorHeight(x, z);
+    const floorHeight = this.getFloorHeight(x, z, this.bodyY - this.eyeHeight);
     return Number.isFinite(floorHeight) ? floorHeight : null;
   }
 
@@ -399,6 +403,20 @@ export class FirstPersonControls {
       return { x: currentX, z: nextZ };
     }
     return { x: currentX, z: currentZ };
+  }
+
+  resolveEmbeddedPosition(delta) {
+    if (!this.resolvePosition) return;
+    const resolved = this.resolvePosition(
+      this.camera.position.x,
+      this.camera.position.z,
+      PLAYER_RADIUS,
+      this.bodyY - this.eyeHeight,
+      Math.max(0.015, this.moveSpeed * Math.max(0, delta)),
+    );
+    if (!Number.isFinite(resolved?.x) || !Number.isFinite(resolved?.z)) return;
+    this.camera.position.x = resolved.x;
+    this.camera.position.z = resolved.z;
   }
 
   onCanvasPointerDown(event) {
@@ -603,7 +621,7 @@ export class FirstPersonControls {
     this.verticalVelocity -= GRAVITY * delta;
     this.bodyY += this.verticalVelocity * delta;
 
-    if (this.hasFloorSupport && this.bodyY <= this.groundY) {
+    if (this.hasFloorSupport && this.verticalVelocity <= 0 && this.bodyY <= this.groundY) {
       this.bodyY = this.groundY;
       this.verticalVelocity = 0;
       this.isGrounded = true;
@@ -703,6 +721,13 @@ export class FirstPersonControls {
 
     const inputLength = Math.hypot(inputX, inputY);
     let hasMovementInput = false;
+
+    // Evaluate vertical contact first. A player falling past a table edge is
+    // therefore blocked by its side before horizontal movement can deepen the
+    // overlap, just like a physical capsule collision.
+    this.updateVerticalMotion(delta);
+    this.resolveEmbeddedPosition(delta);
+
     if (inputLength >= 0.01) {
       hasMovementInput = true;
       if (inputLength > 1) {
@@ -779,7 +804,6 @@ export class FirstPersonControls {
       }
     }
 
-    this.updateVerticalMotion(delta);
     this.updateHeadBob(delta, horizontalDistance, hasMovementInput);
     this.updateZoom(delta);
     this.applyRotation();

@@ -446,13 +446,13 @@ export function createLevelSevenScene({ initialState = null } = {}) {
   const { northSouth, eastWest, fixturePositions } = collectLevelSevenTransforms();
   addInstancedBoxes(
     scene,
-    new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
+    new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS),
     wallMaterial,
     northSouth,
   );
   addInstancedBoxes(
     scene,
-    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
+    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE),
     wallMaterial,
     eastWest,
   );

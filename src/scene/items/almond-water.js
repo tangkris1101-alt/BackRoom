@@ -13,6 +13,7 @@ import {
 import { createAlmondWaterLabelTexture } from "./labels.js";
 import {
   createItemHighlight,
+  createItemGroundShadow,
   createPickupState,
   getPickupDistance,
   inspectForward,
@@ -60,12 +61,6 @@ export function createAlmondWaterModel(variant = "normal") {
     roughness: 0.46,
     metalness: isSuper ? 0.2 : 0.12,
   });
-  const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: isSuper ? 0x332005 : 0x1d2718,
-    transparent: true,
-    opacity: isSuper ? 0.26 : 0.2,
-    depthWrite: false,
-  });
 
   const glassProfile = [
     new THREE.Vector2(0.108, 0.02),
@@ -108,11 +103,6 @@ export function createAlmondWaterModel(variant = "normal") {
     groove.position.y = 0.824 + i * 0.027;
     group.add(groove);
   }
-
-  const baseShadow = new THREE.Mesh(new THREE.CircleGeometry(0.33, 32), shadowMaterial);
-  baseShadow.rotation.x = -Math.PI / 2;
-  baseShadow.position.y = 0.012;
-  group.add(baseShadow);
 
   markItemMeshes(group, isSuper ? "super-almond-water" : "almond-water");
   return group;
@@ -157,6 +147,12 @@ export function createAlmondWaterPickup(
   const bottleModel = createAlmondWaterModel(variant);
   bottleModel.scale.setScalar(isSuper ? SUPER_ALMOND_WATER_MODEL_SCALE : ALMOND_WATER_MODEL_SCALE);
   group.add(bottleModel);
+  group.add(createItemGroundShadow({
+    radius: 0.33,
+    color: isSuper ? 0x332005 : 0x1d2718,
+    opacity: isSuper ? 0.26 : 0.2,
+    y: 0.012,
+  }));
   const highlight = createItemHighlight({
     color: isSuper ? 0xffdf6d : 0xdfffe9,
     width: isSuper ? 0.42 : 0.38,

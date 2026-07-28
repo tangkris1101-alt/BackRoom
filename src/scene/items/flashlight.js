@@ -9,6 +9,7 @@ import {
 } from "../constants.js";
 import {
   createItemHighlight,
+  createItemGroundShadow,
   createPickupState,
   getPickupDistance,
   inspectForward,
@@ -47,12 +48,6 @@ export function createFlashlightModel() {
     roughness: 0.56,
     metalness: 0.18,
   });
-  const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x060807,
-    transparent: true,
-    opacity: 0.24,
-    depthWrite: false,
-  });
 
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.105, 0.62, 20), bodyMaterial);
   body.rotation.z = Math.PI / 2;
@@ -84,15 +79,6 @@ export function createFlashlightModel() {
   const button = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.026, 0.06), buttonMaterial);
   button.position.set(0.07, 0.235, 0);
   group.add(button);
-
-  const baseShadow = new THREE.Mesh(new THREE.CircleGeometry(0.54, 28), shadowMaterial);
-  // World-only decoration. The first-person holder removes it so a ground
-  // shadow never becomes a dark disc floating in front of the camera.
-  baseShadow.name = "flashlight-ground-shadow";
-  baseShadow.rotation.x = -Math.PI / 2;
-  baseShadow.scale.z = 0.42;
-  baseShadow.position.y = 0.011;
-  group.add(baseShadow);
 
   markItemMeshes(group, "flashlight");
   return group;
@@ -129,6 +115,13 @@ export function createFlashlightPickup(
   group.name = "flashlight-pickup";
   const model = createFlashlightModel();
   group.add(model);
+  group.add(createItemGroundShadow({
+    radius: 0.54,
+    color: 0x060807,
+    opacity: 0.24,
+    scaleZ: 0.42,
+    y: 0.011,
+  }));
   const highlight = createItemHighlight({
     color: 0xbfeeff,
     width: 1.16,

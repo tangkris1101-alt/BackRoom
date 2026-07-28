@@ -31,6 +31,30 @@ export function createItemHighlight({
   return highlight;
 }
 
+// This is a low-cost contact-shadow cue, not a renderer shadow. Keep it on
+// the pickup root rather than the tilted item model so it always remains flat
+// against the world floor.
+export function createItemGroundShadow({
+  radius,
+  color,
+  opacity,
+  scaleZ = 1,
+  y = 0.011,
+} = {}) {
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+  });
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(radius, 32), material);
+  shadow.name = "item-ground-shadow";
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.scale.z = scaleZ;
+  shadow.position.y = y;
+  return shadow;
+}
+
 export function setItemHighlight(highlight, visible) {
   if (highlight) highlight.visible = Boolean(visible);
 }

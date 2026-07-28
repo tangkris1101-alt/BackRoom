@@ -84,6 +84,10 @@
             <span id="main-menu-quality-label">画质</span>
             <output id="main-menu-quality-value">自动</output>
           </div>
+          <button id="main-menu-changelog" class="settings-changelog-button" type="button">
+            <strong id="main-menu-changelog-label">更新日志</strong>
+            <small id="main-menu-changelog-hint">查看最近的更新记录</small>
+          </button>
         </section>
       </section>
 
@@ -447,12 +451,30 @@
             <span id="pause-quality-label">画质</span>
             <output id="pause-quality-value">自动</output>
           </div>
+          <button id="pause-changelog" class="settings-changelog-button" type="button">
+            <strong id="pause-changelog-label">更新日志</strong>
+            <small id="pause-changelog-hint">查看最近的更新记录</small>
+          </button>
         </section>
         <button id="pause-reset" class="pause-overlay__reset" type="button" aria-label="重置进度">
           <strong id="pause-reset-label">重置进度</strong>
           <small id="pause-reset-hint">清空所有存档并回到 L0</small>
         </button>
       </div>
+
+      <section id="changelog-modal" class="changelog-modal" role="dialog" aria-modal="true" aria-labelledby="changelog-title" hidden>
+        <article class="changelog-modal__panel">
+          <header class="changelog-modal__header">
+            <div>
+              <span id="changelog-eyebrow">GIT HISTORY SNAPSHOT</span>
+              <h2 id="changelog-title">更新日志</h2>
+            </div>
+            <button id="changelog-close" class="changelog-modal__close" type="button" aria-label="关闭更新日志">×</button>
+          </header>
+          <p id="changelog-description" class="changelog-modal__description">以下内容来自当前版本内置的 Git 提交记录。</p>
+          <ol id="changelog-list" class="changelog-modal__list"></ol>
+        </article>
+      </section>
 
       <div id="tutorial-overlay" class="tutorial-overlay" aria-live="polite" hidden>
         <article class="tutorial-modal" role="dialog" aria-label="新手教程">

@@ -122,6 +122,10 @@ export function attachFirstPersonViewModel(camera) {
   viewModel.name = "first-person-baked-hazmat-arms";
   viewModel.userData.modelName = VIEW_MODEL_NAME;
   viewModel.userData.loaded = false;
+  const fillLight = new THREE.HemisphereLight(0xe8f0df, 0x304039, 0);
+  fillLight.name = "first-person-view-model-fill";
+  viewModel.add(fillLight);
+  viewModel.userData.fillLight = fillLight;
   camera.add(viewModel);
 
   try {
@@ -133,6 +137,15 @@ export function attachFirstPersonViewModel(camera) {
     viewModel.userData.loadError = error?.message ?? "failed";
   }
   return viewModel;
+}
+
+export function setFirstPersonViewModelLighting(viewModel, { intensity = 0, skyColor = 0xe8f0df, groundColor = 0x304039 } = {}) {
+  const fillLight = viewModel?.userData?.fillLight;
+  if (!fillLight) return;
+  fillLight.color.set(skyColor);
+  fillLight.groundColor.set(groundColor);
+  const blend = 0.12;
+  fillLight.intensity = THREE.MathUtils.lerp(fillLight.intensity, intensity, blend);
 }
 
 function setHeldItemMaterialState(root) {
@@ -204,9 +217,6 @@ export function syncFirstPersonHeldItem(camera, itemId) {
 
   const heldItem = createWorldItemModel(heldItemId);
   heldItem.name = HELD_ITEM_NAME;
-  if (heldItemId === "flashlight") {
-    heldItem.getObjectByName("flashlight-ground-shadow")?.removeFromParent();
-  }
   setHeldItemMaterialState(heldItem);
   positionHeldItem(heldItem, heldItemId);
   viewModel.add(heldItem);

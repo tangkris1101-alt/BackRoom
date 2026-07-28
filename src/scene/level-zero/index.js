@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { colliderBlocksAtFeetHeight, getPlatformFloorHeight, resolvePlatformOverlap } from "../common/platform-collision.js";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -223,13 +224,13 @@ export function createLevelZeroScene({ initialState = null } = {}) {
 
   addInstancedBoxes(
     scene,
-    new THREE.BoxGeometry(CELL_SIZE + WALL_THICKNESS, WALL_HEIGHT, WALL_THICKNESS),
+    new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS),
     wallMaterials,
     northSouth,
   );
   addInstancedBoxes(
     scene,
-    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE + WALL_THICKNESS),
+    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE),
     wallMaterials,
     eastWest,
   );
@@ -286,7 +287,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   });
   let exitReached = Boolean(objectiveInitial.reached);
 
-  function isWalkable(x, z, radius = 0.36) {
+  function isWalkable(x, z, radius = 0.36, feetY = 0) {
     const corner = radius * 0.72;
     const samples = [
       [0, 0],
@@ -305,6 +306,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       return isOpenCell(cell.col, cell.row);
     });
     return insideLevelGeometry && !propColliders.some((collider) =>
+      colliderBlocksAtFeetHeight(collider, feetY) &&
       x + radius > collider.minX &&
       x - radius < collider.maxX &&
       z + radius > collider.minZ &&
@@ -312,9 +314,14 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     );
   }
 
-  function getFloorHeight(x, z) {
+  function getFloorHeight(x, z, feetY) {
     const exitDistance = Math.hypot(x - exitPosition.x, z - exitPosition.z);
-    return exitDistance < EXIT_HOLE_RADIUS - 0.12 ? null : 0;
+    if (exitDistance < EXIT_HOLE_RADIUS - 0.12) return null;
+    return getPlatformFloorHeight({ colliders: propColliders, x, z, feetY });
+  }
+
+  function resolvePosition(x, z, radius, feetY, maxCorrection) {
+    return resolvePlatformOverlap({ colliders: propColliders, x, z, radius, feetY, maxCorrection });
   }
 
   function update(delta, elapsed, playerPosition) {
@@ -385,6 +392,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     targetPosition: exitPosition,
     isWalkable,
     getFloorHeight,
+    resolvePosition,
     decorativeItemSpawns: [
       { id: "rusted-key", position: { ...cellCenter(3, 18), y: 0.08 }, rotation: 0.6, tiltZ: 0.05 },
       { id: "crumpled-note", position: { ...cellCenter(10, 21), y: 0.07 }, rotation: -0.35, tiltX: 0.04 },

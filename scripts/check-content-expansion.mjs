@@ -132,6 +132,11 @@ assert.equal(
   true,
 );
 const mainSource = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
+assert.match(mainSource, /const prewarm = preloadLevelScene\(nextLevelInfo\.level\);/);
+assert.match(mainSource, /await transition\.prewarm;/);
+assert.match(mainSource, /await renderer\.compileAsync\?\.\(world\.scene, world\.camera\);/);
+assert.match(mainSource, /levelTransition\.revealElapsed \+= delta \* 1000;/);
+assert.doesNotMatch(mainSource, /LEVEL_TRANSITION_MS/);
 assert.match(mainSource, /const debugBypassHubLocks = isDebugFeaturesActive\(\) && world\?\.level === HUB_LEVEL;/);
 assert.match(mainSource, /debugBypassHubLocks \|\| getLevelKeyTarget/);
 const controlsSource = await readFile(new URL("../src/first-person-controls.js", import.meta.url), "utf8");
@@ -181,6 +186,9 @@ for (const level of ["one", "two", "three", "four", "five", "six", "seven"]) {
 const levelEightSource = await readFile(new URL("../src/scene/level-eight/index.js", import.meta.url), "utf8");
 const sceneIndexSource = await readFile(new URL("../src/scene/index.js", import.meta.url), "utf8");
 const levelNineSource = await readFile(new URL("../src/scene/level-nine/index.js", import.meta.url), "utf8");
+const levelOneSource = await readFile(new URL("../src/scene/level-one/index.js", import.meta.url), "utf8");
+const levelOnePropsSource = await readFile(new URL("../src/scene/level-one/props.js", import.meta.url), "utf8");
+const viewModelSource = await readFile(new URL("../src/scene/common/view-model.js", import.meta.url), "utf8");
 assert.match(levelEightSource, /targetLevel:\s*9/);
 assert.match(sceneIndexSource, /level-nine\/index\.js/);
 assert.match(levelNineSource, /targetLevel:\s*null/);
@@ -190,5 +198,9 @@ const levelNinePropsSource = await readFile(new URL("../src/scene/level-nine/pro
 assert.match(levelNinePropsSource, /new THREE\.PointLight\(0xffd18b, 0, 16, 2\.05\)/);
 assert.match(levelNinePropsSource, /new THREE\.CircleGeometry\(4\.15, 32\)/);
 assert.match(levelNinePropsSource, /pool\.material\.opacity = \(fogSurge \? 0\.18 : 0\.34\) \* flicker/);
+assert.match(levelOneSource, /createLevelOneLights\(scene, fixturePositions, \{ dynamicPointLights: true \}\)/);
+assert.match(levelOneSource, /applyLevelOnePropLightField\(scene, lightField\)/);
+assert.match(levelOnePropsSource, /fixtures\.updatePointLights = \(playerPosition, delta, elapsed\)/);
+assert.match(viewModelSource, /setFirstPersonViewModelLighting/);
 
 console.log("content expansion checks passed");

@@ -27,7 +27,7 @@ import {
   getLevelOneTargetMount,
 } from "./layout.js";
 
-export function createLevelOneLights(scene, fixturePositions) {
+export function createLevelOneLights(scene, fixturePositions, { dynamicPointLights = false } = {}) {
   const fixtures = [];
   const pointLightIndexes = new Set(
     fixturePositions
@@ -83,7 +83,7 @@ export function createLevelOneLights(scene, fixturePositions) {
     }
 
     let light = null;
-    if (fixture.hasPointLight && pointLightIndexes.has(index)) {
+    if (!dynamicPointLights && fixture.hasPointLight && pointLightIndexes.has(index)) {
       light = createFixturePointLight(fixture, tubeY - 0.2, {
         rangeScale: 1.22,
         intensityScale: 3.25,
@@ -94,6 +94,12 @@ export function createLevelOneLights(scene, fixturePositions) {
     fixtures.push({
       material: tubeMaterial,
       light,
+      x: fixture.x,
+      z: fixture.z,
+      lightY: tubeY - 0.2,
+      color: fixture.color,
+      range: fixture.range,
+      priority: fixture.priority ?? 0,
       phase: fixture.phase,
       speed: fixture.speed,
       baseIntensity: fixture.baseIntensity,
@@ -101,6 +107,45 @@ export function createLevelOneLights(scene, fixturePositions) {
       broken: fixture.broken,
     });
   });
+
+  if (dynamicPointLights) {
+    const lightPool = Array.from({ length: LEVEL_ONE_MAX_POINT_LIGHTS }, () => {
+      const light = new THREE.PointLight(0xffffff, 0, 1, 2);
+      light.visible = false;
+      scene.add(light);
+      return light;
+    });
+    let nextAssignmentAt = 0;
+
+    fixtures.updatePointLights = (playerPosition, delta, elapsed) => {
+      if (elapsed >= nextAssignmentAt) {
+        const ranked = fixtures
+          .map((fixture) => ({
+            fixture,
+            score: fixture.priority * 5 - Math.hypot(fixture.x - playerPosition.x, fixture.z - playerPosition.z),
+          }))
+          .sort((left, right) => right.score - left.score)
+          .slice(0, lightPool.length);
+        lightPool.forEach((light, index) => {
+          const source = ranked[index]?.fixture ?? null;
+          light.userData.source = source;
+          if (!source) return;
+          light.color.set(source.color);
+          light.distance = source.range * 1.22;
+          light.position.set(source.x, source.lightY, source.z);
+          light.visible = true;
+        });
+        nextAssignmentAt = elapsed + 0.26;
+      }
+      const blend = 1 - Math.exp(-delta * 9);
+      lightPool.forEach((light) => {
+        const source = light.userData.source;
+        const target = source ? source.pulse * source.baseIntensity * 3.25 : 0;
+        light.intensity = THREE.MathUtils.lerp(light.intensity, target, blend);
+        light.visible = light.intensity > 0.012;
+      });
+    };
+  }
 
   return fixtures;
 }
@@ -247,6 +292,7 @@ export function addLevelOneCrates(scene) {
       maxX: mesh.position.x + 0.86,
       minZ: mesh.position.z - 0.82,
       maxZ: mesh.position.z + 0.82,
+      topY: 0.86,
     };
     mesh.userData.collider = collider;
     colliders.push(collider);
@@ -396,6 +442,7 @@ export function addLevelOneCorridorDetails(scene) {
       maxX: center.x + halfX,
       minZ: center.z - halfZ,
       maxZ: center.z + halfZ,
+      topY: 0.98,
     });
   });
 

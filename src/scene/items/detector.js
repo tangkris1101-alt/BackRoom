@@ -9,6 +9,7 @@ import {
 } from "../constants.js";
 import {
   createItemHighlight,
+  createItemGroundShadow,
   createPickupState,
   getPickupDistance,
   inspectForward,
@@ -42,12 +43,6 @@ export function createDetectorModel() {
     roughness: 0.5,
     metalness: 0.16,
   });
-  const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x090504,
-    transparent: true,
-    opacity: 0.24,
-    depthWrite: false,
-  });
 
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.2, 0.28), bodyMaterial);
   body.position.y = 0.17;
@@ -72,12 +67,6 @@ export function createDetectorModel() {
     blip.position.set(-0.05 + i * 0.055, 0.304, -0.055 + i * 0.018);
     group.add(blip);
   }
-
-  const baseShadow = new THREE.Mesh(new THREE.CircleGeometry(0.38, 28), shadowMaterial);
-  baseShadow.rotation.x = -Math.PI / 2;
-  baseShadow.scale.z = 0.55;
-  baseShadow.position.y = 0.011;
-  group.add(baseShadow);
 
   markItemMeshes(group, "detector");
   return group;
@@ -114,6 +103,13 @@ export function createDetectorPickup(
   group.name = "entity-detector-pickup";
   const model = createDetectorModel();
   group.add(model);
+  group.add(createItemGroundShadow({
+    radius: 0.38,
+    color: 0x090504,
+    opacity: 0.24,
+    scaleZ: 0.55,
+    y: 0.011,
+  }));
   const highlight = createItemHighlight({
     color: 0xff9a73,
     width: 0.62,

@@ -43,6 +43,7 @@ import {
   isLevelKeyId,
   LEVEL_KEY_IDS,
 } from "./scene/common/world-items.js";
+import { CHANGELOG_ENTRIES } from "./ui/changelog.js";
 
 const canvas = document.querySelector("#scene");
 const appRoot = canvas?.closest("#app") ?? document.body;
@@ -64,6 +65,9 @@ const mainMenuQualityLabel = document.querySelector("#main-menu-quality-label");
 const mainMenuQualityValue = document.querySelector("#main-menu-quality-value");
 const mainMenuLanguageZh = document.querySelector("#main-menu-language-zh");
 const mainMenuLanguageEn = document.querySelector("#main-menu-language-en");
+const mainMenuChangelog = document.querySelector("#main-menu-changelog");
+const mainMenuChangelogLabel = document.querySelector("#main-menu-changelog-label");
+const mainMenuChangelogHint = document.querySelector("#main-menu-changelog-hint");
 const joystick = document.querySelector("#joystick");
 const jumpButton = document.querySelector("#jump-button");
 const useButton = document.querySelector("#use-button");
@@ -147,6 +151,15 @@ const pauseQualityLabel = document.querySelector("#pause-quality-label");
 const pauseQualityValue = document.querySelector("#pause-quality-value");
 const pauseLanguageZh = document.querySelector("#pause-language-zh");
 const pauseLanguageEn = document.querySelector("#pause-language-en");
+const pauseChangelog = document.querySelector("#pause-changelog");
+const pauseChangelogLabel = document.querySelector("#pause-changelog-label");
+const pauseChangelogHint = document.querySelector("#pause-changelog-hint");
+const changelogModal = document.querySelector("#changelog-modal");
+const changelogEyebrow = document.querySelector("#changelog-eyebrow");
+const changelogTitle = document.querySelector("#changelog-title");
+const changelogDescription = document.querySelector("#changelog-description");
+const changelogList = document.querySelector("#changelog-list");
+const changelogClose = document.querySelector("#changelog-close");
 const frameRateButtons = [...document.querySelectorAll("[data-frame-rate]")];
 const pauseResetButton = document.querySelector("#pause-reset");
 const pauseResetLabel = document.querySelector("#pause-reset-label");
@@ -190,6 +203,7 @@ const COMPLETED_KEY = "backrooms-levels-completed";
 const PICKED_UP_KEY = "backrooms-picked-up-items";
 let tutorialPage = 0;
 let tutorialActive = false;
+let changelogReturnFocus = null;
 
 const MAX_PIXEL_RATIO = 1.25;
 const MIN_PIXEL_RATIO = 0.75;
@@ -201,7 +215,6 @@ const LEVEL_TRANSITION_FADE_IN_MS = 720;
 const LEVEL_TRANSITION_HOLD_MS = 360;
 const LEVEL_TRANSITION_FADE_OUT_MS = 760;
 const LEVEL_TRANSITION_LOAD_AT_MS = LEVEL_TRANSITION_FADE_IN_MS + LEVEL_TRANSITION_HOLD_MS;
-const LEVEL_TRANSITION_MS = LEVEL_TRANSITION_LOAD_AT_MS + LEVEL_TRANSITION_FADE_OUT_MS;
 const FLASHLIGHT_BATTERY_MAX = 100;
 const FLASHLIGHT_DRAIN_RATE = 1;
 const FLASHLIGHT_MAX_STACK = 3;
@@ -858,6 +871,8 @@ function updateMainMenuText() {
   if (mainMenuFrameRateTitle) mainMenuFrameRateTitle.textContent = text.frameRate;
   if (mainMenuQualityLabel) mainMenuQualityLabel.textContent = text.quality;
   if (mainMenuQualityValue) mainMenuQualityValue.textContent = text.automatic;
+  if (mainMenuChangelogLabel) mainMenuChangelogLabel.textContent = text.changelogLabel;
+  if (mainMenuChangelogHint) mainMenuChangelogHint.textContent = text.changelogHint;
   if (mainMenuSettingsClose) mainMenuSettingsClose.setAttribute("aria-label", text.close);
   frameRateButtons.forEach((button) => {
     if (button.dataset.frameRate === "auto") button.textContent = text.automatic;
@@ -865,6 +880,7 @@ function updateMainMenuText() {
   mainMenuLanguageZh?.setAttribute("aria-pressed", String(currentLanguage === "zh-CN"));
   mainMenuLanguageEn?.setAttribute("aria-pressed", String(currentLanguage === "en"));
   updateFrameRateControls();
+  updateChangelogText();
 }
 
 function setMainMenuSettingsOpen(open) {
@@ -874,6 +890,48 @@ function setMainMenuSettingsOpen(open) {
   mainMenuSettings.setAttribute("aria-expanded", String(nextOpen));
   mainMenu?.classList.toggle("is-settings-open", nextOpen);
   if (nextOpen) mainMenuSettingsClose?.focus();
+}
+
+function updateChangelogText() {
+  const text = STATUS_TEXT[currentLanguage] ?? STATUS_TEXT.en;
+  if (changelogEyebrow) changelogEyebrow.textContent = text.changelogEyebrow;
+  if (changelogTitle) changelogTitle.textContent = text.changelogTitle;
+  if (changelogDescription) changelogDescription.textContent = text.changelogDescription;
+  if (changelogClose) changelogClose.setAttribute("aria-label", text.changelogClose);
+  if (!changelogList) return;
+  const fragment = document.createDocumentFragment();
+  for (const entry of CHANGELOG_ENTRIES) {
+    const item = document.createElement("li");
+    const meta = document.createElement("span");
+    meta.className = "changelog-modal__meta";
+    meta.textContent = `${entry.date} · ${entry.commit}`;
+    const title = document.createElement("strong");
+    title.textContent = currentLanguage === "zh-CN" ? entry.titleZh : entry.title;
+    item.append(meta, title);
+    fragment.append(item);
+  }
+  changelogList.replaceChildren(fragment);
+}
+
+function isChangelogOpen() {
+  return Boolean(changelogModal && !changelogModal.hasAttribute("hidden"));
+}
+
+function setChangelogOpen(open, trigger = null) {
+  if (!changelogModal) return;
+  if (open) {
+    changelogReturnFocus = trigger ?? document.activeElement;
+    updateChangelogText();
+    changelogModal.removeAttribute("hidden");
+    window.requestAnimationFrame(() => changelogModal.classList.add("is-visible"));
+    changelogClose?.focus();
+    return;
+  }
+  changelogModal.classList.remove("is-visible");
+  changelogModal.setAttribute("hidden", "");
+  const focusTarget = changelogReturnFocus;
+  changelogReturnFocus = null;
+  focusTarget?.focus?.();
 }
 
 function isMainMenuVisible() {
@@ -1587,7 +1645,7 @@ async function loadLevel(level, { updateUrl = false } = {}) {
     nextWorld = await createBackroomsScene(level, { initialState: initialStateForLevel });
   } catch (error) {
     console.error("Failed to load level scene", error);
-    return;
+    return false;
   }
   world = nextWorld;
   firesaltEffects = createFiresaltEffectManager(world.scene, world.isWalkable);
@@ -1603,6 +1661,7 @@ async function loadLevel(level, { updateUrl = false } = {}) {
     camera: world.camera,
     isWalkable: world.isWalkable,
     getFloorHeight: world.getFloorHeight,
+    resolvePosition: world.resolvePosition,
     spawn: world.spawn,
     movementSpeedMultiplier: world.movementSpeedMultiplier ?? 1,
   });
@@ -1611,7 +1670,7 @@ async function loadLevel(level, { updateUrl = false } = {}) {
     save &&
     save.player &&
     save.player.level === level &&
-    (world.isWalkable?.(save.player.position.x, save.player.position.z) ?? true)
+    (world.isWalkable?.(save.player.position.x, save.player.position.z, undefined, save.player.position.y - controls.eyeHeight) ?? true)
   ) {
     const pos = save.player.position;
     world.camera.position.set(pos.x, pos.y, pos.z);
@@ -1629,6 +1688,7 @@ async function loadLevel(level, { updateUrl = false } = {}) {
   if (updateUrl) updateLevelUrl(world.level);
   resize();
   disposeWorld(previousWorld);
+  return true;
 }
 
 async function bootstrapWorld(level, save) {
@@ -1659,6 +1719,7 @@ async function bootstrapWorld(level, save) {
     jumpButton,
     isWalkable: world.isWalkable,
     getFloorHeight: world.getFloorHeight,
+    resolvePosition: world.resolvePosition,
     spawn: world.spawn,
     movementSpeedMultiplier: world.movementSpeedMultiplier ?? 1,
   });
@@ -1667,7 +1728,7 @@ async function bootstrapWorld(level, save) {
     save &&
     save.player &&
     save.player.level === level &&
-    (world.isWalkable?.(save.player.position.x, save.player.position.z) ?? true)
+    (world.isWalkable?.(save.player.position.x, save.player.position.z, undefined, save.player.position.y - controls.eyeHeight) ?? true)
   ) {
     const pos = save.player.position;
     world.camera.position.set(pos.x, pos.y, pos.z);
@@ -1852,6 +1913,8 @@ function updatePauseOverlay() {
   if (pauseFrameRateTitle) pauseFrameRateTitle.textContent = formatLocalizedStatus("settingsFrameRate");
   if (pauseQualityLabel) pauseQualityLabel.textContent = formatLocalizedStatus("settingsQuality");
   if (pauseQualityValue) pauseQualityValue.textContent = formatLocalizedStatus("settingsAutomatic");
+  if (pauseChangelogLabel) pauseChangelogLabel.textContent = formatLocalizedStatus("changelogLabel");
+  if (pauseChangelogHint) pauseChangelogHint.textContent = formatLocalizedStatus("changelogHint");
   frameRateButtons.forEach((button) => {
     if (button.dataset.frameRate === "auto") button.textContent = formatLocalizedStatus("settingsAutomatic");
   });
@@ -1908,7 +1971,12 @@ function updateLevelTransitionOverlayText(transition = levelTransition) {
   if (!transition?.nextLevelInfo) return;
   setExitOverlayText(transition.nextLevelInfo.levelLabel, transition.nextLevelInfo.levelName);
   setLevelDangerIndicator(exitOverlayDanger, transition.nextLevelInfo);
-  const status = formatLocalizedStatus(transition.loaded ? "levelTransitionReady" : "levelTransitionHint");
+  const statusKey = transition.loaded
+    ? "levelTransitionReady"
+    : transition.loadStarted
+      ? "levelTransitionBuilding"
+      : "levelTransitionPrewarming";
+  const status = formatLocalizedStatus(statusKey);
   const elapsed = formatLocalizedStatus("exitTotalTime", { time: formatDuration(runTime) });
   setExitOverlayDetail(`${status} · ${elapsed}`);
 }
@@ -1938,11 +2006,15 @@ function beginLevelTransition(nextLevel) {
   reachedLevels.add(nextLevelInfo.level);
   saveIntegerSet(COMPLETED_KEY, completedLevels);
   saveIntegerSet(REACHED_KEY, reachedLevels);
+  const prewarm = preloadLevelScene(nextLevelInfo.level);
   levelTransition = {
     nextLevel: nextLevelInfo.level,
     nextLevelInfo,
     elapsed: 0,
     loaded: false,
+    loadStarted: false,
+    revealElapsed: 0,
+    prewarm,
   };
   canvas.dataset.transitioning = "true";
   canvas.dataset.transitionPhase = "fade-in";
@@ -1954,21 +2026,67 @@ function beginLevelTransition(nextLevel) {
   updateLevelTransitionOverlayText();
 }
 
+function startLevelTransitionLoad(transition) {
+  if (!transition || transition.loadStarted || levelTransition !== transition) return;
+  transition.loadStarted = true;
+  canvas.dataset.transitionPhase = "loading";
+  updateLevelTransitionOverlayText(transition);
+
+  // Let the loading state paint before scene factories synchronously create
+  // geometry, textures, collision maps, entities, and world items. The build
+  // is still main-thread work, but it is now fully covered by the transition.
+  window.requestAnimationFrame(() => {
+    window.setTimeout(async () => {
+      if (levelTransition !== transition) return;
+      await transition.prewarm;
+      if (levelTransition !== transition) return;
+
+      const loaded = await loadLevel(transition.nextLevel, { updateUrl: true });
+      if (levelTransition !== transition) return;
+      if (!loaded) {
+        levelTransition = null;
+        canvas.dataset.transitioning = "false";
+        canvas.dataset.transitionPhase = "";
+        canvas.dataset.exitReached = "false";
+        hideExitOverlay();
+        return;
+      }
+
+      // Compile before the new level is revealed. On supporting browsers this
+      // uses KHR_parallel_shader_compile, preventing first-visible-frame shader
+      // stalls from spilling into player control.
+      try {
+        await renderer.compileAsync?.(world.scene, world.camera);
+      } catch (error) {
+        console.warn("Failed to precompile level scene", error);
+      }
+      if (levelTransition !== transition) return;
+
+      transition.loaded = true;
+      transition.revealElapsed = 0;
+      canvas.dataset.transitionPhase = "fade-out";
+      exitOverlay?.classList.add("is-level-loaded");
+      updateLevelTransitionOverlayText(transition);
+      hideExitOverlay();
+    }, 0);
+  });
+}
+
 function updateLevelTransition(delta) {
   if (!levelTransition) return;
   levelTransition.elapsed += delta * 1000;
 
-  if (!levelTransition.loaded && levelTransition.elapsed >= LEVEL_TRANSITION_LOAD_AT_MS) {
-    const nextLevel = levelTransition.nextLevel;
-    levelTransition.loaded = true;
-    canvas.dataset.transitionPhase = "fade-out";
-    loadLevel(nextLevel, { updateUrl: true });
-    exitOverlay?.classList.add("is-level-loaded");
-    updateLevelTransitionOverlayText();
-    hideExitOverlay();
+  if (!levelTransition.loadStarted && levelTransition.elapsed >= LEVEL_TRANSITION_LOAD_AT_MS) {
+    startLevelTransitionLoad(levelTransition);
+    return;
   }
 
-  if (levelTransition.elapsed < LEVEL_TRANSITION_MS) return;
+  // The old fixed timer could expose a new level while its synchronous scene
+  // construction was still blocking the browser. Start the reveal only after
+  // loadLevel has finished, then count a fresh fade-out interval.
+  if (!levelTransition.loaded) return;
+  levelTransition.revealElapsed += delta * 1000;
+  if (levelTransition.revealElapsed < LEVEL_TRANSITION_FADE_OUT_MS) return;
 
   levelTransition = null;
   canvas.dataset.transitioning = "false";
@@ -3527,6 +3645,11 @@ function onUseKeyDown(event) {
     return;
   }
   if (isMainMenuVisible()) {
+    if (isChangelogOpen() && event.code === "Escape") {
+      event.preventDefault();
+      setChangelogOpen(false);
+      return;
+    }
     if (event.code === "Escape") {
       event.preventDefault();
       setMainMenuSettingsOpen(false);
@@ -3545,6 +3668,11 @@ function onUseKeyDown(event) {
     return;
   }
   if (isPaused) {
+    if (isChangelogOpen() && event.code === "Escape") {
+      event.preventDefault();
+      setChangelogOpen(false);
+      return;
+    }
     if (event.code === "Escape") {
       event.preventDefault();
       setPauseState(false);
@@ -3770,6 +3898,11 @@ pauseSettingsClose?.addEventListener("pointerdown", (event) => {
   event.stopPropagation();
   setPauseSettingsOpen(false);
   pauseSettingsButton?.focus();
+});
+pauseChangelog?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  setChangelogOpen(true, pauseChangelog);
 });
 [pauseLanguageZh, pauseLanguageEn].forEach((button) => {
   button?.addEventListener("pointerdown", (event) => {
@@ -4115,6 +4248,20 @@ mainMenuSettingsClose?.addEventListener("pointerdown", (event) => {
   event.stopPropagation();
   setMainMenuSettingsOpen(false);
   mainMenuSettings?.focus();
+});
+mainMenuChangelog?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  setChangelogOpen(true, mainMenuChangelog);
+});
+
+changelogClose?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  setChangelogOpen(false);
+});
+changelogModal?.addEventListener("pointerdown", (event) => {
+  if (event.target === changelogModal) setChangelogOpen(false);
 });
 
 [mainMenuLanguageZh, mainMenuLanguageEn].forEach((button) => {
