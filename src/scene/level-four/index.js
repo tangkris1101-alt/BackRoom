@@ -162,8 +162,8 @@ export function createLevelFourScene({ initialState = null } = {}) {
   });
   const interactions = [...propInteractions];
   const routes = [
-    { id: "level-four-stairs-level-five", targetLevel: 5, targetLabel: "LEVEL 5", label: "HOTEL", kind: "stair", position: targetPosition, rotation: 0 },
-    { id: "level-four-stairs-level-six", targetLevel: 6, targetLabel: "LEVEL 6", label: "DARKNESS", kind: "stair", position: levelOneCellCenter(2, 22), rotation: Math.PI },
+    { id: "level-four-stairs-level-five", targetLevel: 5, targetLabel: "LEVEL 5", label: "HOTEL", kind: "stair", stairModel: true, position: targetPosition, rotation: 0 },
+    { id: "level-four-stairs-level-six", targetLevel: 6, targetLabel: "LEVEL 6", label: "DARKNESS", kind: "stair", stairModel: true, position: levelOneCellCenter(2, 22), rotation: Math.PI },
     { id: "level-four-elevator-level-three", targetLevel: 3, targetLabel: "LEVEL 3", label: "MAINTENANCE", kind: "elevator", position: levelOneCellCenter(1, 1), rotation: Math.PI / 2 },
   ];
   const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);

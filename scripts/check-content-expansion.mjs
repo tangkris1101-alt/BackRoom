@@ -17,13 +17,15 @@ const { loadSave, createEntitySnapshot } = await import("../src/save.js");
 const levelOne = await import("../src/scene/level-one/layout.js");
 const { collectLevelOneTransforms } = await import("../src/scene/level-one/props.js");
 const levelThree = await import("../src/scene/level-three/layout.js");
+const levelFive = await import("../src/scene/level-five/layout.js");
+const { collectLevelFiveTransforms } = await import("../src/scene/level-five/props.js");
 const levelSix = await import("../src/scene/level-six/layout.js");
 const levelEight = await import("../src/scene/level-eight/layout.js");
 const levelNine = await import("../src/scene/level-nine/layout.js");
 const levelThirtySeven = await import("../src/scene/level-thirty-seven/layout.js");
 const levelZero = await import("../src/scene/level-zero/layout.js");
 const levelZeroWorld = await import("../src/scene/level-zero/world.js");
-const { FIRESALT_EFFECT_RADIUS, FIRESALT_STUN_DURATION } = await import("../src/scene/constants.js");
+const { CELL_SIZE, FIRESALT_EFFECT_RADIUS, FIRESALT_STUN_DURATION } = await import("../src/scene/constants.js");
 const { createExitNetwork } = await import("../src/scene/common/exit-network.js");
 
 function canReach({ cols, rows, start, target, isOpen }) {
@@ -65,6 +67,16 @@ const levelOneFixtures = collectLevelOneTransforms().fixturePositions;
 assert.equal(levelOne.LEVEL_ONE_MAX_POINT_LIGHTS, 32);
 assert.ok(levelOneFixtures.length >= 39);
 assert.ok(levelOneFixtures.filter((fixture) => fixture.hasPointLight).length >= levelOne.LEVEL_ONE_MAX_POINT_LIGHTS);
+// Level 5's modeled stairwell leaves through the north edge of cell 7,5.
+// Its throat must be truly open, rather than revealing a wallpapered grid wall.
+assert.equal(levelFive.isLevelFiveOpenCell(7, 4), true);
+const levelFiveStairCenter = levelFive.levelFiveCellCenter(7, 5);
+assert.equal(
+  collectLevelFiveTransforms().northSouth.some(
+    (wall) => wall.x === levelFiveStairCenter.x && wall.z === levelFiveStairCenter.z - CELL_SIZE / 2,
+  ),
+  false,
+);
 assert.deepEqual(
   [levelEight.LEVEL_EIGHT_COLS, levelEight.LEVEL_EIGHT_ROWS, levelThirtySeven.LEVEL_THIRTY_SEVEN_COLS, levelThirtySeven.LEVEL_THIRTY_SEVEN_ROWS],
   [52, 40, 48, 36],
@@ -114,6 +126,26 @@ assert.equal(focusedDoor?.id, "focused-stairs");
 const openedDoor = doorTestNetwork.interact(doorTestCamera.position, { routeId: focusedDoor?.id });
 assert.equal(openedDoor?.id, "focused-stairs");
 assert.equal(openedDoor?.interacted, true);
+
+// Real stair routes are open stairwells, not a second type of animated door.
+const stairwellScene = new THREE.Scene();
+const stairwellCamera = new THREE.PerspectiveCamera();
+stairwellCamera.position.set(0, 1.62, 2.4);
+stairwellCamera.rotation.set(0, 0, 0);
+const stairwellNetwork = createExitNetwork(stairwellScene, stairwellCamera, [
+  { id: "modeled-stairwell", targetLevel: 5, targetLabel: "LEVEL 5", kind: "stair", stairModel: true, position: { x: 0, z: 0 }, noSign: true },
+]);
+const stairwellModel = stairwellScene.getObjectByName("exit-network-modeled-stairwell");
+assert.equal(stairwellModel?.getObjectByName("exit-stair-tread-modeled-stairwell-14")?.isMesh, true);
+assert.equal(stairwellModel?.getObjectByName("exit-stair-point-light-modeled-stairwell")?.isPointLight, true);
+assert.equal(stairwellModel?.getObjectByName("exit-stair-light-housing-modeled-stairwell")?.isMesh, true);
+assert.equal(stairwellModel?.getObjectByName("exit-stair-jamb-left-modeled-stairwell")?.isMesh, true);
+assert.equal(stairwellModel?.getObjectByName("exit-stair-shaft-black-end-wall-modeled-stairwell")?.isMesh, true);
+assert.equal(stairwellModel?.getObjectByName("exit-stair-shaft-darkness-modeled-stairwell")?.isMesh, true);
+assert.equal(stairwellModel?.getObjectByName("exit-portal-modeled-stairwell"), undefined);
+assert.equal(stairwellNetwork.inspect(stairwellCamera.position)?.available, false);
+assert.equal(stairwellNetwork.interact(stairwellCamera.position), null);
+assert.equal(stairwellNetwork.update(0.016, { x: 0, z: 0 })?.id, "modeled-stairwell");
 
 // Hub debug access must be able to open a key-gated door without consuming a key.
 const debugDoorScene = new THREE.Scene();

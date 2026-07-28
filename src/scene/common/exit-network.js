@@ -7,6 +7,7 @@ const ENTER_RADIUS = 1.25;
 
 function createRouteText(route) {
   const target = route.targetLabel ?? `LEVEL ${route.targetLevel}`;
+  const isStairwell = route.stairModel === true;
   if (route.anonymous) {
     return {
       "zh-CN": {
@@ -25,31 +26,31 @@ function createRouteText(route) {
   }
   const kindZh = route.kind === "elevator"
     ? "电梯"
-    : route.kind === "cabinet"
+      : route.kind === "cabinet"
       ? "储物柜"
-      : route.kind === "stair"
-        ? "楼梯门"
+      : isStairwell
+        ? "楼梯间"
         : "出口门";
   const kindEn = route.kind === "elevator"
     ? "ELEVATOR"
-    : route.kind === "cabinet"
+      : route.kind === "cabinet"
       ? "STORAGE CABINET"
-      : route.kind === "stair"
-        ? "STAIR DOOR"
+      : isStairwell
+        ? "STAIRWELL"
         : "EXIT DOOR";
   const isCabinet = route.kind === "cabinet";
   return {
     "zh-CN": {
       name: isCabinet ? "普通储物柜" : route.hidden ? "异常混凝土门" : `${target} ${kindZh}`,
       effect: isCabinet ? `柜内存在通往 ${target} 的异常空间` : route.hidden ? "门框后的空间信号无法识别" : `通往 ${target}`,
-      action: "F / 按钮打开",
-      response: isCabinet ? "柜门已打开" : `${target} 出口已打开`,
+      action: isStairwell ? "走入楼梯" : "F / 按钮打开",
+      response: isCabinet ? "柜门已打开" : isStairwell ? `${target} 楼梯已通行` : `${target} 出口已打开`,
     },
     en: {
       name: isCabinet ? "ORDINARY STORAGE CABINET" : route.hidden ? "ANOMALOUS CONCRETE DOOR" : `${target} ${kindEn}`,
       effect: isCabinet ? `AN ANOMALOUS SPACE LEADS TO ${target}` : route.hidden ? "THE SIGNAL BEHIND THE FRAME IS UNREADABLE" : `ROUTE TO ${target}`,
-      action: "F / BUTTON OPEN",
-      response: isCabinet ? "CABINET OPEN" : `${target} ROUTE OPEN`,
+      action: isStairwell ? "WALK INTO THE STAIRWELL" : "F / BUTTON OPEN",
+      response: isCabinet ? "CABINET OPEN" : isStairwell ? `${target} STAIRWELL IS CLEAR` : `${target} ROUTE OPEN`,
     },
   };
 }
@@ -115,7 +116,137 @@ function addRouteHeaderLight(group, route) {
   group.add(housing, lens, light);
 }
 
+function createStairwellModel(scene, route) {
+  const group = new THREE.Group();
+  group.position.set(route.position.x, 0, route.position.z);
+  group.rotation.y = route.rotation ?? 0;
+  group.name = `exit-network-${route.id}`;
+
+  const concreteMaterial = new THREE.MeshStandardMaterial({
+    color: 0x4c514c,
+    emissive: 0x111612,
+    emissiveIntensity: 0.22,
+    roughness: 0.92,
+  });
+  // This is a physical end wall, deliberately black instead of inheriting
+  // any level wallpaper. It remains visible from every approach angle.
+  const stairEndWallMaterial = new THREE.MeshStandardMaterial({
+    color: 0x030403,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
+    roughness: 0.98,
+  });
+  const treadMaterial = new THREE.MeshStandardMaterial({
+    color: 0x697066,
+    emissive: 0x192019,
+    emissiveIntensity: 0.2,
+    roughness: 0.84,
+  });
+  const railMaterial = new THREE.MeshStandardMaterial({
+    color: 0x28302b,
+    emissive: 0x07100b,
+    emissiveIntensity: 0.28,
+    roughness: 0.38,
+    metalness: 0.72,
+  });
+
+  // Recess the stairs into a full-height shaft. This keeps the route part of
+  // the surrounding architecture instead of reading as a freestanding prop.
+  const stepCount = 14;
+  const stepRun = 0.32;
+  const stepHeight = 0.125;
+  const stairRun = stepCount * stepRun;
+  const stairRise = stepCount * stepHeight;
+  const openingWidth = 2.2;
+  for (let index = 0; index < stepCount; index += 1) {
+    const height = stepHeight * (index + 1);
+    const tread = new THREE.Mesh(new THREE.BoxGeometry(2.18, height, stepRun), treadMaterial);
+    tread.name = `exit-stair-tread-${route.id}-${index + 1}`;
+    tread.position.set(0, height / 2, -0.16 - index * stepRun);
+    group.add(tread);
+  }
+
+  const shaftHeight = 2.48;
+  const sideDepth = stairRun + 0.62;
+  const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.18, shaftHeight, sideDepth), concreteMaterial);
+  leftWall.name = `exit-stair-shaft-left-${route.id}`;
+  leftWall.position.set(-(openingWidth / 2 + 0.09), shaftHeight / 2, -(sideDepth / 2 - 0.08));
+  const rightWall = leftWall.clone();
+  rightWall.name = `exit-stair-shaft-right-${route.id}`;
+  rightWall.position.x = openingWidth / 2 + 0.09;
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(openingWidth + 0.36, shaftHeight, 0.18), stairEndWallMaterial);
+  backWall.name = `exit-stair-shaft-black-end-wall-${route.id}`;
+  backWall.position.set(0, shaftHeight / 2, -sideDepth + 0.02);
+  // The outer level wall can otherwise show through above the final tread.
+  // Keep the stairwell's far end dark so it reads as a continuation/exit,
+  // rather than the red wallpaper of the source room.
+  const farDarkness = new THREE.Mesh(
+    new THREE.PlaneGeometry(openingWidth, shaftHeight - 0.08),
+    new THREE.MeshBasicMaterial({ color: 0x080a08 }),
+  );
+  farDarkness.name = `exit-stair-shaft-darkness-${route.id}`;
+  farDarkness.position.set(0, shaftHeight / 2 - 0.04, -sideDepth + 0.105);
+
+  // These wall pieces form a flush opening in the existing level wall. They
+  // replace the dark doorway posts and the oversized STAIRS sign.
+  const facadeWidth = 3.9;
+  const jambWidth = (facadeWidth - openingWidth) / 2;
+  const leftJamb = new THREE.Mesh(new THREE.BoxGeometry(jambWidth, shaftHeight, 0.28), concreteMaterial);
+  leftJamb.name = `exit-stair-jamb-left-${route.id}`;
+  leftJamb.position.set(-(openingWidth / 2 + jambWidth / 2), shaftHeight / 2, 0.02);
+  const rightJamb = leftJamb.clone();
+  rightJamb.name = `exit-stair-jamb-right-${route.id}`;
+  rightJamb.position.x *= -1;
+  const header = new THREE.Mesh(new THREE.BoxGeometry(facadeWidth, 0.42, 0.28), concreteMaterial);
+  header.name = `exit-stair-header-${route.id}`;
+  header.position.set(0, shaftHeight - 0.21, 0.02);
+
+  const railHeight = 0.82;
+  const railRun = stairRun - 0.48;
+  const railRise = stairRise - stepHeight;
+  const railLength = Math.hypot(railRun, railRise);
+  const railSlope = Math.atan2(railRise, railRun);
+  for (const side of [-1, 1]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.055, railLength), railMaterial);
+    rail.position.set(side * (openingWidth / 2 - 0.14), railHeight + railRise / 2, -0.4 - railRun / 2);
+    rail.rotation.set(-railSlope, Math.PI, 0);
+    group.add(rail);
+    for (let index = 0; index < 4; index += 1) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.055, railHeight, 0.055), railMaterial);
+      const progress = index / 3;
+      post.position.set(
+        side * (openingWidth / 2 - 0.14),
+        stepHeight + railRise * progress + railHeight / 2,
+        -0.4 - railRun * progress,
+      );
+      group.add(post);
+    }
+  }
+  group.add(leftWall, rightWall, backWall, farDarkness, leftJamb, rightJamb, header);
+
+  const lampMaterial = new THREE.MeshStandardMaterial({
+    color: 0xe8f4d9,
+    emissive: 0xdfffc4,
+    emissiveIntensity: 1.18,
+    roughness: 0.28,
+  });
+  const lampHousing = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.08, 0.36), concreteMaterial);
+  lampHousing.name = `exit-stair-light-housing-${route.id}`;
+  lampHousing.position.set(0, shaftHeight - 0.04, -1.35);
+  const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.025, 0.22), lampMaterial);
+  lamp.name = `exit-stair-light-${route.id}`;
+  lamp.position.set(0, shaftHeight - 0.095, -1.35);
+  const light = new THREE.PointLight(0xe5ffd2, 2.2, 4.8, 2);
+  light.name = `exit-stair-point-light-${route.id}`;
+  light.position.set(0, shaftHeight - 0.16, -1.35);
+  group.add(lampHousing, lamp, light);
+
+  scene.add(group);
+  return { group, stairwell: true };
+}
+
 function createRouteModel(scene, route) {
+  if (route.stairModel === true) return createStairwellModel(scene, route);
   const group = new THREE.Group();
   group.position.set(route.position.x, 0, route.position.z);
   group.rotation.y = route.rotation ?? 0;
@@ -396,9 +527,11 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
   const routes = routeDefinitions.map((definition) => {
     const route = {
       ...definition,
-      opened: Boolean(initialState?.[definition.id]?.count),
+      // Stairwells are open architectural passages: entering their landing is
+      // enough to transition, with no invisible door state to unlock first.
+      opened: definition.stairModel === true || Boolean(initialState?.[definition.id]?.count),
       unlocked: Boolean(initialState?.[definition.id]?.unlocked ?? initialState?.[definition.id]?.count),
-      openProgress: Boolean(initialState?.[definition.id]?.count) ? 1 : 0,
+      openProgress: definition.stairModel === true || Boolean(initialState?.[definition.id]?.count) ? 1 : 0,
       i18n: createRouteText(definition),
     };
     route.model = createRouteModel(scene, route);
@@ -421,6 +554,7 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
       route.model.rightHinge.rotation.y = -swing;
       return;
     }
+    if (route.stairModel === true) return;
     if (route.model.singlePanel) {
       route.model.singleHinge.rotation.y = route.openProgress * (route.doorSwingAngle ?? -Math.PI * 0.58);
     } else {
@@ -469,8 +603,8 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
       bestScore = score;
       const locked = !route.opened && !route.unlocked && Boolean(route.requiresLevelKey) && !hasLevelKey(route.targetLevel);
       const text = locked ? createLockedRouteText(route) : route.i18n;
-      const canClose = route.opened && route.canClose !== false && distance <= INTERACT_RADIUS;
-      const displayText = route.opened
+      const canClose = route.stairModel !== true && route.opened && route.canClose !== false && distance <= INTERACT_RADIUS;
+      const displayText = route.opened && route.stairModel !== true
         ? {
             "zh-CN": { ...text["zh-CN"], action: "F / 按钮关闭门" },
             en: { ...text.en, action: "F / BUTTON CLOSE DOOR" },
@@ -509,7 +643,7 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
     }
     if (!candidate) return null;
     if (candidate.route.opened) {
-      if (candidate.route.canClose === false) return null;
+      if (candidate.route.stairModel === true || candidate.route.canClose === false) return null;
       candidate.route.opened = false;
       return {
         interacted: true,

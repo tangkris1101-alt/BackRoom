@@ -268,7 +268,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
 
   const interactions = [...propInteractions];
   const routes = [
-    { id: "level-six-stairs-level-seven", targetLevel: 7, targetLabel: "LEVEL 7", label: "DESCENT", kind: "stair", position: targetPosition, rotation: 0 },
+    { id: "level-six-stairs-level-seven", targetLevel: 7, targetLabel: "LEVEL 7", label: "DESCENT", kind: "stair", stairModel: true, position: targetPosition, rotation: 0 },
     { id: "level-six-return-level-five", targetLevel: 5, targetLabel: "LEVEL 5", label: "RETURN", kind: "door", position: levelSixCellCenter(4, 15), rotation: Math.PI },
     { id: "level-six-pool-level-eight", targetLevel: 8, targetLabel: "LEVEL 8", label: "COLD POOL", kind: "stair", position: levelSixCellCenter(18, 7), rotation: Math.PI / 2 },
   ];

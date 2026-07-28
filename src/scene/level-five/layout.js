@@ -78,6 +78,9 @@ function buildLayout() {
 
   // Guest rooms and empty lounges branching from the main hall.
   carveRoom(grid, 4, 5, 7, 5, CELL_OPEN);
+  // The Level 4 stairwell rises north from this lounge.  Keep its throat open
+  // so the grid wall is not rendered across the modeled stairs' upper end.
+  carveCell(grid, 7, 4, CELL_OPEN);
   carveRoom(grid, 13, 4, 6, 4, CELL_OPEN);
   carveRoom(grid, 23, 5, 8, 5, CELL_OPEN);
   carveRoom(grid, 34, 5, 6, 5, CELL_OPEN);

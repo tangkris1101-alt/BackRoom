@@ -293,7 +293,7 @@ export function createLevelFiveScene({ initialState = null } = {}) {
   const routes = [
     { id: "level-five-boiler-level-six", targetLevel: 6, targetLabel: "LEVEL 6", label: "BOILER", kind: "door", position: targetPosition, rotation: 0 },
     { id: "level-five-elevator-level-three", targetLevel: 3, targetLabel: "LEVEL 3", label: "SERVICE", kind: "elevator", position: levelFiveCellCenter(37, 5), rotation: Math.PI },
-    { id: "level-five-stairs-level-four", targetLevel: 4, targetLabel: "LEVEL 4", label: "STAIRS", kind: "stair", position: levelFiveCellCenter(7, 5), rotation: 0 },
+    { id: "level-five-stairs-level-four", targetLevel: 4, targetLabel: "LEVEL 4", label: "STAIRS", kind: "stair", stairModel: true, position: levelFiveCellCenter(7, 5), rotation: 0 },
   ];
   const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
 
