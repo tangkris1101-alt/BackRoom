@@ -45,7 +45,7 @@
 | --- | --- | ---: | --- | --- |
 | THE HUB（-1） | NEXUS TUNNELS | 0 / 0 | 无 | 11 扇需对应层级钥匙的门：Level 0、1、2、3、4、5、6、7、8、9、37。 |
 | Level 0 | NOCLIP ZONE | 0 / 0 | 无 | 坠入出口孔洞 → **Level 1**。 |
-| Level 1 | HABITABLE ZONE | 1 / 1 | 细菌 ×1 | 电梯 → **Level 2**；隐藏柜门 → **THE HUB**。 |
+| Level 1 | HABITABLE ZONE | 1 / 1 | 细菌 ×1 | 电梯 → **Level 2**。 |
 | Level 2 | PIPE DREAMS | 1 / 1 | 猎犬 ×1 | 解锁门 → **Level 3**；返回门 → **Level 1**；办公室门 → **Level 4**；隐藏门 → **THE HUB**。 |
 | Level 3 | ELECTRICAL STATION | 4 / 4 | 细菌 ×2、猎犬 ×1、伏击猎犬 ×1 | 电梯 → **Level 4**；电梯 → **Level 5**。 |
 | Level 4 | ABANDONED OFFICE | 1 / 1 | 猎犬 ×1 | 楼梯 → **Level 5**；楼梯 → **Level 6**；电梯 → **Level 3**。 |

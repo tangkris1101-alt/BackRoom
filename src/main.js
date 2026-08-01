@@ -72,6 +72,7 @@ const joystick = document.querySelector("#joystick");
 const jumpButton = document.querySelector("#jump-button");
 const useButton = document.querySelector("#use-button");
 const actionButton = document.querySelector("#action-button");
+const dropButton = document.querySelector("#drop-button");
 const flashlightButton = document.querySelector("#flashlight-button");
 const detectorButton = document.querySelector("#detector-button");
 const pauseButton = document.querySelector("#pause-button");
@@ -407,6 +408,7 @@ const gameplayUiElements = [
   jumpButton,
   useButton,
   actionButton,
+  dropButton,
   flashlightButton,
   detectorButton,
   pauseButton,
@@ -1250,6 +1252,7 @@ function formatLocalizedStatus(id, values = {}) {
 function updateHudLabels() {
   if (staminaLabel) staminaLabel.textContent = formatLocalizedStatus("staminaLabel");
   if (healthLabel) healthLabel.textContent = formatLocalizedStatus("healthLabel");
+  dropButton?.setAttribute("aria-label", currentLanguage === "en" ? "Drop equipped item" : "丢弃当前物品");
 }
 
 function formatDuration(totalSeconds) {
@@ -2666,11 +2669,16 @@ function scrollEquippedIntoView(container, equippedIndex) {
 }
 
 function updateActionButtonState() {
-  if (!actionButton) return;
   const equipped = getEquipped();
   const hasUsable = Boolean(equipped && equipped.id !== "compass" && !isLevelKeyId(equipped.id));
-  actionButton.classList.toggle("is-visible", hasUsable);
-  actionButton.disabled = !hasUsable;
+  if (actionButton) {
+    actionButton.classList.toggle("is-visible", hasUsable);
+    actionButton.disabled = !hasUsable;
+  }
+  if (dropButton) {
+    dropButton.classList.toggle("is-visible", Boolean(equipped));
+    dropButton.disabled = !equipped;
+  }
 }
 
 function updateDrinkingMeter(controlState) {
@@ -3847,6 +3855,13 @@ actionButton?.addEventListener("pointercancel", (event) => {
 });
 actionButton?.addEventListener("pointerleave", (event) => {
   if (ePressActive) endEPress();
+});
+dropButton?.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!dropEquippedItem()) return;
+  dropButton.classList.add("is-active");
+  window.setTimeout(() => dropButton?.classList.remove("is-active"), 140);
 });
 documentReaderClose?.addEventListener("pointerdown", (event) => {
   event.preventDefault();

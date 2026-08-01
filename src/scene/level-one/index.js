@@ -10,7 +10,6 @@ import {
   SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
   SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
-  HUB_LEVEL,
 } from "../constants.js";
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, setFirstPersonViewModelLighting, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
@@ -233,9 +232,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
   const spawnCell = levelOneCellCenter(LEVEL_ONE_START_CELL.col, LEVEL_ONE_START_CELL.row);
   const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: LEVEL_ONE_START_CELL.yaw };
   const targetPosition = levelOneCellCenter(LEVEL_ONE_TARGET_CELL.col, LEVEL_ONE_TARGET_CELL.row);
-  const hubCell = levelOneCellCenter(33, 23);
   const elevatorMount = getLevelOneTargetMount(targetPosition);
-  const hubMount = getLevelOneTargetMount(hubCell);
 
   let propColliders = addLevelOneCrates(scene);
   propColliders = propColliders.concat(addLevelOneSupplyShelves(scene));
@@ -248,7 +245,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
     isWalkable,
   );
   const { northSouth, eastWest, corridorNorthSouth, corridorEastWest, fixturePositions } = collectLevelOneTransforms({
-    openings: [elevatorMount, hubMount],
+    openings: [elevatorMount],
   });
   const lightField = createLevelOneLightField(fixturePositions);
 
@@ -333,7 +330,6 @@ export function createLevelOneScene({ initialState = null } = {}) {
     corridorEastWest,
   );
   addLevelOneDoorwayWall(scene, elevatorMount, wallMaterials);
-  addLevelOneDoorwayWall(scene, hubMount, wallMaterials);
 
   const fixtures = createLevelOneLights(scene, fixturePositions, { dynamicPointLights: true });
   const updateLightState = createStableLightState("HUM", {
@@ -423,16 +419,6 @@ export function createLevelOneScene({ initialState = null } = {}) {
       position: elevatorMount,
       entryPosition: getEntryPosition(elevatorMount),
       rotation: elevatorMount.rotation,
-    },
-    {
-      id: "level-one-hidden-hub-door",
-      targetLevel: HUB_LEVEL,
-      targetLabel: "THE HUB",
-      kind: "cabinet",
-      noSign: true,
-      position: hubMount,
-      entryPosition: getEntryPosition(hubMount),
-      rotation: hubMount.rotation,
     },
   ];
   const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);

@@ -61,6 +61,7 @@ body {
 #app.is-ui-hidden .jump-button,
 #app.is-ui-hidden .use-button,
 #app.is-ui-hidden .action-button,
+#app.is-ui-hidden .drop-button,
 #app.is-ui-hidden .flashlight-button,
 #app.is-ui-hidden .detector-button,
 #app.is-ui-hidden .pause-button,
@@ -2898,6 +2899,7 @@ body {
 }
 
 .action-button,
+.drop-button,
 .pause-button {
   position: fixed;
   z-index: 6;
@@ -2924,24 +2926,33 @@ body {
   bottom: max(46px, calc(env(safe-area-inset-bottom) + 46px));
 }
 
-.action-button span {
+.drop-button {
+  right: max(104px, calc(env(safe-area-inset-right) + 104px));
+  bottom: max(46px, calc(env(safe-area-inset-bottom) + 46px));
+}
+
+.action-button span,
+.drop-button span {
   font-size: 18px;
   font-weight: 900;
   line-height: 1;
   text-shadow: 0 0 9px rgba(214, 255, 145, 0.38);
 }
 
-.action-button.is-visible {
+.action-button.is-visible,
+.drop-button.is-visible {
   opacity: 1;
   pointer-events: auto;
 }
 
-.action-button.is-active {
+.action-button.is-active,
+.drop-button.is-active {
   transform: scale(0.96);
   background: rgba(230, 238, 174, 0.22);
 }
 
-.action-button:disabled {
+.action-button:disabled,
+.drop-button:disabled {
   opacity: 0.42;
 }
 
@@ -3285,6 +3296,7 @@ body {
   .joystick,
   .jump-button,
   .action-button,
+  .drop-button,
   .flashlight-button,
   .detector-button,
   .pause-button {
@@ -3306,6 +3318,7 @@ body {
   }
 
   .action-button,
+  .drop-button,
   .pause-button {
     display: grid;
   }
