@@ -1631,7 +1631,7 @@ function markDirty() {
   }, SAVE_DEBOUNCE_MS);
 }
 
-async function loadLevel(level, { updateUrl = false } = {}) {
+async function loadLevel(level, { updateUrl = false, entryContext = null } = {}) {
   if (world && !gameFailed) {
     writeSaveSnapshot();
   }
@@ -1645,7 +1645,7 @@ async function loadLevel(level, { updateUrl = false } = {}) {
 
   let nextWorld;
   try {
-    nextWorld = await createBackroomsScene(level, { initialState: initialStateForLevel });
+    nextWorld = await createBackroomsScene(level, { initialState: initialStateForLevel, entryContext });
   } catch (error) {
     console.error("Failed to load level scene", error);
     return false;
@@ -1670,6 +1670,7 @@ async function loadLevel(level, { updateUrl = false } = {}) {
   });
   syncDebugState();
   if (
+    !entryContext &&
     save &&
     save.player &&
     save.player.level === level &&
@@ -2000,6 +2001,9 @@ function showLevelDangerBriefing(levelInfo) {
 
 function beginLevelTransition(nextLevel) {
   const nextLevelInfo = getBackroomsLevelInfo(nextLevel);
+  const entryContext = nextLevelInfo.level === HUB_LEVEL
+    ? { type: "door", sourceLevel: world.level }
+    : null;
   if (levelBriefingTimer) {
     window.clearTimeout(levelBriefingTimer);
     levelBriefingTimer = 0;
@@ -2018,6 +2022,7 @@ function beginLevelTransition(nextLevel) {
     loadStarted: false,
     revealElapsed: 0,
     prewarm,
+    entryContext,
   };
   canvas.dataset.transitioning = "true";
   canvas.dataset.transitionPhase = "fade-in";
@@ -2044,7 +2049,10 @@ function startLevelTransitionLoad(transition) {
       await transition.prewarm;
       if (levelTransition !== transition) return;
 
-      const loaded = await loadLevel(transition.nextLevel, { updateUrl: true });
+      const loaded = await loadLevel(transition.nextLevel, {
+        updateUrl: true,
+        entryContext: transition.entryContext,
+      });
       if (levelTransition !== transition) return;
       if (!loaded) {
         levelTransition = null;

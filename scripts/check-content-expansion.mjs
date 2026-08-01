@@ -27,6 +27,7 @@ const levelZero = await import("../src/scene/level-zero/layout.js");
 const levelZeroWorld = await import("../src/scene/level-zero/world.js");
 const { CELL_SIZE, FIRESALT_EFFECT_RADIUS, FIRESALT_STUN_DURATION } = await import("../src/scene/constants.js");
 const { createExitNetwork } = await import("../src/scene/common/exit-network.js");
+const { resolveHubEntry } = await import("../src/scene/hub/entry.js");
 
 function canReach({ cols, rows, start, target, isOpen }) {
   const queue = [[start.col, start.row]];
@@ -163,6 +164,32 @@ assert.equal(
   })?.interacted,
   true,
 );
+
+// Entering the Hub through a level door places the player beside the matching
+// Hub door and unlocks that door without leaving it open. Completion entry has
+// no source-door context and must retain the ordinary Hub spawn/state.
+const hubEntryRoutes = [
+  { id: "hub-door-level-2", targetLevel: 2, position: { x: 17, z: 57 } },
+  { id: "hub-door-level-7", targetLevel: 7, position: { x: -17, z: 21 } },
+];
+const defaultHubSpawn = { x: 0, z: 112, yaw: Math.PI };
+const hubDoorEntry = resolveHubEntry({
+  routes: hubEntryRoutes,
+  initialInteractions: { "hub-door-level-2": { count: 1, unlocked: false } },
+  entryContext: { type: "door", sourceLevel: 2 },
+  defaultSpawn: defaultHubSpawn,
+});
+assert.deepEqual(hubDoorEntry.spawn, { x: 14.6, z: 57, yaw: Math.PI / 2 });
+assert.deepEqual(hubDoorEntry.interactions["hub-door-level-2"], { count: 0, unlocked: true });
+assert.equal(hubDoorEntry.entryRoute?.id, "hub-door-level-2");
+const hubCompletionEntry = resolveHubEntry({
+  routes: hubEntryRoutes,
+  initialInteractions: {},
+  defaultSpawn: defaultHubSpawn,
+});
+assert.equal(hubCompletionEntry.spawn, defaultHubSpawn);
+assert.deepEqual(hubCompletionEntry.interactions, {});
+assert.equal(hubCompletionEntry.entryRoute, null);
 const mainSource = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 assert.match(mainSource, /const prewarm = preloadLevelScene\(nextLevelInfo\.level\);/);
 assert.match(mainSource, /await transition\.prewarm;/);
@@ -171,6 +198,8 @@ assert.match(mainSource, /levelTransition\.revealElapsed \+= delta \* 1000;/);
 assert.doesNotMatch(mainSource, /LEVEL_TRANSITION_MS/);
 assert.match(mainSource, /const debugBypassHubLocks = isDebugFeaturesActive\(\) && world\?\.level === HUB_LEVEL;/);
 assert.match(mainSource, /debugBypassHubLocks \|\| getLevelKeyTarget/);
+assert.match(mainSource, /nextLevelInfo\.level === HUB_LEVEL\s*\? \{ type: "door", sourceLevel: world\.level \}/);
+assert.match(mainSource, /entryContext: transition\.entryContext/);
 const controlsSource = await readFile(new URL("../src/first-person-controls.js", import.meta.url), "utf8");
 assert.match(controlsSource, /event\.code === "KeyC"/);
 assert.match(controlsSource, /this\.camera\.fov = nextFov/);

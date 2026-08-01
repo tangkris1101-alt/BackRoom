@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createExitNetwork } from "../common/exit-network.js";
 import { HUB_LEVEL } from "../constants.js";
+import { resolveHubEntry } from "./entry.js";
 
 const HALF_WIDTH = 17;
 const HALF_LENGTH = 132;
@@ -180,7 +181,7 @@ function addHubArchitecture(scene, routes) {
   addHighLockedDoors(scene);
 }
 
-export function createHubScene({ initialState = null } = {}) {
+export function createHubScene({ initialState = null, entryContext = null } = {}) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x3a3326);
   scene.fog = new THREE.FogExp2(0x3e3729, 0.008);
@@ -192,7 +193,6 @@ export function createHubScene({ initialState = null } = {}) {
   fill.position.set(6, CEILING_HEIGHT - 0.5, 10);
   scene.add(fill);
 
-  const spawn = { x: 0, z: 112, yaw: Math.PI };
   const routes = [
     { level: 1, side: -1, z: -111, symbolSeed: 7 },
     { level: 6, side: 1, z: -83, symbolSeed: 2 },
@@ -219,8 +219,15 @@ export function createHubScene({ initialState = null } = {}) {
     position: { x: side * HALF_WIDTH, z },
     rotation: side < 0 ? Math.PI / 2 : -Math.PI / 2,
   }));
+  const hubEntry = resolveHubEntry({
+    routes,
+    initialInteractions: initialState?.interactions ?? {},
+    entryContext,
+    defaultSpawn: { x: 0, z: 112, yaw: Math.PI },
+  });
+  const spawn = hubEntry.spawn;
   addHubArchitecture(scene, routes);
-  const exitNetwork = createExitNetwork(scene, camera, routes, initialState?.interactions ?? {});
+  const exitNetwork = createExitNetwork(scene, camera, routes, hubEntry.interactions);
   const keyMarker = new THREE.Group();
   keyMarker.name = "hub-level-key-door-marker";
   const keyMarkerMaterial = new THREE.MeshBasicMaterial({

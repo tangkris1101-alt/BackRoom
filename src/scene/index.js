@@ -19,11 +19,11 @@ function getLevelSceneLoader(level) {
   return LEVEL_SCENE_LOADERS.get(level) ?? LEVEL_SCENE_LOADERS.get(0);
 }
 
-export async function createBackroomsScene(level = 0, { initialState = null } = {}) {
+export async function createBackroomsScene(level = 0, { initialState = null, entryContext = null } = {}) {
   const levelInfo = getBackroomsLevelInfo(level);
   const [importScene, factoryName] = getLevelSceneLoader(levelInfo.level);
   const sceneModule = await importScene();
-  return sceneModule[factoryName]({ initialState });
+  return sceneModule[factoryName]({ initialState, entryContext });
 }
 
 export function preloadLevelScene(level = 0) {
