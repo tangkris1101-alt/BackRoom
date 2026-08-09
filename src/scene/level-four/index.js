@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createGameMaterial } from "../common/materials.js";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -75,28 +76,28 @@ export function createLevelFourScene({ initialState = null } = {}) {
     isWalkable,
   );
 
-  const floorMaterial = new THREE.MeshStandardMaterial({
+  const floorMaterial = createGameMaterial({
     map: createLevelFourCarpetTexture(),
     color: 0xdfe4d7,
     emissive: 0x596454,
     emissiveIntensity: 0.18,
     roughness: 0.97,
   });
-  const wallMaterial = new THREE.MeshStandardMaterial({
+  const wallMaterial = createGameMaterial({
     map: createLevelFourWallTexture(),
     color: 0xf1ecd9,
     emissive: 0x545046,
     emissiveIntensity: 0.16,
     roughness: 0.92,
   });
-  const ceilingMaterial = new THREE.MeshStandardMaterial({
+  const ceilingMaterial = createGameMaterial({
     map: createLevelFourCeilingTexture(),
     color: 0xf4f0d9,
     emissive: 0x807a60,
     emissiveIntensity: 0.32,
     roughness: 0.86,
   });
-  const wallCapMaterial = new THREE.MeshStandardMaterial({
+  const wallCapMaterial = createGameMaterial({
     color: 0xaaa189,
     emissive: 0x332f26,
     emissiveIntensity: 0.08,

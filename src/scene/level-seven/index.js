@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createGameMaterial } from "../common/materials.js";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -100,7 +101,7 @@ function createLevelSevenLights(scene, fixturePositions) {
   );
   const bulbGeometry = new THREE.SphereGeometry(0.11, 14, 10);
   const socketGeometry = new THREE.CylinderGeometry(0.12, 0.16, 0.16, 12);
-  const socketMaterial = new THREE.MeshStandardMaterial({
+  const socketMaterial = createGameMaterial({
     color: 0x1a1410,
     emissive: 0x080403,
     emissiveIntensity: 0.16,
@@ -113,7 +114,7 @@ function createLevelSevenLights(scene, fixturePositions) {
     socket.position.set(fixture.x, CEILING_Y - 0.12, fixture.z);
     scene.add(socket);
 
-    const bulbMaterial = new THREE.MeshStandardMaterial({
+    const bulbMaterial = createGameMaterial({
       color: fixture.color,
       emissive: fixture.color,
       emissiveIntensity: fixture.baseIntensity,
@@ -163,7 +164,7 @@ function addLevelSevenWater(scene) {
 }
 
 function addLevelSevenExit(scene, targetPosition) {
-  const hatchMaterial = new THREE.MeshStandardMaterial({
+  const hatchMaterial = createGameMaterial({
     color: 0x172a2e,
     emissive: 0x03191d,
     emissiveIntensity: 0.34,
@@ -174,7 +175,7 @@ function addLevelSevenExit(scene, targetPosition) {
   hatch.position.set(targetPosition.x, 0.18, targetPosition.z);
   scene.add(hatch);
 
-  const postMaterial = new THREE.MeshStandardMaterial({
+  const postMaterial = createGameMaterial({
     color: 0xd9e7c8,
     emissive: 0x334a36,
     emissiveIntensity: 0.22,
@@ -186,7 +187,7 @@ function addLevelSevenExit(scene, targetPosition) {
 
   const sign = new THREE.Mesh(
     new THREE.PlaneGeometry(1.72, 0.5),
-    new THREE.MeshStandardMaterial({
+    createGameMaterial({
       map: createWideSignTexture("SURFACE", "#06191c", "#a8f6ff"),
       color: 0xffffff,
       emissive: 0x54d8ff,
@@ -212,19 +213,19 @@ function addLevelSevenDetails(scene, interactionInitial = {}) {
     colliders.push({ minX: x - halfX, maxX: x + halfX, minZ: z - halfZ, maxZ: z + halfZ });
   };
 
-  const woodMaterial = new THREE.MeshStandardMaterial({
+  const woodMaterial = createGameMaterial({
     color: 0x3a2619,
     emissive: 0x0b0502,
     emissiveIntensity: 0.16,
     roughness: 0.82,
   });
-  const buoyMaterial = new THREE.MeshStandardMaterial({
+  const buoyMaterial = createGameMaterial({
     color: 0xb33124,
     emissive: 0x230604,
     emissiveIntensity: 0.28,
     roughness: 0.58,
   });
-  const buoyRopeMaterial = new THREE.MeshStandardMaterial({
+  const buoyRopeMaterial = createGameMaterial({
     color: 0x151b1c,
     roughness: 0.94,
     metalness: 0.05,
@@ -406,21 +407,21 @@ export function createLevelSevenScene({ initialState = null } = {}) {
   );
   addLevelSevenWater(scene);
 
-  const floorMaterial = new THREE.MeshStandardMaterial({
+  const floorMaterial = createGameMaterial({
     map: createLevelSevenRoomFloorTexture(),
     color: 0xffffff,
     emissive: 0x17110d,
     emissiveIntensity: 0.42,
     roughness: 0.94,
   });
-  const wallMaterial = new THREE.MeshStandardMaterial({
+  const wallMaterial = createGameMaterial({
     map: createLevelSevenWallpaperTexture(),
     color: 0xffffff,
     emissive: 0x18100f,
     emissiveIntensity: 0.38,
     roughness: 0.9,
   });
-  const ceilingMaterial = new THREE.MeshStandardMaterial({
+  const ceilingMaterial = createGameMaterial({
     map: createLevelSevenCeilingTexture(),
     color: 0xffffff,
     emissive: 0x0e0907,

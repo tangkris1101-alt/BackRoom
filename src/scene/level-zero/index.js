@@ -10,6 +10,7 @@ import {
   SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
 } from "../constants.js";
+import { createGameMaterial, applyFixtureLightFieldIfNeeded } from "../common/materials.js";
 import { addInstancedBoxes, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import {
@@ -155,40 +156,39 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   const wallpaperTexture = createLevelZeroWallpaperTexture();
   const ceilingTexture = createLevelZeroCeilingTexture();
 
-  const floorMaterial = new THREE.MeshStandardMaterial({
+  const floorMaterial = createGameMaterial({
     map: carpetTexture,
     color: 0xf6e9c6,
     emissive: 0x8a7449,
     emissiveIntensity: 0,
     roughness: 0.98,
   });
-  const wallMaterial = new THREE.MeshStandardMaterial({
+  const wallMaterial = createGameMaterial({
     map: wallpaperTexture,
     color: 0xfffce3,
     emissive: 0x655b34,
-    // A subtle baseline prevents unlit wall faces from collapsing to black.
     emissiveIntensity: 0.045,
     roughness: 0.92,
     metalness: 0,
   });
-  const ceilingMaterial = new THREE.MeshStandardMaterial({
+  const ceilingMaterial = createGameMaterial({
     map: ceilingTexture,
     color: 0xfff7df,
     emissive: 0xc0b07a,
     emissiveIntensity: 0,
     roughness: 0.86,
   });
-  const wallCapMaterial = new THREE.MeshStandardMaterial({
+  const wallCapMaterial = createGameMaterial({
     color: 0xc7b778,
     emissive: 0x584c24,
     emissiveIntensity: 0,
     roughness: 0.98,
     metalness: 0,
   });
-  applyFixtureLightField(floorMaterial, fixtureLightField, 1.28);
-  applyFixtureLightField(wallMaterial, fixtureLightField, 0.94);
-  applyFixtureLightField(ceilingMaterial, fixtureLightField, 0.72);
-  applyFixtureLightField(wallCapMaterial, fixtureLightField, 0.78);
+  applyFixtureLightFieldIfNeeded(floorMaterial, applyFixtureLightField, fixtureLightField, 1.28);
+  applyFixtureLightFieldIfNeeded(wallMaterial, applyFixtureLightField, fixtureLightField, 0.94);
+  applyFixtureLightFieldIfNeeded(ceilingMaterial, applyFixtureLightField, fixtureLightField, 0.72);
+  applyFixtureLightFieldIfNeeded(wallCapMaterial, applyFixtureLightField, fixtureLightField, 0.78);
   const wallMaterials = [
     wallMaterial,
     wallMaterial,

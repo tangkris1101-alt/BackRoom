@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createGameMaterial } from "../common/materials.js";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -84,46 +85,46 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     isWalkable,
   );
 
-  const floorMaterial = new THREE.MeshStandardMaterial({
+  const floorMaterial = createGameMaterial({
     map: createLevelFiveCarpetTexture(),
     color: 0xffffff,
     emissive: 0x3c170c,
     emissiveIntensity: 0.58,
     roughness: 0.94,
   });
-  const wallMaterial = new THREE.MeshStandardMaterial({
+  const wallMaterial = createGameMaterial({
     map: createLevelFiveWallpaperTexture(),
     color: 0xffffff,
     emissive: 0x45190d,
     emissiveIntensity: 0.56,
     roughness: 0.88,
   });
-  const ceilingMaterial = new THREE.MeshStandardMaterial({
+  const ceilingMaterial = createGameMaterial({
     map: createLevelFiveCeilingTexture(),
     color: 0xffffff,
     emissive: 0x4a2a14,
     emissiveIntensity: 0.58,
     roughness: 0.84,
   });
-  const wallCapMaterial = new THREE.MeshStandardMaterial({
+  const wallCapMaterial = createGameMaterial({
     color: 0x5a3923,
     emissive: 0x140704,
     emissiveIntensity: 0.22,
     roughness: 0.88,
   });
-  const woodFloorMaterial = new THREE.MeshStandardMaterial({
+  const woodFloorMaterial = createGameMaterial({
     ...createLevelFivePbrMaps("wood", 7, 2.2),
     color: 0x9d6b55,
     roughness: 0.48,
     metalness: 0.02,
   });
-  const marbleFloorMaterial = new THREE.MeshStandardMaterial({
+  const marbleFloorMaterial = createGameMaterial({
     ...createLevelFivePbrMaps("marble", 6, 2.4),
     color: 0xd6c7ad,
     roughness: 0.34,
     metalness: 0,
   });
-  const boilerMaterial = new THREE.MeshStandardMaterial({
+  const boilerMaterial = createGameMaterial({
     ...createLevelFivePbrMaps("boiler", 8, 3.8),
     color: 0x8e7061,
     emissive: 0x160905,

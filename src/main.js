@@ -10,6 +10,7 @@ import {
   BACTERIA_CONTACT_RADIUS,
   HOUND_CONTACT_RADIUS,
   HUB_LEVEL,
+  MATERIAL_QUALITY_STORAGE_KEY,
   PLAYABLE_LEVEL_IDS,
   SILENCE_LIQUID_DURATION,
   SILENCE_LIQUID_REPEL_RADIUS,
@@ -22,6 +23,11 @@ import {
   clearSave,
   getInitialLevelFromSave,
 } from "./save.js";
+import {
+  getMaterialQuality,
+  setMaterialQuality,
+  MATERIAL_QUALITY,
+} from "./scene/common/materials.js";
 import {
   BUFF_TEXT,
   ENTITY_TEXT,
@@ -162,6 +168,7 @@ const changelogDescription = document.querySelector("#changelog-description");
 const changelogList = document.querySelector("#changelog-list");
 const changelogClose = document.querySelector("#changelog-close");
 const frameRateButtons = [...document.querySelectorAll("[data-frame-rate]")];
+const qualityButtons = [...document.querySelectorAll("[data-quality]")];
 const pauseResetButton = document.querySelector("#pause-reset");
 const pauseResetLabel = document.querySelector("#pause-reset-label");
 const pauseResetHint = document.querySelector("#pause-reset-hint");
@@ -281,6 +288,25 @@ function updateFrameRateControls() {
     button.setAttribute("aria-pressed", String(button.dataset.frameRate === activeValue));
   });
   canvas.dataset.frameRateLimit = activeValue;
+}
+
+function updateQualityControls() {
+  const activeQuality = getMaterialQuality();
+  qualityButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.quality === activeQuality));
+  });
+}
+
+function requestMaterialQuality(quality) {
+  if (quality !== MATERIAL_QUALITY.HIGH && quality !== MATERIAL_QUALITY.LOW) return;
+  const current = getMaterialQuality();
+  if (quality === current) return;
+  setMaterialQuality(quality);
+  updateQualityControls();
+  // Material quality only takes effect on next level load.
+  // Show a subtle hint to the player.
+  pickupFlashText = formatLocalizedStatus("qualityHint");
+  pickupFlashUntil = clock.elapsedTime + 2.0;
 }
 
 function setFrameRateLimit(nextLimit) {
@@ -872,7 +898,10 @@ function updateMainMenuText() {
   if (mainMenuLanguageTitle) mainMenuLanguageTitle.textContent = text.language;
   if (mainMenuFrameRateTitle) mainMenuFrameRateTitle.textContent = text.frameRate;
   if (mainMenuQualityLabel) mainMenuQualityLabel.textContent = text.quality;
-  if (mainMenuQualityValue) mainMenuQualityValue.textContent = text.automatic;
+  qualityButtons.forEach((button) => {
+    if (button.dataset.quality === "high") button.textContent = text.qualityHigh ?? "高画质";
+    if (button.dataset.quality === "low") button.textContent = text.qualityLow ?? "低画质";
+  });
   if (mainMenuChangelogLabel) mainMenuChangelogLabel.textContent = text.changelogLabel;
   if (mainMenuChangelogHint) mainMenuChangelogHint.textContent = text.changelogHint;
   if (mainMenuSettingsClose) mainMenuSettingsClose.setAttribute("aria-label", text.close);
@@ -882,6 +911,7 @@ function updateMainMenuText() {
   mainMenuLanguageZh?.setAttribute("aria-pressed", String(currentLanguage === "zh-CN"));
   mainMenuLanguageEn?.setAttribute("aria-pressed", String(currentLanguage === "en"));
   updateFrameRateControls();
+  updateQualityControls();
   updateChangelogText();
 }
 
@@ -1515,17 +1545,44 @@ function disposeMaterial(material) {
     material.forEach(disposeMaterial);
     return;
   }
+  if (!material) return;
   Object.values(material).forEach((value) => {
     if (value?.isTexture) value.dispose();
   });
   material.dispose();
 }
 
+function disposeObject(object) {
+  if (object.geometry) {
+    object.geometry.dispose();
+  }
+  if (object.material) {
+    disposeMaterial(object.material);
+  }
+  if (object.isGroup || object.isScene) {
+    // Children will be traversed by disposeWorld; no need to recurse here.
+  }
+}
+
 function disposeWorld(previousWorld) {
+  if (!previousWorld?.scene) return;
+  // Dispose all textures on the scene to catch any that were added
+  // to the scene or its children as userData.
   previousWorld.scene.traverse((object) => {
-    if (object.geometry) object.geometry.dispose();
-    if (object.material) disposeMaterial(object.material);
+    disposeObject(object);
+    if (object.userData) {
+      Object.values(object.userData).forEach((value) => {
+        if (value?.isTexture) value.dispose();
+      });
+    }
   });
+  // Dispose renderer textures (e.g., depth textures, post-processing targets)
+  // These are managed by the renderer, but we can force a clear of unused textures.
+  renderer?.renderLists?.dispose?.();
+  // Detach camera from scene to avoid circular references
+  if (previousWorld.camera) {
+    previousWorld.camera.clear();
+  }
 }
 
 function updateLevelUrl(level) {
@@ -4257,6 +4314,13 @@ frameRateButtons.forEach((button) => {
     event.preventDefault();
     event.stopPropagation();
     requestFrameRateLimit(button.dataset.frameRate);
+  });
+});
+qualityButtons.forEach((button) => {
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    requestMaterialQuality(button.dataset.quality);
   });
 });
 

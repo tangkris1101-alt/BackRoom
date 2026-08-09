@@ -80,9 +80,12 @@
               <button class="frame-rate-option" type="button" data-frame-rate="144">144</button>
             </div>
           </div>
-          <div class="settings-quality-row">
-            <span id="main-menu-quality-label">画质</span>
-            <output id="main-menu-quality-value">自动</output>
+          <div class="settings-option-group">
+            <span id="main-menu-quality-label" class="settings-option-group__label">画质</span>
+            <div class="frame-rate-options" role="group" aria-labelledby="main-menu-quality-label">
+              <button class="quality-option" type="button" data-quality="high">高画质</button>
+              <button class="quality-option" type="button" data-quality="low">低画质</button>
+            </div>
           </div>
           <button id="main-menu-changelog" class="settings-changelog-button" type="button">
             <strong id="main-menu-changelog-label">更新日志</strong>
@@ -447,9 +450,12 @@
               <button class="frame-rate-option" type="button" data-frame-rate="144">144</button>
             </div>
           </div>
-          <div class="settings-quality-row">
-            <span id="pause-quality-label">画质</span>
-            <output id="pause-quality-value">自动</output>
+          <div class="settings-option-group">
+            <span id="pause-quality-label" class="settings-option-group__label">画质</span>
+            <div class="frame-rate-options" role="group" aria-labelledby="pause-quality-label">
+              <button class="quality-option" type="button" data-quality="high">高画质</button>
+              <button class="quality-option" type="button" data-quality="low">低画质</button>
+            </div>
           </div>
           <button id="pause-changelog" class="settings-changelog-button" type="button">
             <strong id="pause-changelog-label">更新日志</strong>

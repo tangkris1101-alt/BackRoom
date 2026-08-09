@@ -704,6 +704,7 @@ export const STATUS_TEXT = {
     failureRestartHint: "CLEAR PROGRESS AND RETURN TO LEVEL 0",
     debugEnabled: "DEBUG FEATURES ENABLED",
     debugDisabled: "DEBUG FEATURES DISABLED",
+    qualityHint: "Quality changed. Takes effect on next level load.",
     exitContinueLabel: "CONTINUE EXPLORING",
     exitContinueHint: "KEEP YOUR INVENTORY AND ENTER THE HUB",
     exitTotalTime: "TOTAL TIME {time}",
@@ -739,6 +740,8 @@ export const MAIN_MENU_TEXT = {
     frameRate: "帧数",
     automatic: "自动",
     quality: "画质",
+    qualityHigh: "高画质",
+    qualityLow: "低画质",
     close: "关闭设置",
   },
   en: {
@@ -755,6 +758,8 @@ export const MAIN_MENU_TEXT = {
     frameRate: "FRAME RATE",
     automatic: "AUTO",
     quality: "QUALITY",
+    qualityHigh: "HIGH",
+    qualityLow: "LOW",
     close: "CLOSE SETTINGS",
   },
 };

@@ -12,6 +12,7 @@ import {
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
 } from "../constants.js";
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
+import { createGameMaterial, applyFixtureLightFieldIfNeeded } from "../common/materials.js";
 import { attachFirstPersonViewModel, getViewModelName, setFirstPersonViewModelLighting, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import {
   LEVEL_ONE_COLS,
@@ -171,13 +172,17 @@ function isFirstPersonViewModelMesh(object) {
   return false;
 }
 
+function applyLevelOneLightFieldSafe(material, lightField, intensity) {
+  applyFixtureLightFieldIfNeeded(material, applyLevelOneLightField, lightField, intensity);
+}
+
 function applyLevelOnePropLightField(scene, lightField) {
   scene.traverse((object) => {
     if (!object.isMesh || isFirstPersonViewModelMesh(object)) return;
     const materials = Array.isArray(object.material) ? object.material : [object.material];
     materials.filter(Boolean).forEach((material) => {
       if (material.emissiveIntensity > 0.5) return;
-      applyLevelOneLightField(material, lightField, 0.72);
+      applyLevelOneLightFieldSafe(material, lightField, 0.72);
     });
   });
 }
@@ -249,7 +254,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
   });
   const lightField = createLevelOneLightField(fixturePositions);
 
-  const floorMaterial = new THREE.MeshStandardMaterial({
+  const floorMaterial = createGameMaterial({
     ...createLevelOneFloorPbrMaps(),
     color: 0xd5dccc,
     emissive: 0x3b463d,
@@ -258,19 +263,19 @@ export function createLevelOneScene({ initialState = null } = {}) {
     normalScale: new THREE.Vector2(0.42, 0.42),
     aoMapIntensity: 0.58,
   });
-  const wallMaterial = new THREE.MeshStandardMaterial({
+  const wallMaterial = createGameMaterial({
     color: 0xd5d7d2,
     emissive: 0x000000,
     emissiveIntensity: 0,
     roughness: 0.94,
   });
-  const ceilingMaterial = new THREE.MeshStandardMaterial({
+  const ceilingMaterial = createGameMaterial({
     color: 0xcfd1cc,
     emissive: 0x000000,
     emissiveIntensity: 0,
     roughness: 0.9,
   });
-  const wallCapMaterial = new THREE.MeshStandardMaterial({
+  const wallCapMaterial = createGameMaterial({
     color: 0x747976,
     emissive: 0x000000,
     emissiveIntensity: 0,
@@ -284,10 +289,10 @@ export function createLevelOneScene({ initialState = null } = {}) {
     wallMaterial,
     wallMaterial,
   ];
-  applyLevelOneLightField(floorMaterial, lightField, 3.05);
-  applyLevelOneLightField(wallMaterial, lightField, 2.35);
-  applyLevelOneLightField(ceilingMaterial, lightField, 2.1);
-  applyLevelOneLightField(wallCapMaterial, lightField, 2.15);
+  applyLevelOneLightFieldSafe(floorMaterial, lightField, 3.05);
+  applyLevelOneLightFieldSafe(wallMaterial, lightField, 2.35);
+  applyLevelOneLightFieldSafe(ceilingMaterial, lightField, 2.1);
+  applyLevelOneLightFieldSafe(wallCapMaterial, lightField, 2.15);
 
   const floor = new THREE.Mesh(
     enableAoUv(new THREE.PlaneGeometry(LEVEL_ONE_COLS * CELL_SIZE, LEVEL_ONE_ROWS * CELL_SIZE)),

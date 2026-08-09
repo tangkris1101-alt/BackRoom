@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createGameMaterial } from "../common/materials.js";
 import { CELL_SIZE, CEILING_Y, WALL_HEIGHT } from "../constants.js";
 import { addInstancedBoxes, createStableLightState } from "../common/lighting.js";
 import {
@@ -25,9 +26,9 @@ import { createLevelEightCeilingTexture, createLevelEightPbrMaps } from "./textu
 import { enableAoUv } from "../common/texture-utils.js";
 
 function addCaveDetails(scene) {
-  const rock = new THREE.MeshStandardMaterial({ color: 0x303733, roughness: 0.98, metalness: 0.02 });
-  const wetRock = new THREE.MeshStandardMaterial({ color: 0x263532, emissive: 0x06231d, emissiveIntensity: 0.24, roughness: 0.72 });
-  const mineral = new THREE.MeshStandardMaterial({ color: 0x8c5124, emissive: 0xff4b16, emissiveIntensity: 0.45, roughness: 0.42 });
+  const rock = createGameMaterial({ color: 0x303733, roughness: 0.98, metalness: 0.02 });
+  const wetRock = createGameMaterial({ color: 0x263532, emissive: 0x06231d, emissiveIntensity: 0.24, roughness: 0.72 });
+  const mineral = createGameMaterial({ color: 0x8c5124, emissive: 0xff4b16, emissiveIntensity: 0.45, roughness: 0.42 });
   const spikeGeometry = new THREE.ConeGeometry(0.32, 1.45, 7);
   const transforms = [];
   for (let row = 2; row < LEVEL_EIGHT_ROWS - 2; row += 2) {
@@ -88,9 +89,9 @@ export function createLevelEightScene({ initialState = null } = {}) {
   const targetPosition = levelEightCellCenter(LEVEL_EIGHT_TARGET_CELL.col, LEVEL_EIGHT_TARGET_CELL.row);
   const spawn = { ...spawnCell, yaw: LEVEL_EIGHT_START_CELL.yaw };
 
-  const floorMaterial = new THREE.MeshStandardMaterial({ ...createLevelEightPbrMaps(18, 14), color: 0xa7b4aa, emissive: 0x0c1814, emissiveIntensity: 0.28, roughness: 0.94, normalScale: new THREE.Vector2(0.55, 0.55), aoMapIntensity: 0.62 });
-  const wallMaterial = new THREE.MeshStandardMaterial({ ...createLevelEightPbrMaps(22, 8), color: 0x98a39a, emissive: 0x0c1714, emissiveIntensity: 0.2, roughness: 0.96, normalScale: new THREE.Vector2(0.72, 0.72), aoMapIntensity: 0.7 });
-  const ceilingMaterial = new THREE.MeshStandardMaterial({ map: createLevelEightCeilingTexture(), color: 0x77817a, emissive: 0x07100e, emissiveIntensity: 0.18, roughness: 0.98 });
+  const floorMaterial = createGameMaterial({ ...createLevelEightPbrMaps(18, 14), color: 0xa7b4aa, emissive: 0x0c1814, emissiveIntensity: 0.28, roughness: 0.94, normalScale: new THREE.Vector2(0.55, 0.55), aoMapIntensity: 0.62 });
+  const wallMaterial = createGameMaterial({ ...createLevelEightPbrMaps(22, 8), color: 0x98a39a, emissive: 0x0c1714, emissiveIntensity: 0.2, roughness: 0.96, normalScale: new THREE.Vector2(0.72, 0.72), aoMapIntensity: 0.7 });
+  const ceilingMaterial = createGameMaterial({ map: createLevelEightCeilingTexture(), color: 0x77817a, emissive: 0x07100e, emissiveIntensity: 0.18, roughness: 0.98 });
   const floor = new THREE.Mesh(enableAoUv(new THREE.PlaneGeometry(LEVEL_EIGHT_COLS * CELL_SIZE, LEVEL_EIGHT_ROWS * CELL_SIZE)), floorMaterial);
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createGameMaterial } from "../common/materials.js";
 import { CELL_SIZE } from "../constants.js";
 import { createStableLightState } from "../common/lighting.js";
 import {
@@ -36,10 +37,10 @@ export function createLevelNineScene({ initialState = null } = {}) {
   const spawn = { ...spawnCell, yaw: LEVEL_NINE_START_CELL.yaw };
   const coarse = window.matchMedia?.("(pointer: coarse), (max-width: 800px)").matches;
 
-  const grassMaterial = new THREE.MeshStandardMaterial({
+  const grassMaterial = createGameMaterial({
     map: createLevelNineGrassTexture(), color: 0x496b51, emissive: 0x08120c, emissiveIntensity: 0.34, roughness: 0.95,
   });
-  const roadMaterial = new THREE.MeshStandardMaterial({
+  const roadMaterial = createGameMaterial({
     map: createLevelNineRoadTexture(), color: 0x74808d, emissive: 0x0b111a, emissiveIntensity: 0.42, roughness: 0.36, metalness: 0.08,
   });
   const floor = new THREE.Mesh(enableAoUv(new THREE.PlaneGeometry(LEVEL_NINE_COLS * CELL_SIZE, LEVEL_NINE_ROWS * CELL_SIZE)), grassMaterial);

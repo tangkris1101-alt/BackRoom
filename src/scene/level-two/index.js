@@ -11,6 +11,7 @@ import {
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
   HUB_LEVEL,
 } from "../constants.js";
+import { createGameMaterial } from "../common/materials.js";
 import { updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import {
@@ -525,7 +526,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
 
   // Keep the pipe-room surfaces dimmer than the ceiling fixtures so the player
   // flashlight has visible lighting headroom on nearby floors and walls.
-  const floorMaterial = new THREE.MeshStandardMaterial({
+  const floorMaterial = createGameMaterial({
     map: createLevelTwoFloorTexture(),
     color: 0xa58d6c,
     emissive: 0x24150b,
@@ -533,7 +534,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     roughness: 0.91,
     metalness: 0.02,
   });
-  const wallMaterial = new THREE.MeshStandardMaterial({
+  const wallMaterial = createGameMaterial({
     map: createLevelTwoWallTexture(),
     color: 0xae997b,
     emissive: 0x1d1108,
@@ -542,7 +543,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     metalness: 0.02,
     side: THREE.DoubleSide,
   });
-  const ceilingMaterial = new THREE.MeshStandardMaterial({
+  const ceilingMaterial = createGameMaterial({
     map: createLevelTwoCeilingTexture(),
     color: 0x8d8068,
     emissive: 0x21160c,
@@ -550,14 +551,14 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     roughness: 0.9,
     metalness: 0.05,
   });
-  const wallCapMaterial = new THREE.MeshStandardMaterial({
+  const wallCapMaterial = createGameMaterial({
     color: 0x443729,
     emissive: 0x0e0704,
     emissiveIntensity: 0.05,
     roughness: 0.94,
     metalness: 0.04,
   });
-  const diagWallMaterial = new THREE.MeshStandardMaterial({
+  const diagWallMaterial = createGameMaterial({
     color: 0x5f503d,
     emissive: 0x170c05,
     emissiveIntensity: 0.08,
@@ -565,7 +566,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     metalness: 0.06,
     side: THREE.DoubleSide,
   });
-  const fillMaterial = new THREE.MeshStandardMaterial({
+  const fillMaterial = createGameMaterial({
     color: 0x4d4133,
     emissive: 0x100905,
     emissiveIntensity: 0.06,

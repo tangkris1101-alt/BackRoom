@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createGameMaterial } from "../common/materials.js";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -131,7 +132,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(LEVEL_THREE_COLS * CELL_SIZE, LEVEL_THREE_ROWS * CELL_SIZE),
-    new THREE.MeshStandardMaterial({
+    createGameMaterial({
       map: createLevelThreeFloorTexture(),
       color: 0xffffff,
       roughness: 0.92,
@@ -144,7 +145,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
 
   const ceiling = new THREE.Mesh(
     new THREE.PlaneGeometry(LEVEL_THREE_COLS * CELL_SIZE, LEVEL_THREE_ROWS * CELL_SIZE),
-    new THREE.MeshStandardMaterial({
+    createGameMaterial({
       map: createLevelThreeCeilingTexture(),
       color: 0xffffff,
       roughness: 0.82,
@@ -154,7 +155,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   ceiling.position.set(LEVEL_THREE_CENTER_X, CEILING_Y, LEVEL_THREE_CENTER_Z);
   scene.add(ceiling);
 
-  const wallMaterial = new THREE.MeshStandardMaterial({
+  const wallMaterial = createGameMaterial({
     map: createLevelThreeBrickTexture(),
     color: 0xffffff,
     roughness: 0.88,

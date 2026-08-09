@@ -1,4 +1,5 @@
 export const CELL_SIZE = 4;
+export const MATERIAL_QUALITY_STORAGE_KEY = "backrooms:material:quality";
 export const WALL_HEIGHT = 3.72;
 export const WALL_THICKNESS = 0.22;
 export const CEILING_Y = 3.66;

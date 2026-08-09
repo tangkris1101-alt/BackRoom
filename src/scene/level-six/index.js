@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createGameMaterial } from "../common/materials.js";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -72,7 +73,7 @@ function addLevelSixExit(scene, targetPosition) {
   const mount = getLevelSixTargetMount(targetPosition);
   const door = new THREE.Mesh(
     new THREE.BoxGeometry(1.45, 2.18, 0.08),
-    new THREE.MeshStandardMaterial({
+    createGameMaterial({
       color: 0x080b0c,
       emissive: 0x001609,
       emissiveIntensity: 0.18,
@@ -86,7 +87,7 @@ function addLevelSixExit(scene, targetPosition) {
 
   const sign = new THREE.Mesh(
     new THREE.PlaneGeometry(1.82, 0.48),
-    new THREE.MeshStandardMaterial({
+    createGameMaterial({
       map: createWideSignTexture("NO LIGHT", "#020604", "#7aff9c"),
       color: 0xffffff,
       emissive: 0x1cff72,
@@ -107,7 +108,7 @@ function addLevelSixExit(scene, targetPosition) {
 function addLevelSixDetails(scene, interactionInitial = {}) {
   const colliders = [];
   const interactions = [];
-  const cableMaterial = new THREE.MeshStandardMaterial({
+  const cableMaterial = createGameMaterial({
     color: 0x010101,
     roughness: 0.9,
     metalness: 0.15,
@@ -203,21 +204,21 @@ export function createLevelSixScene({ initialState = null } = {}) {
   // temporal-dead-zone error "Cannot access ... before initialization".
   const entityInitial = snapEntityStates(initialState?.entities ?? [], isWalkable);
 
-  const floorMaterial = new THREE.MeshStandardMaterial({
+  const floorMaterial = createGameMaterial({
     map: createLevelSixFloorTexture(),
     color: 0xb9c2c0,
     emissive: 0x10171a,
     emissiveIntensity: 0.52,
     roughness: 0.98,
   });
-  const wallMaterial = new THREE.MeshStandardMaterial({
+  const wallMaterial = createGameMaterial({
     map: createLevelSixWallTexture(),
     color: 0xb0b9b6,
     emissive: 0x0d1214,
     emissiveIntensity: 0.42,
     roughness: 0.96,
   });
-  const ceilingMaterial = new THREE.MeshStandardMaterial({
+  const ceilingMaterial = createGameMaterial({
     map: createLevelSixCeilingTexture(),
     color: 0x8f9692,
     emissive: 0x070a0b,
