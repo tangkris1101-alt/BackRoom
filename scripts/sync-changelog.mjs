@@ -15,6 +15,9 @@ const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? requested
 const titleZhIndex = args.indexOf("--title-zh");
 const latestTitleZh = titleZhIndex >= 0 ? args[titleZhIndex + 1]?.trim() : "";
 const zhOverrides = new Map();
+const isArtifactSyncTitle = (value) => (
+  /^chore(?:\([^)]*\))?:\s*sync changelog and standalone build$/i.test(value)
+);
 
 for (let index = 0; index < args.length; index += 1) {
   if (args[index] !== "--zh") continue;
@@ -35,7 +38,7 @@ const existingZh = new Map(existingEntries.map((entry) => [entry.commit, entry.t
 
 const { stdout } = await execFileAsync(
   "git",
-  ["log", `-${limit}`, "--date=short", "--pretty=format:%h%x1f%ad%x1f%s%x1e"],
+  ["log", `-${limit * 2}`, "--date=short", "--pretty=format:%h%x1f%ad%x1f%s%x1e"],
   { cwd: projectRoot, encoding: "utf8", maxBuffer: 1024 * 1024 },
 );
 
@@ -49,6 +52,8 @@ const entries = stdout
   .split("\x1e")
   .map((record) => record.trim())
   .filter(Boolean)
+  .filter((record) => !isArtifactSyncTitle(record.split("\x1f")[2] ?? ""))
+  .slice(0, limit)
   .map((record, index) => {
     const [commit, date, rawTitle] = record.split("\x1f");
     const title = sanitizeStandaloneText(rawTitle);
