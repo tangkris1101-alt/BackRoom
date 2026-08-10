@@ -9,6 +9,8 @@
     "prebuild": "node scripts/check-encoding.mjs src app.html",
     "build": "npm run prebuild && vite build && node scripts/make-standalone.mjs",
     "check": "node scripts/check-encoding.mjs && node scripts/check-content-expansion.mjs && node scripts/check-material-quality.mjs && node scripts/check-platform-collision.mjs && node scripts/check-item-ground-shadows.mjs",
+    "changelog:sync": "node scripts/sync-changelog.mjs",
+    "changelog:check": "node scripts/sync-changelog.mjs --check",
     "write:utf8": "node scripts/write-utf8.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },

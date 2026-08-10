@@ -82,7 +82,7 @@
           </div>
           <div class="settings-option-group">
             <span id="main-menu-quality-label" class="settings-option-group__label">画质</span>
-            <div class="frame-rate-options" role="group" aria-labelledby="main-menu-quality-label">
+            <div class="quality-options" role="group" aria-labelledby="main-menu-quality-label">
               <button class="quality-option" type="button" data-quality="high">高画质</button>
               <button class="quality-option" type="button" data-quality="low">低画质</button>
             </div>
@@ -113,7 +113,7 @@
               start: "开始游戏",
               startHint: "进入 LEVEL 0",
               settings: "设置",
-              settingsHint: "语言 · 帧数",
+              settingsHint: "语言 · 帧数 · 画质",
               settingsTitle: "设置",
               language: "语言",
               frameRate: "帧数",
@@ -130,7 +130,7 @@
               start: "START GAME",
               startHint: "ENTER LEVEL 0",
               settings: "SETTINGS",
-              settingsHint: "LANGUAGE · FRAME RATE",
+              settingsHint: "LANGUAGE · FRAME RATE · QUALITY",
               settingsTitle: "SETTINGS",
               language: "LANGUAGE",
               frameRate: "FRAME RATE",
@@ -158,7 +158,6 @@
           setText("main-menu-language-title", text.language);
           setText("main-menu-frame-rate-title", text.frameRate);
           setText("main-menu-quality-label", text.quality);
-          setText("main-menu-quality-value", text.automatic);
           document.querySelector('[data-frame-rate="auto"]')?.replaceChildren(text.automatic);
           document.getElementById("main-menu-language-zh")?.setAttribute("aria-pressed", String(language === "zh-CN"));
           document.getElementById("main-menu-language-en")?.setAttribute("aria-pressed", String(language === "en"));
@@ -452,7 +451,7 @@
           </div>
           <div class="settings-option-group">
             <span id="pause-quality-label" class="settings-option-group__label">画质</span>
-            <div class="frame-rate-options" role="group" aria-labelledby="pause-quality-label">
+            <div class="quality-options" role="group" aria-labelledby="pause-quality-label">
               <button class="quality-option" type="button" data-quality="high">高画质</button>
               <button class="quality-option" type="button" data-quality="low">低画质</button>
             </div>
