@@ -25,7 +25,7 @@ export const createLevelEightFloorTexture = () => rockTexture("#343a37", 18, 14,
 export const createLevelEightWallTexture = () => rockTexture("#3f4742", 22, 8, 802);
 export const createLevelEightCeilingTexture = () => rockTexture("#242a28", 18, 14, 803);
 
-export function createLevelEightPbrMaps(repeatX, repeatY) {
+export function createLevelEightPbrMaps(repeatX, repeatY, { includeDetailMaps = true } = {}) {
   const loader = new THREE.TextureLoader();
   const configure = (texture, color = false) => {
     texture.wrapS = THREE.RepeatWrapping;
@@ -35,10 +35,12 @@ export function createLevelEightPbrMaps(repeatX, repeatY) {
     if (color) texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
   };
-  return {
+  const maps = {
     map: configure(loader.load(rockColorUrl), true),
-    normalMap: configure(loader.load(rockNormalUrl)),
-    roughnessMap: configure(loader.load(rockRoughnessUrl)),
-    aoMap: configure(loader.load(rockAoUrl)),
   };
+  if (!includeDetailMaps) return maps;
+  maps.normalMap = configure(loader.load(rockNormalUrl));
+  maps.roughnessMap = configure(loader.load(rockRoughnessUrl));
+  maps.aoMap = configure(loader.load(rockAoUrl));
+  return maps;
 }

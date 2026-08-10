@@ -16,7 +16,7 @@ const PBR_SOURCES = {
   boiler: [rustyMetalColorUrl, rustyMetalNormalUrl, rustyMetalRoughnessUrl],
 };
 
-export function createLevelFivePbrMaps(kind, repeatX, repeatY) {
+export function createLevelFivePbrMaps(kind, repeatX, repeatY, { includeDetailMaps = true } = {}) {
   const [colorUrl, normalUrl, roughnessUrl] = PBR_SOURCES[kind];
   const loader = new THREE.TextureLoader();
   const configure = (texture, color = false) => {
@@ -27,11 +27,13 @@ export function createLevelFivePbrMaps(kind, repeatX, repeatY) {
     if (color) texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
   };
-  return {
+  const maps = {
     map: configure(loader.load(colorUrl), true),
-    normalMap: configure(loader.load(normalUrl)),
-    roughnessMap: configure(loader.load(roughnessUrl)),
   };
+  if (!includeDetailMaps) return maps;
+  maps.normalMap = configure(loader.load(normalUrl));
+  maps.roughnessMap = configure(loader.load(roughnessUrl));
+  return maps;
 }
 
 export function createLevelFiveCarpetTexture() {

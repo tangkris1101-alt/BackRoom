@@ -10,7 +10,7 @@ import {
   SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
 } from "../constants.js";
-import { createGameMaterial, applyFixtureLightFieldIfNeeded } from "../common/materials.js";
+import { createGameMaterial, applyFixtureLightFieldIfNeeded, isLowQuality } from "../common/materials.js";
 import { addInstancedBoxes, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import {
@@ -150,7 +150,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   const pickupInitial = initialState?.pickups ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
   const { northSouth, eastWest, fixturePositions } = collectWallTransforms();
-  const fixtureLightField = createFixtureLightField(fixturePositions);
+  const fixtureLightField = isLowQuality() ? null : createFixtureLightField(fixturePositions);
 
   const carpetTexture = createLevelZeroCarpetTexture();
   const wallpaperTexture = createLevelZeroWallpaperTexture();
@@ -388,6 +388,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     exitMode: "fall",
     scene,
     camera,
+    disposableTextures: fixtureLightField?.texture ? [fixtureLightField.texture] : [],
     spawn,
     targetPosition: exitPosition,
     isWalkable,

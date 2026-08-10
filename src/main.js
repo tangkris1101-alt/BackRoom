@@ -5,6 +5,7 @@ import { DebugMode, DEBUG_PLAYABLE_LEVELS } from "./debug-mode.js";
 import { createBackroomsScene, getBackroomsLevelInfo, preloadLevelScene } from "./scene.js";
 import { FirstPersonControls } from "./first-person-controls.js";
 import { syncFirstPersonHeldItem } from "./scene/common/view-model.js";
+import { disposeWorldResources } from "./scene/common/dispose.js";
 import { createFiresaltEffectManager } from "./scene/items/index.js";
 import {
   BACTERIA_CONTACT_RADIUS,
@@ -1540,49 +1541,8 @@ function syncLevelHud() {
   canvas.dataset.completedLevels = [...completedLevels].sort((a, b) => a - b).join(",");
 }
 
-function disposeMaterial(material) {
-  if (Array.isArray(material)) {
-    material.forEach(disposeMaterial);
-    return;
-  }
-  if (!material) return;
-  Object.values(material).forEach((value) => {
-    if (value?.isTexture) value.dispose();
-  });
-  material.dispose();
-}
-
-function disposeObject(object) {
-  if (object.geometry) {
-    object.geometry.dispose();
-  }
-  if (object.material) {
-    disposeMaterial(object.material);
-  }
-  if (object.isGroup || object.isScene) {
-    // Children will be traversed by disposeWorld; no need to recurse here.
-  }
-}
-
 function disposeWorld(previousWorld) {
-  if (!previousWorld?.scene) return;
-  // Dispose all textures on the scene to catch any that were added
-  // to the scene or its children as userData.
-  previousWorld.scene.traverse((object) => {
-    disposeObject(object);
-    if (object.userData) {
-      Object.values(object.userData).forEach((value) => {
-        if (value?.isTexture) value.dispose();
-      });
-    }
-  });
-  // Dispose renderer textures (e.g., depth textures, post-processing targets)
-  // These are managed by the renderer, but we can force a clear of unused textures.
-  renderer?.renderLists?.dispose?.();
-  // Detach camera from scene to avoid circular references
-  if (previousWorld.camera) {
-    previousWorld.camera.clear();
-  }
+  disposeWorldResources(previousWorld, renderer);
 }
 
 function updateLevelUrl(level) {

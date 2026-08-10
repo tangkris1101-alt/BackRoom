@@ -44,8 +44,12 @@ export function setMaterialQuality(quality) {
  * transparent, opacity, side, visible
  * 丢弃：roughness, metalness, normalMap, normalScale, aoMap, aoMapIntensity 等
  */
-export function createGameMaterial(props = {}) {
-  if (isLowQuality()) {
+export function createGameMaterial(propsOrFactory = {}) {
+  const lowQuality = isLowQuality();
+  const props = typeof propsOrFactory === "function"
+    ? propsOrFactory({ lowQuality })
+    : propsOrFactory;
+  if (lowQuality) {
     const lambertProps = {};
     const keepKeys = [
       "color", "emissive", "emissiveIntensity", "map", "alphaMap",

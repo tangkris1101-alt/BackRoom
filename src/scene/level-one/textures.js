@@ -40,7 +40,7 @@ export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, cont
 export function createLevelOneFloorTexture() {
   return createLevelOneConcreteTexture(0x1e1e10, 13, 10, [100, 101, 98], 0.78);
 }
-export function createLevelOneFloorPbrMaps() {
+export function createLevelOneFloorPbrMaps({ includeDetailMaps = true } = {}) {
   const loader = new THREE.TextureLoader();
   const configure = (texture, color = false) => {
     texture.wrapS = THREE.RepeatWrapping;
@@ -50,12 +50,14 @@ export function createLevelOneFloorPbrMaps() {
     if (color) texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
   };
-  return {
+  const maps = {
     map: configure(loader.load(concreteColorUrl), true),
-    normalMap: configure(loader.load(concreteNormalUrl)),
-    roughnessMap: configure(loader.load(concreteRoughnessUrl)),
-    aoMap: configure(loader.load(concreteAoUrl)),
   };
+  if (!includeDetailMaps) return maps;
+  maps.normalMap = configure(loader.load(concreteNormalUrl));
+  maps.roughnessMap = configure(loader.load(concreteRoughnessUrl));
+  maps.aoMap = configure(loader.load(concreteAoUrl));
+  return maps;
 }
 
 export function createLevelOneWallTexture() {

@@ -12,7 +12,7 @@ import {
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
 } from "../constants.js";
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
-import { createGameMaterial, applyFixtureLightFieldIfNeeded } from "../common/materials.js";
+import { createGameMaterial, applyFixtureLightFieldIfNeeded, isLowQuality } from "../common/materials.js";
 import { attachFirstPersonViewModel, getViewModelName, setFirstPersonViewModelLighting, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import {
   LEVEL_ONE_COLS,
@@ -76,10 +76,22 @@ const LEVEL_ONE_DOORWAY_WIDTH = 2.7;
 const LEVEL_ONE_DOORWAY_HEIGHT = 2.56;
 const LEVEL_ONE_EXIT_ACTIVITY_RADIUS = CELL_SIZE * 6;
 
-function createLevelOneLightField(fixturePositions) {
+function createLevelOneLightField(fixturePositions, { includeTexture = true } = {}) {
   const size = 512;
   const width = LEVEL_ONE_COLS * CELL_SIZE;
   const height = LEVEL_ONE_ROWS * CELL_SIZE;
+  const sample = (worldX, worldZ) => THREE.MathUtils.clamp(
+    fixturePositions.reduce((total, fixture) => {
+      const radius = Math.max((24 / size) * width, fixture.range * 1.42);
+      const distance = Math.hypot(fixture.x - worldX, fixture.z - worldZ);
+      const falloff = THREE.MathUtils.clamp(1 - distance / radius, 0, 1);
+      const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.8, 0.42, 1);
+      return total + falloff * falloff * strength;
+    }, 0),
+    0,
+    1,
+  );
+  if (!includeTexture) return { texture: null, width, height, sample };
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -108,17 +120,6 @@ function createLevelOneLightField(fixturePositions) {
   texture.magFilter = THREE.LinearFilter;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
-  const sample = (worldX, worldZ) => THREE.MathUtils.clamp(
-    fixturePositions.reduce((total, fixture) => {
-      const radius = Math.max((24 / size) * width, fixture.range * 1.42);
-      const distance = Math.hypot(fixture.x - worldX, fixture.z - worldZ);
-      const falloff = THREE.MathUtils.clamp(1 - distance / radius, 0, 1);
-      const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.8, 0.42, 1);
-      return total + falloff * falloff * strength;
-    }, 0),
-    0,
-    1,
-  );
   return { texture, width, height, sample };
 }
 
@@ -173,6 +174,7 @@ function isFirstPersonViewModelMesh(object) {
 }
 
 function applyLevelOneLightFieldSafe(material, lightField, intensity) {
+  if (!lightField?.texture) return;
   applyFixtureLightFieldIfNeeded(material, applyLevelOneLightField, lightField, intensity);
 }
 
@@ -252,17 +254,18 @@ export function createLevelOneScene({ initialState = null } = {}) {
   const { northSouth, eastWest, corridorNorthSouth, corridorEastWest, fixturePositions } = collectLevelOneTransforms({
     openings: [elevatorMount],
   });
-  const lightField = createLevelOneLightField(fixturePositions);
+  const lowQuality = isLowQuality();
+  const lightField = createLevelOneLightField(fixturePositions, { includeTexture: !lowQuality });
 
-  const floorMaterial = createGameMaterial({
-    ...createLevelOneFloorPbrMaps(),
+  const floorMaterial = createGameMaterial(({ lowQuality: useLowQuality }) => ({
+    ...createLevelOneFloorPbrMaps({ includeDetailMaps: !useLowQuality }),
     color: 0xd5dccc,
     emissive: 0x3b463d,
     emissiveIntensity: 0.32,
     roughness: 0.96,
     normalScale: new THREE.Vector2(0.42, 0.42),
     aoMapIntensity: 0.58,
-  });
+  }));
   const wallMaterial = createGameMaterial({
     color: 0xd5d7d2,
     emissive: 0x000000,
@@ -589,6 +592,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
     exitMode: "network",
     scene,
     camera,
+    disposableTextures: lightField.texture ? [lightField.texture] : [],
     spawn,
     targetPosition,
     isWalkable,

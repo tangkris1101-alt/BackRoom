@@ -97,8 +97,8 @@ export function createLevelThirtySevenScene({ initialState = null } = {}) {
   const spawnCell = levelThirtySevenCellCenter(LEVEL_THIRTY_SEVEN_START_CELL.col, LEVEL_THIRTY_SEVEN_START_CELL.row);
   const targetPosition = levelThirtySevenCellCenter(LEVEL_THIRTY_SEVEN_TARGET_CELL.col, LEVEL_THIRTY_SEVEN_TARGET_CELL.row);
   const spawn = { ...spawnCell, yaw: LEVEL_THIRTY_SEVEN_START_CELL.yaw };
-  const floorMaterial = createGameMaterial({ ...createLevelThirtySevenPbrMaps(24, 18), color: 0xf2f7ee, emissive: 0x486c67, emissiveIntensity: 0.16, roughness: 0.44, normalScale: new THREE.Vector2(0.38, 0.38), aoMapIntensity: 0.5 });
-  const wallMaterial = createGameMaterial({ ...createLevelThirtySevenPbrMaps(16, 8), color: 0xf4f8ef, emissive: 0x4c706b, emissiveIntensity: 0.18, roughness: 0.38, normalScale: new THREE.Vector2(0.42, 0.42), aoMapIntensity: 0.44 });
+  const floorMaterial = createGameMaterial(({ lowQuality }) => ({ ...createLevelThirtySevenPbrMaps(24, 18, { includeDetailMaps: !lowQuality }), color: 0xf2f7ee, emissive: 0x486c67, emissiveIntensity: 0.16, roughness: 0.44, normalScale: new THREE.Vector2(0.38, 0.38), aoMapIntensity: 0.5 }));
+  const wallMaterial = createGameMaterial(({ lowQuality }) => ({ ...createLevelThirtySevenPbrMaps(16, 8, { includeDetailMaps: !lowQuality }), color: 0xf4f8ef, emissive: 0x4c706b, emissiveIntensity: 0.18, roughness: 0.38, normalScale: new THREE.Vector2(0.42, 0.42), aoMapIntensity: 0.44 }));
   const ceilingMaterial = createGameMaterial({ map: createLevelThirtySevenCeilingTexture(), color: 0xf4f6ea, emissive: 0x76918a, emissiveIntensity: 0.3, roughness: 0.52 });
   const floor = new THREE.Mesh(enableAoUv(new THREE.PlaneGeometry(LEVEL_THIRTY_SEVEN_COLS * CELL_SIZE, LEVEL_THIRTY_SEVEN_ROWS * CELL_SIZE)), floorMaterial);
   floor.rotation.x = -Math.PI / 2;

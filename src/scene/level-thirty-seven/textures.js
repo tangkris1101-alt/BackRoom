@@ -29,7 +29,7 @@ export const createLevelThirtySevenFloorTexture = () => tiles("#dce3dc", "#849b9
 export const createLevelThirtySevenWallTexture = () => tiles("#e8ece4", "#9bb0aa", 16, 8, 3702);
 export const createLevelThirtySevenCeilingTexture = () => tiles("#e4e8df", "#a7b4ac", 18, 14, 3703);
 
-export function createLevelThirtySevenPbrMaps(repeatX, repeatY) {
+export function createLevelThirtySevenPbrMaps(repeatX, repeatY, { includeDetailMaps = true } = {}) {
   const loader = new THREE.TextureLoader();
   const configure = (texture, color = false) => {
     texture.wrapS = THREE.RepeatWrapping;
@@ -39,10 +39,12 @@ export function createLevelThirtySevenPbrMaps(repeatX, repeatY) {
     if (color) texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
   };
-  return {
+  const maps = {
     map: configure(loader.load(tileColorUrl), true),
-    normalMap: configure(loader.load(tileNormalUrl)),
-    roughnessMap: configure(loader.load(tileRoughnessUrl)),
-    aoMap: configure(loader.load(tileAoUrl)),
   };
+  if (!includeDetailMaps) return maps;
+  maps.normalMap = configure(loader.load(tileNormalUrl));
+  maps.roughnessMap = configure(loader.load(tileRoughnessUrl));
+  maps.aoMap = configure(loader.load(tileAoUrl));
+  return maps;
 }

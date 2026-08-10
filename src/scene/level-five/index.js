@@ -112,26 +112,26 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     emissiveIntensity: 0.22,
     roughness: 0.88,
   });
-  const woodFloorMaterial = createGameMaterial({
-    ...createLevelFivePbrMaps("wood", 7, 2.2),
+  const woodFloorMaterial = createGameMaterial(({ lowQuality }) => ({
+    ...createLevelFivePbrMaps("wood", 7, 2.2, { includeDetailMaps: !lowQuality }),
     color: 0x9d6b55,
     roughness: 0.48,
     metalness: 0.02,
-  });
-  const marbleFloorMaterial = createGameMaterial({
-    ...createLevelFivePbrMaps("marble", 6, 2.4),
+  }));
+  const marbleFloorMaterial = createGameMaterial(({ lowQuality }) => ({
+    ...createLevelFivePbrMaps("marble", 6, 2.4, { includeDetailMaps: !lowQuality }),
     color: 0xd6c7ad,
     roughness: 0.34,
     metalness: 0,
-  });
-  const boilerMaterial = createGameMaterial({
-    ...createLevelFivePbrMaps("boiler", 8, 3.8),
+  }));
+  const boilerMaterial = createGameMaterial(({ lowQuality }) => ({
+    ...createLevelFivePbrMaps("boiler", 8, 3.8, { includeDetailMaps: !lowQuality }),
     color: 0x8e7061,
     emissive: 0x160905,
     emissiveIntensity: 0.16,
     roughness: 0.76,
     metalness: 0.68,
-  });
+  }));
 
   const addFloorPatch = ({ col, row, width, height }, material, y = 0.012) => {
     const first = levelFiveCellCenter(col, row);
