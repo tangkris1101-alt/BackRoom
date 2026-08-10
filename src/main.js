@@ -3209,8 +3209,13 @@ function tryFocusedInteraction() {
   if (interaction?.interacted && interactionId) {
     const localized = getLocalizedText(INTERACTION_TEXT, interactionId);
     const embedded = interaction.i18n?.[currentLanguage] ?? interaction.i18n?.en ?? {};
-    pickupFlashText = embedded.response ?? embedded.name ?? localized.response ?? localized.name ?? "INTERACTION";
-    pickupFlashUntil = clock.elapsedTime + (interaction.feedbackDuration ?? 1900) / 1000;
+    const documentOpened = typeof interaction.documentId === "string"
+      ? openDocumentReader(interaction.documentId)
+      : false;
+    if (!documentOpened) {
+      pickupFlashText = embedded.response ?? embedded.name ?? localized.response ?? localized.name ?? "INTERACTION";
+      pickupFlashUntil = clock.elapsedTime + (interaction.feedbackDuration ?? 1900) / 1000;
+    }
     useButton?.classList.add("is-active");
     window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
     canvas.dataset.lastInteraction = interactionId;

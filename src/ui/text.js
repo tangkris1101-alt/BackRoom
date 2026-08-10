@@ -154,6 +154,12 @@ export const ENTITY_TEXT = {
 
 export const INTERACTION_TEXT = {
   "zh-CN": {
+    "level-zero-meg-file": {
+      name: "M.E.G. 外勤资料",
+      effect: "马尼拉房间桌上的密封行动记录",
+      action: "F / 按钮阅读",
+      response: "档案封条已经松开",
+    },
     "exit-elevator-door": {
       name: "\u51fa\u53e3\u7535\u68af\u95e8",
       effect: "\u95e8\u540e\u7684\u7a7a\u95f4\u4fe1\u53f7\u4ecd\u5728\u7a33\u5b9a",
@@ -336,6 +342,12 @@ export const INTERACTION_TEXT = {
     },
   },
   en: {
+    "level-zero-meg-file": {
+      name: "M.E.G. FIELD FILE",
+      effect: "A sealed operations record left on the Manila Room table.",
+      action: "F / BUTTON READ",
+      response: "The archive seal comes loose.",
+    },
     "exit-elevator-door": {
       name: "EXIT ELEVATOR DOOR",
       effect: "The space behind it is still stabilizing.",
@@ -782,6 +794,54 @@ export const LEVEL_DANGER_TEXT = {
 };
 
 export const LEVEL_DOCUMENTS = {
+  "level-zero-meg-file": {
+    "zh-CN": {
+      eyebrow: "M.E.G. 前线档案 / MANILA-00",
+      title: "LEVEL 0：马尼拉房间失联记录",
+      hint: "按 E 或 ESC 关闭",
+      sections: [
+        {
+          heading: "任务摘要",
+          text: "M.E.G. 测绘小队“灯塔-7”曾把这间贴有异样壁纸的房间作为 Level 0 临时观察站。记录停在第三次轮班：队员离开房间寻找出口后，只有一部指南针和断续的无线电噪声返回。桌椅与文件不得移出房间，以便后来者确认这里不是又一段重复走廊。",
+        },
+        {
+          heading: "灯光与停留规则",
+          text: "房间顶灯大约每半分钟会出现一次短暂熄灭。熄灯不代表房间移动，但黑暗中不要离开桌边，也不要追随墙外传来的脚步声。灯重新亮起后，先确认入口、桌子与 M.E.G. 文件夹仍在原位，再继续行动。",
+        },
+        {
+          heading: "补给与导航",
+          text: "Level 0 可找到杏仁水、手电筒和指南针。保持手电筒电量，把重复墙纸、桌子和灯具异常当作路标；指南针只能提供出口方向，不能保证直线路径安全。若走廊景象连续重复，退回上一个能确认的地标，不要在体力耗尽时冲刺。",
+        },
+        {
+          heading: "出口注记",
+          text: "小队最后一次可靠测绘指向地面上的黑色坍塌区，附近可见 EXIT 标记。那不是普通房门；确认生命、体力与补给后再跳入。坠落信号与 Level 1 一致。接近出口时指南针可能失去响应——这是抵达迹象，不是设备故障。",
+        },
+      ],
+    },
+    en: {
+      eyebrow: "M.E.G. FORWARD ARCHIVE / MANILA-00",
+      title: "LEVEL 0: MANILA ROOM LOST-TEAM LOG",
+      hint: "PRESS E OR ESC TO CLOSE",
+      sections: [
+        {
+          heading: "MISSION SUMMARY",
+          text: "M.E.G. survey team Beacon-7 used this oddly wallpapered room as a temporary Level 0 observation post. The log ends during the third watch: after the team left to locate an exit, only a compass and broken radio noise returned. Keep the table, chair, and files in place so later wanderers can distinguish this room from another repeating corridor.",
+        },
+        {
+          heading: "LIGHT AND SHELTER RULE",
+          text: "The ceiling light suffers a short blackout roughly every half minute. A blackout does not mean the room has moved, but do not leave the table or follow footsteps outside while it is dark. When the light returns, verify the entrance, table, and M.E.G. folder before moving on.",
+        },
+        {
+          heading: "SUPPLIES AND NAVIGATION",
+          text: "Almond Water, flashlights, and compasses can be found in Level 0. Preserve battery power and use wallpaper changes, tables, and faulty fixtures as landmarks. A compass gives an exit bearing, not a guaranteed safe straight path. If the corridor repeats, return to the last confirmed landmark instead of sprinting until exhausted.",
+        },
+        {
+          heading: "EXIT NOTE",
+          text: "The team's last reliable survey points to a black collapse in the floor near an EXIT marker. It is not an ordinary doorway; check health, stamina, and supplies before dropping in. The fall signal matches Level 1. A compass may go silent near the opening—treat that as arrival, not equipment failure.",
+        },
+      ],
+    },
+  },
   "level-one-file": {
     "zh-CN": {
       eyebrow: "M.E.G. FIELD FILE / L1-ALPHA",

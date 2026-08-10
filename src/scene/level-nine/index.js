@@ -15,6 +15,7 @@ import {
   LEVEL_NINE_ROWS,
   LEVEL_NINE_START_CELL,
   LEVEL_NINE_TARGET_CELL,
+  LEVEL_NINE_FIELD_TARGET_CELL,
   isLevelNineOpenCell,
   isLevelNineRoadCell,
   levelNineCellCenter,
@@ -34,6 +35,7 @@ export function createLevelNineScene({ initialState = null } = {}) {
   scene.add(camera);
   const spawnCell = levelNineCellCenter(LEVEL_NINE_START_CELL.col, LEVEL_NINE_START_CELL.row);
   const targetPosition = levelNineCellCenter(LEVEL_NINE_TARGET_CELL.col, LEVEL_NINE_TARGET_CELL.row);
+  const fieldTargetPosition = levelNineCellCenter(LEVEL_NINE_FIELD_TARGET_CELL.col, LEVEL_NINE_FIELD_TARGET_CELL.row);
   const spawn = { ...spawnCell, yaw: LEVEL_NINE_START_CELL.yaw };
   const coarse = window.matchMedia?.("(pointer: coarse), (max-width: 800px)").matches;
 
@@ -66,6 +68,23 @@ export function createLevelNineScene({ initialState = null } = {}) {
   roads.instanceMatrix.needsUpdate = true;
   roads.name = "level-nine-asphalt-roads";
   scene.add(roads);
+  const fieldTrack = new THREE.Mesh(
+    new THREE.PlaneGeometry(CELL_SIZE * 22, CELL_SIZE * 2.2),
+    createGameMaterial({ color: 0x5f6140, emissive: 0x12140a, emissiveIntensity: 0.2, roughness: 1 }),
+  );
+  const fieldTrackMidpoint = levelNineCellCenter(12.5, LEVEL_NINE_FIELD_TARGET_CELL.row);
+  fieldTrack.name = "level-nine-field-walkway";
+  fieldTrack.rotation.x = -Math.PI / 2;
+  fieldTrack.position.set(fieldTrackMidpoint.x, 0.024, fieldTrackMidpoint.z);
+  scene.add(fieldTrack);
+  const fieldGlow = new THREE.Mesh(
+    new THREE.PlaneGeometry(12, 3.8),
+    new THREE.MeshBasicMaterial({ color: 0x9b8f4f, transparent: true, opacity: 0.28, side: THREE.DoubleSide }),
+  );
+  fieldGlow.name = "level-nine-field-horizon";
+  fieldGlow.position.set(fieldTargetPosition.x - 1.8, 1.9, fieldTargetPosition.z);
+  fieldGlow.rotation.y = Math.PI / 2;
+  scene.add(fieldGlow);
   scene.add(new THREE.HemisphereLight(0x5e7695, 0x020407, 0.74));
   const moonlight = new THREE.DirectionalLight(0x7795c4, 0.18);
   moonlight.position.set(-42, 32, -28);
@@ -83,12 +102,21 @@ export function createLevelNineScene({ initialState = null } = {}) {
   const routes = [
     {
       id: "level-nine-arrow-route",
-      targetLevel: null,
+      targetLevel: 11,
       targetLabel: "LEVEL 11",
       label: "ARROW ROUTE",
-      kind: "door",
+      kind: "threshold",
       position: targetPosition,
-      rotation: 0,
+      enterRadius: 5.2,
+    },
+    {
+      id: "level-nine-field-route",
+      targetLevel: 10,
+      targetLabel: "LEVEL 10",
+      label: "FIELD WALKWAY",
+      kind: "threshold",
+      position: fieldTargetPosition,
+      enterRadius: 5.2,
     },
   ];
   const exitNetwork = createExitNetwork(scene, camera, routes, initialState?.interactions ?? {});
@@ -97,7 +125,7 @@ export function createLevelNineScene({ initialState = null } = {}) {
     rows: LEVEL_NINE_ROWS,
     isCellOpen: isLevelNineOpenCell,
     getCellCenter: levelNineCellCenter,
-    avoidPositions: [spawnCell, targetPosition],
+    avoidPositions: [spawnCell, targetPosition, fieldTargetPosition],
     blockedAabbs: details.colliders,
     initialState: initialState?.pickups ?? {},
     includeFiresalt: true,
@@ -142,7 +170,9 @@ export function createLevelNineScene({ initialState = null } = {}) {
     const houndState = hound.update(delta, elapsed, playerPosition, effects);
     const smilerStates = smilers.map((smiler) => smiler.update(delta, elapsed, playerPosition, effects));
     const entities = [houndState, ...smilerStates];
-    const exitDistance = Math.hypot(playerPosition.x - targetPosition.x, playerPosition.z - targetPosition.z);
+    const arrowDistance = Math.hypot(playerPosition.x - targetPosition.x, playerPosition.z - targetPosition.z);
+    const fieldDistance = Math.hypot(playerPosition.x - fieldTargetPosition.x, playerPosition.z - fieldTargetPosition.z);
+    const exitDistance = Math.min(arrowDistance, fieldDistance);
     const flicker = fogSurge ? 0.3 : 0.64 + Math.sin(elapsed * 0.55) * 0.08;
     scene.fog.density = fogSurge ? 0.021 : 0.012 + Math.sin(elapsed * 0.22) * 0.0008;
     cameraMistLight.intensity = fogSurge ? 0.18 : 0.3;
@@ -161,9 +191,9 @@ export function createLevelNineScene({ initialState = null } = {}) {
       focusItem: pickupSet.inspect(camera),
       lightState: updateLightState(delta, flicker),
       statusText: objectiveReached
-        ? "LEVEL 11 ROUTE"
+        ? entered?.targetLevel === 10 ? "FIELD WALKWAY" : "LEVEL 11 ROUTE"
         : exitDistance < 14
-          ? "FOLLOW THE ARROWS"
+          ? fieldDistance < arrowDistance ? "THE WHEAT FIELD" : "FOLLOW THE ARROWS"
           : fogSurge
             ? "FOG ROLLING IN"
             : "THE SUBURBS",

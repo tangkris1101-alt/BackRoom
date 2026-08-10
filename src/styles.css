@@ -2544,7 +2544,10 @@ body {
     max-width: 100%;
   }
 
-  .stamina-meter__label,
+  .stamina-meter__label {
+    display: block;
+  }
+
   .flashlight-meter__label,
   .detector-meter__label,
   .compass-meter__label {

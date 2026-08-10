@@ -61,13 +61,20 @@ function addTableAndDocumentation(scene, center) {
     }
   }
 
-  return [{
-    minX: tableX - 1.275,
-    maxX: tableX + 1.275,
-    minZ: tableZ - 0.66,
-    maxZ: tableZ + 0.66,
-    topY: 1.11,
-  }];
+  return {
+    colliders: [{
+      minX: tableX - 1.275,
+      maxX: tableX + 1.275,
+      minZ: tableZ - 0.66,
+      maxZ: tableZ + 0.66,
+      topY: 1.11,
+    }],
+    documentationPosition: {
+      x: documentTwo.position.x,
+      y: documentTwo.position.y,
+      z: documentTwo.position.z,
+    },
+  };
 }
 
 function addInteriorWall(scene, material, width, depth, x, z) {
@@ -96,7 +103,7 @@ export function createManilaRoom(scene, room, cellCenter) {
   addInteriorWall(scene, wallpaper, 0.035, CELL_SIZE * 1.98, center.x - halfWidth + 0.13, center.z - CELL_SIZE * 1.5);
   addInteriorWall(scene, wallpaper, 0.035, CELL_SIZE * 1.98, center.x - halfWidth + 0.13, center.z + CELL_SIZE * 1.5);
 
-  const colliders = addTableAndDocumentation(scene, center);
+  const furnishings = addTableAndDocumentation(scene, center);
 
   const panelMaterial = new THREE.MeshStandardMaterial({
     color: 0xfff4d2,
@@ -113,7 +120,8 @@ export function createManilaRoom(scene, room, cellCenter) {
 
   return {
     center,
-    colliders,
+    colliders: furnishings.colliders,
+    documentationPosition: furnishings.documentationPosition,
     update(elapsed) {
       const cycle = elapsed % 31;
       const blackout = cycle > 26.4 && cycle < 27.35;

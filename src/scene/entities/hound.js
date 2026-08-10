@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { HOUND_CONTACT_RADIUS } from "../constants.js";
 import { createLimbSegment } from "../common/view-model.js";
 import { createEntityMover } from "./behavior.js";
+import { createPassivePatrolState } from "./passive-patrol.js";
 
 const HOUND_RECOMPUTE_INTERVAL = 0.42;
 const HOUND_STUCK_THRESHOLD = 0.58;
@@ -103,6 +104,7 @@ export function createHoundEntity(
     type = "hound",
     dormant = false,
     dormantArmRadius = 0,
+    passivePatrol = null,
     initialState = null,
     cols,
     rows,
@@ -125,6 +127,12 @@ export function createHoundEntity(
   let isDormant = Boolean(dormant);
   let stunnedUntil = 0;
   let wasFlashlit = false;
+  const passivePatrolState = createPassivePatrolState({
+    points: passivePatrol?.points,
+    provokeDuration: passivePatrol?.provokeDuration,
+    initialState,
+  });
+  const passiveMode = Boolean(passivePatrolState);
   if (initialState && Number.isFinite(initialState.position?.x) && Number.isFinite(initialState.position?.z)) {
     group.position.x = initialState.position.x;
     group.position.z = initialState.position.z;
@@ -169,18 +177,22 @@ export function createHoundEntity(
 
   return {
     getState() {
+      const passiveState = passivePatrolState?.getState() ?? { patrolIndex: 0, provokedTimer: 0 };
       return {
         id,
         type,
         position: { x: group.position.x, z: group.position.z },
         contact,
         awakened: !isDormant,
+        ...passiveState,
       };
     },
     update(delta, elapsed, playerPosition, effects = {}) {
       const dx = playerPosition.x - group.position.x;
       const dz = playerPosition.z - group.position.z;
       const distance = Math.hypot(dx, dz);
+      const passiveState = passivePatrolState?.update(delta, group.position, effects) ?? null;
+      const provoked = Boolean(passiveState?.provoked);
       const flashlit = isFlashlightHit(effects);
       if (flashlit && !wasFlashlit) {
         stunnedUntil = Math.max(stunnedUntil, elapsed + HOUND_FLASH_STUN_DURATION);
@@ -194,13 +206,19 @@ export function createHoundEntity(
       }
       const closeSurge = distance < 8 ? 1.12 : 1;
       const stride = 0.96 + Math.sin(elapsed * 3.8) * 0.09;
+      let movementTarget = playerPosition;
+      let movementEffects = effects;
+      if (passiveMode && !provoked) {
+        movementTarget = passiveState.target;
+        movementEffects = {};
+      }
       const moveState = stunned
         ? { distance, contact: false }
-        : mover.update(delta, elapsed, playerPosition, effects, {
+        : mover.update(delta, elapsed, movementTarget, movementEffects, {
             dormant: isDormant,
-            speedScale: closeSurge * stride,
+            speedScale: (passiveMode && !provoked ? 0.42 : closeSurge) * stride,
           });
-      contact = !stunned && moveState.contact;
+      contact = !stunned && (!passiveMode || provoked) && moveState.contact;
 
       const gait = Math.sin(elapsed * 7.2) * 0.035;
       group.position.y = isDormant
@@ -223,6 +241,9 @@ export function createHoundEntity(
         dormant: isDormant,
         stunned,
         flashlit,
+        provoked,
+        provokedTimer: passiveState?.provokedTimer ?? 0,
+        patrolIndex: passiveState?.patrolIndex ?? 0,
       };
     },
   };

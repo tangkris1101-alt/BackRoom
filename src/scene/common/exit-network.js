@@ -525,16 +525,18 @@ function createRouteModel(scene, route) {
 
 export function createExitNetwork(scene, camera, routeDefinitions, initialState = {}) {
   const routes = routeDefinitions.map((definition) => {
+    const isThreshold = definition.kind === "threshold";
     const route = {
       ...definition,
       // Stairwells are open architectural passages: entering their landing is
       // enough to transition, with no invisible door state to unlock first.
-      opened: definition.stairModel === true || Boolean(initialState?.[definition.id]?.count),
-      unlocked: Boolean(initialState?.[definition.id]?.unlocked ?? initialState?.[definition.id]?.count),
-      openProgress: definition.stairModel === true || Boolean(initialState?.[definition.id]?.count) ? 1 : 0,
+      opened: isThreshold || definition.stairModel === true || Boolean(initialState?.[definition.id]?.count),
+      unlocked: isThreshold || Boolean(initialState?.[definition.id]?.unlocked ?? initialState?.[definition.id]?.count),
+      openProgress: isThreshold || definition.stairModel === true || Boolean(initialState?.[definition.id]?.count) ? 1 : 0,
+      triggered: false,
       i18n: createRouteText(definition),
     };
-    route.model = createRouteModel(scene, route);
+    route.model = isThreshold ? {} : createRouteModel(scene, route);
     return route;
   });
   scene.userData.exitRoutes = routes.map((route) => ({
@@ -545,6 +547,7 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
   }));
 
   function updateModel(route, delta) {
+    if (route.kind === "threshold") return;
     const target = route.opened ? 1 : 0;
     route.openProgress += (target - route.openProgress) * Math.min(1, delta * 4.8);
     if (route.model.lockAssembly) route.model.lockAssembly.visible = !route.unlocked;
@@ -579,10 +582,12 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
   function update(delta, playerPosition) {
     let entered = null;
     for (const route of routes) {
-      updateModel(route, delta);
+      if (route.kind === "threshold" && route.triggered) continue;
+      if (route.kind !== "threshold") updateModel(route, delta);
       const distance = distanceToEntry(route, playerPosition);
       if (route.opened && route.openProgress > 0.72 && distance <= (route.enterRadius ?? ENTER_RADIUS)) {
         entered = route;
+        if (route.kind === "threshold") route.triggered = true;
       }
     }
     return entered;
@@ -595,6 +600,7 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
     let focused = null;
     let bestScore = -Infinity;
     for (const route of routes) {
+      if (route.kind === "threshold") continue;
       const distance = distanceTo(route, playerPosition);
       if (distance > INSPECT_DISTANCE) continue;
       toRoute.set(route.position.x - camera.position.x, 1.35 - camera.position.y, route.position.z - camera.position.z);
@@ -637,6 +643,7 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
   } = {}) {
     let candidate = null;
     for (const route of routes) {
+      if (route.kind === "threshold") continue;
       const distance = distanceTo(route, playerPosition);
       if ((routeId && route.id !== routeId) || distance > INTERACT_RADIUS) continue;
       if (!candidate || distance < candidate.distance) candidate = { route, distance };
@@ -693,7 +700,7 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
     update,
     inspect,
     interact,
-    getState: () => Object.fromEntries(routes.map((route) => [route.id, {
+    getState: () => Object.fromEntries(routes.filter((route) => route.kind !== "threshold").map((route) => [route.id, {
       count: route.opened ? 1 : 0,
       unlocked: route.unlocked,
     }])),

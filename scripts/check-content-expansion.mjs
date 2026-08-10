@@ -22,11 +22,15 @@ const { collectLevelFiveTransforms } = await import("../src/scene/level-five/pro
 const levelSix = await import("../src/scene/level-six/layout.js");
 const levelEight = await import("../src/scene/level-eight/layout.js");
 const levelNine = await import("../src/scene/level-nine/layout.js");
+const levelTen = await import("../src/scene/level-ten/layout.js");
+const levelEleven = await import("../src/scene/level-eleven/layout.js");
 const levelThirtySeven = await import("../src/scene/level-thirty-seven/layout.js");
 const levelZero = await import("../src/scene/level-zero/layout.js");
 const levelZeroWorld = await import("../src/scene/level-zero/world.js");
 const { CELL_SIZE, FIRESALT_EFFECT_RADIUS, FIRESALT_STUN_DURATION } = await import("../src/scene/constants.js");
 const { createExitNetwork } = await import("../src/scene/common/exit-network.js");
+const { createPassivePatrolState } = await import("../src/scene/entities/passive-patrol.js");
+const { createInteractionSpot } = await import("../src/scene/entities/interactions.js");
 const { resolveHubEntry } = await import("../src/scene/hub/entry.js");
 
 function canReach({ cols, rows, start, target, isOpen }) {
@@ -88,10 +92,18 @@ assert.equal(canReach({ cols: 52, rows: 40, start: levelNine.LEVEL_NINE_START_CE
 assert.equal(levelNine.isLevelNineOpenCell(2, 2), true);
 assert.equal(levelNine.isLevelNineOpenCell(0, 0), false);
 assert.equal(levelNine.isLevelNineRoadCell(levelNine.LEVEL_NINE_START_CELL.col, levelNine.LEVEL_NINE_START_CELL.row), true);
+assert.deepEqual([levelTen.LEVEL_TEN_COLS, levelTen.LEVEL_TEN_ROWS], [56, 42]);
+assert.equal(canReach({ cols: 56, rows: 42, start: levelTen.LEVEL_TEN_START_CELL, target: levelTen.LEVEL_TEN_TARGET_CELL, isOpen: levelTen.isLevelTenOpenCell }), true);
+assert.equal(levelTen.LEVEL_TEN_WHEAT_PLOTS.length, 12);
+assert.deepEqual([levelEleven.LEVEL_ELEVEN_COLS, levelEleven.LEVEL_ELEVEN_ROWS], [60, 48]);
+assert.equal(canReach({ cols: 60, rows: 48, start: levelEleven.LEVEL_ELEVEN_START_CELL, target: levelEleven.LEVEL_ELEVEN_BACKROAD_CELL, isOpen: levelEleven.isLevelElevenOpenCell }), true);
+assert.equal(canReach({ cols: 60, rows: 48, start: levelEleven.LEVEL_ELEVEN_START_CELL, target: levelEleven.LEVEL_ELEVEN_POOL_EXIT_CELL, isOpen: levelEleven.isLevelElevenOpenCell }), true);
 assert.equal(canReach({ cols: 48, rows: 36, start: levelThirtySeven.LEVEL_THIRTY_SEVEN_START_CELL, target: levelThirtySeven.LEVEL_THIRTY_SEVEN_TARGET_CELL, isOpen: levelThirtySeven.isLevelThirtySevenOpenCell }), true);
 assert.equal(loadFixture(1, 8).player.level, -1);
 assert.equal(loadFixture(2, 8).player.level, 8);
 assert.equal(loadFixture(2, 9).player.level, 9);
+assert.equal(loadFixture(2, 10).player.level, 10);
+assert.equal(loadFixture(2, 11).player.level, 11);
 assert.equal(loadFixture(2, 37).player.level, 37);
 
 const savedSmiler = loadFixture(2, 8, {
@@ -112,6 +124,23 @@ const levelZeroTableScene = new THREE.Scene();
 const levelZeroTableColliders = levelZeroWorld.addRoomTables(levelZeroTableScene, levelZero.cellCenter);
 assert.equal(levelZeroTableColliders.length, levelZeroWorld.LEVEL_ZERO_ROOM_TABLE_COUNT);
 assert.equal(levelZeroTableScene.getObjectByName("level-zero-room-table-1")?.isGroup, true);
+
+// Scene documents use the ordinary F/mobile interaction path and return the
+// reader document id while keeping their interaction count save-compatible.
+const megFileSpot = createInteractionSpot({
+  id: "level-zero-meg-file",
+  position: { x: 0, y: 1.12, z: 0 },
+  radius: 2.8,
+  onInteract: () => ({ documentId: "level-zero-meg-file" }),
+});
+assert.deepEqual(megFileSpot.interact({ x: 0, z: 2 }), {
+  interacted: true,
+  id: "level-zero-meg-file",
+  textKey: "level-zero-meg-fileResponse",
+  count: 1,
+  documentId: "level-zero-meg-file",
+});
+assert.deepEqual(megFileSpot.getState(), { count: 1 });
 
 // A focused door must win over a closer, unrelated route when F is pressed.
 const doorTestScene = new THREE.Scene();
@@ -147,6 +176,41 @@ assert.equal(stairwellModel?.getObjectByName("exit-portal-modeled-stairwell"), u
 assert.equal(stairwellNetwork.inspect(stairwellCamera.position)?.available, false);
 assert.equal(stairwellNetwork.interact(stairwellCamera.position), null);
 assert.equal(stairwellNetwork.update(0.016, { x: 0, z: 0 })?.id, "modeled-stairwell");
+
+// Outdoor routes are invisible one-shot thresholds: no door model, prompt,
+// interaction state, or repeated transition while the old world is alive.
+const thresholdScene = new THREE.Scene();
+const thresholdCamera = new THREE.PerspectiveCamera();
+const thresholdNetwork = createExitNetwork(thresholdScene, thresholdCamera, [
+  { id: "field-threshold", targetLevel: 10, kind: "threshold", position: { x: 0, z: 0 }, enterRadius: 2 },
+]);
+assert.equal(thresholdScene.getObjectByName("exit-network-field-threshold"), undefined);
+assert.equal(thresholdNetwork.inspect({ x: 0, z: 0 }), null);
+assert.equal(thresholdNetwork.interact({ x: 0, z: 0 }), null);
+assert.deepEqual(thresholdNetwork.getState(), {});
+assert.equal(thresholdNetwork.update(0.016, { x: 0, z: 0 })?.targetLevel, 10);
+assert.equal(thresholdNetwork.update(0.016, { x: 0, z: 0 }), null);
+
+// Level 11's hound patrols harmlessly until a Firesalt burst breaks the effect.
+const passivePatrol = createPassivePatrolState({
+  points: [{ x: 4, z: 0 }, { x: 4, z: 4 }],
+  provokeDuration: 12,
+});
+assert.equal(passivePatrol.update(0.016, { x: 0, z: 0 }).provoked, false);
+const provokedHound = passivePatrol.update(0.016, { x: 0, z: 0 }, {
+  firesaltActive: true,
+  firesaltPosition: { x: 0, z: 0 },
+  firesaltRadius: 8,
+});
+assert.equal(provokedHound.provoked, true);
+assert.ok(passivePatrol.getState().provokedTimer > 11);
+passivePatrol.update(2, { x: 0, z: 0 }, {
+  firesaltActive: true,
+  firesaltPosition: { x: 0, z: 0 },
+  firesaltRadius: 8,
+});
+assert.ok(passivePatrol.getState().provokedTimer < 10.1);
+assert.equal(passivePatrol.update(10.1, { x: 20, z: 20 }).provoked, false);
 
 // Hub debug access must be able to open a key-gated door without consuming a key.
 const debugDoorScene = new THREE.Scene();
@@ -191,6 +255,13 @@ assert.equal(hubCompletionEntry.spawn, defaultHubSpawn);
 assert.deepEqual(hubCompletionEntry.interactions, {});
 assert.equal(hubCompletionEntry.entryRoute, null);
 const mainSource = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
+const levelZeroSource = await readFile(new URL("../src/scene/level-zero/index.js", import.meta.url), "utf8");
+const uiTextSource = await readFile(new URL("../src/ui/text.js", import.meta.url), "utf8");
+assert.match(levelZeroSource, /id: "level-zero-meg-file"/);
+assert.match(levelZeroSource, /focusInteraction: getFocusedInteraction\(camera, playerPosition, interactions\)/);
+assert.match(levelZeroSource, /interact: \(playerPosition\) => tryInteractWithSpots/);
+assert.match(uiTextSource, /"level-zero-meg-file": \{/);
+assert.match(mainSource, /openDocumentReader\(interaction\.documentId\)/);
 assert.match(mainSource, /const prewarm = preloadLevelScene\(nextLevelInfo\.level\);/);
 assert.match(mainSource, /await transition\.prewarm;/);
 assert.match(mainSource, /await renderer\.compileAsync\?\.\(world\.scene, world\.camera\);/);
@@ -247,12 +318,21 @@ for (const level of ["one", "two", "three", "four", "five", "six", "seven"]) {
 const levelEightSource = await readFile(new URL("../src/scene/level-eight/index.js", import.meta.url), "utf8");
 const sceneIndexSource = await readFile(new URL("../src/scene/index.js", import.meta.url), "utf8");
 const levelNineSource = await readFile(new URL("../src/scene/level-nine/index.js", import.meta.url), "utf8");
+const levelTenSource = await readFile(new URL("../src/scene/level-ten/index.js", import.meta.url), "utf8");
+const levelElevenSource = await readFile(new URL("../src/scene/level-eleven/index.js", import.meta.url), "utf8");
 const levelOneSource = await readFile(new URL("../src/scene/level-one/index.js", import.meta.url), "utf8");
 const levelOnePropsSource = await readFile(new URL("../src/scene/level-one/props.js", import.meta.url), "utf8");
 const viewModelSource = await readFile(new URL("../src/scene/common/view-model.js", import.meta.url), "utf8");
 assert.match(levelEightSource, /targetLevel:\s*9/);
 assert.match(sceneIndexSource, /level-nine\/index\.js/);
-assert.match(levelNineSource, /targetLevel:\s*null/);
+assert.match(levelNineSource, /targetLevel:\s*10/);
+assert.match(levelNineSource, /targetLevel:\s*11/);
+assert.match(levelNineSource, /kind:\s*"threshold"/);
+assert.match(levelTenSource, /targetLevel:\s*11/);
+assert.match(levelTenSource, /level:\s*10/);
+assert.match(levelElevenSource, /targetLevel:\s*10/);
+assert.match(levelElevenSource, /targetLevel:\s*37/);
+assert.match(levelElevenSource, /passivePatrol:/);
 assert.match(levelNineSource, /level-nine-asphalt-roads/);
 assert.doesNotMatch(levelNineSource, /collectGridWallTransforms|CEILING_Y|createLevelNineCeilingTexture/);
 const levelNinePropsSource = await readFile(new URL("../src/scene/level-nine/props.js", import.meta.url), "utf8");

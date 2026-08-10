@@ -44,17 +44,19 @@ const stripConventionalPrefix = (value) => value.replace(
   /^(?:feat|fix|perf|refactor|docs|test|build|chore)(?:\([^)]*\))?:\s*/i,
   "",
 );
+const sanitizeStandaloneText = (value) => value.replaceAll("import.meta", "ES module metadata");
 const entries = stdout
   .split("\x1e")
   .map((record) => record.trim())
   .filter(Boolean)
   .map((record, index) => {
-    const [commit, date, title] = record.split("\x1f");
+    const [commit, date, rawTitle] = record.split("\x1f");
+    const title = sanitizeStandaloneText(rawTitle);
     const strippedTitle = stripConventionalPrefix(title);
-    const titleZh = zhOverrides.get(commit)
+    const titleZh = sanitizeStandaloneText(zhOverrides.get(commit)
       || (index === 0 ? latestTitleZh : "")
       || existingZh.get(commit)
-      || (containsChinese(strippedTitle) ? strippedTitle : title);
+      || (containsChinese(strippedTitle) ? strippedTitle : title));
     return { commit, date, title, titleZh };
   });
 

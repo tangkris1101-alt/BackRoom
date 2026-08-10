@@ -12,6 +12,19 @@ const distIndexPath = resolve(distDirectory, "index.html");
 const versionManifestPath = resolve(projectRoot, "backrooms-version.json");
 const distVersionManifestPath = resolve(distDirectory, "backrooms-version.json");
 
+async function writeFileWithRetry(path, data, encoding, attempts = 6) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await writeFile(path, data, encoding);
+      return;
+    } catch (error) {
+      const retryable = ["UNKNOWN", "EBUSY", "EPERM", "EACCES"].includes(error?.code);
+      if (!retryable || attempt === attempts) throw error;
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, attempt * 120));
+    }
+  }
+}
+
 let html = await readFile(sourcePath, "utf8");
 
 const stylesheetMatch = html.match(
@@ -143,11 +156,11 @@ html = html
   );
 
 await Promise.all([
-  writeFile(outputPath, html, "utf8"),
-  writeFile(distOutputPath, html, "utf8"),
-  writeFile(distIndexPath, html, "utf8"),
-  writeFile(versionManifestPath, `${JSON.stringify({ buildId })}\n`, "utf8"),
-  writeFile(distVersionManifestPath, `${JSON.stringify({ buildId })}\n`, "utf8"),
+  writeFileWithRetry(outputPath, html, "utf8"),
+  writeFileWithRetry(distOutputPath, html, "utf8"),
+  writeFileWithRetry(distIndexPath, html, "utf8"),
+  writeFileWithRetry(versionManifestPath, `${JSON.stringify({ buildId })}\n`, "utf8"),
+  writeFileWithRetry(distVersionManifestPath, `${JSON.stringify({ buildId })}\n`, "utf8"),
 ]);
 
 console.log(`Created standalone Backrooms build ${buildId}`);

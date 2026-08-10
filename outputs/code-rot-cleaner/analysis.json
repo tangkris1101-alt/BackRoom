@@ -1,0 +1,1532 @@
+{
+  "schema_version": "1.0",
+  "project_root": "C:\\Users\\Administrator\\Desktop\\work",
+  "generated_at": "2026-08-10T16:46:29Z",
+  "scope": {
+    "source_extensions": [
+      ".cjs",
+      ".js",
+      ".jsx",
+      ".mjs",
+      ".py",
+      ".ts",
+      ".tsx"
+    ],
+    "excluded_directories": [
+      ".git",
+      ".hg",
+      ".mypy_cache",
+      ".next",
+      ".nuxt",
+      ".pytest_cache",
+      ".ruff_cache",
+      ".svelte-kit",
+      ".svn",
+      ".venv",
+      "__pycache__",
+      "build",
+      "coverage",
+      "dist",
+      "node_modules",
+      "out",
+      "outputs",
+      "target",
+      "vendor",
+      "venv"
+    ],
+    "source_files": 110,
+    "source_loc": 29171,
+    "source_bytes": 1095204
+  },
+  "summary": {
+    "candidates": 76,
+    "proof_eligible": 0,
+    "potential_removable_loc": 4449,
+    "potential_removable_bytes": 153505,
+    "by_category": {
+      "orphan-file": 13,
+      "unused-dependency": 0,
+      "unused-export": 62,
+      "duplicate-file": 0,
+      "commented-code": 1
+    }
+  },
+  "candidates": [
+    {
+      "category": "orphan-file",
+      "subject": "extensions/backrooms3d.js",
+      "path": "extensions/backrooms3d.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 598,
+      "bytes": 20031,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: backrooms3d, backrooms3d.js, extensions/backrooms3d, extensions/backrooms3d.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-001"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/map-preview.js",
+      "path": "src/map-preview.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 1667,
+      "bytes": 59763,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: map-preview, map-preview.js, src/map-preview, src/map-preview.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-002"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/scene/items/firesalt.js",
+      "path": "src/scene/items/firesalt.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 206,
+      "bytes": 7589,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: firesalt, firesalt.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-003"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/scene/level-five/textures.js",
+      "path": "src/scene/level-five/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 190,
+      "bytes": 7012,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: src/scene/level-five/textures, src/scene/level-five/textures.js, textures, textures.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-004"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/scene/level-one/textures.js",
+      "path": "src/scene/level-one/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 83,
+      "bytes": 3404,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: textures, textures.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-005"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/scene/level-seven/layout.js",
+      "path": "src/scene/level-seven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 161,
+      "bytes": 4836,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: layout, layout.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-006"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/scene/level-seven/textures.js",
+      "path": "src/scene/level-seven/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 107,
+      "bytes": 3280,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: textures, textures.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-007"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/scene/level-six/textures.js",
+      "path": "src/scene/level-six/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 103,
+      "bytes": 3035,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: textures, textures.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-008"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/scene/level-thirty-seven/textures.js",
+      "path": "src/scene/level-thirty-seven/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 50,
+      "bytes": 2322,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: textures, textures.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-009"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/scene/level-three/props.js",
+      "path": "src/scene/level-three/props.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 670,
+      "bytes": 21530,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: props, props.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-010"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/scene/level-two/layout.js",
+      "path": "src/scene/level-two/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 439,
+      "bytes": 14557,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: layout, layout.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-011"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/scene/level-two/textures.js",
+      "path": "src/scene/level-two/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 149,
+      "bytes": 5187,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: textures, textures.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-012"
+    },
+    {
+      "category": "orphan-file",
+      "subject": "src/ui/level-danger.js",
+      "path": "src/ui/level-danger.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 22,
+      "bytes": 719,
+      "evidence": [
+        "No resolved static inbound import was found.",
+        "The file is not a detected package or conventional entry point.",
+        "Repository text contains possible string/name references: level-danger, level-danger.js."
+      ],
+      "caveats": [
+        "Dynamic loading, reflection, external consumers, or incomplete framework detection can hide reachability.",
+        "Possible string reachability prevents high-confidence deletion."
+      ],
+      "id": "CRT-013"
+    },
+    {
+      "category": "unused-export",
+      "subject": "ALLOW_QUERY_DEBUG from src/debug-mode.js",
+      "path": "src/debug-mode.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 5,
+      "id": "CRT-014"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createPickupSnapshot from src/save.js",
+      "path": "src/save.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 325,
+      "id": "CRT-015"
+    },
+    {
+      "category": "unused-export",
+      "subject": "snapEntityPosition from src/scene/common/snap.js",
+      "path": "src/scene/common/snap.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 3,
+      "id": "CRT-016"
+    },
+    {
+      "category": "unused-export",
+      "subject": "snapEntityState from src/scene/common/snap.js",
+      "path": "src/scene/common/snap.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 29,
+      "id": "CRT-017"
+    },
+    {
+      "category": "unused-export",
+      "subject": "tileHash from src/scene/common/texture-utils.js",
+      "path": "src/scene/common/texture-utils.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 42,
+      "id": "CRT-018"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createCarpetTexture from src/scene/common/textures.js",
+      "path": "src/scene/common/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 51,
+      "id": "CRT-019"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createCeilingTexture from src/scene/common/textures.js",
+      "path": "src/scene/common/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 89,
+      "id": "CRT-020"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createSignTexture from src/scene/common/textures.js",
+      "path": "src/scene/common/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 118,
+      "id": "CRT-021"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createWallpaperTexture from src/scene/common/textures.js",
+      "path": "src/scene/common/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 3,
+      "id": "CRT-022"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_KEY_TARGETS from src/scene/common/world-items.js",
+      "path": "src/scene/common/world-items.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 17,
+      "id": "CRT-023"
+    },
+    {
+      "category": "unused-export",
+      "subject": "COMPASS_INSPECT_DISTANCE from src/scene/constants.js",
+      "path": "src/scene/constants.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 29,
+      "id": "CRT-024"
+    },
+    {
+      "category": "unused-export",
+      "subject": "COMPASS_PICKUP_RADIUS from src/scene/constants.js",
+      "path": "src/scene/constants.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 28,
+      "id": "CRT-025"
+    },
+    {
+      "category": "unused-export",
+      "subject": "COMPASS_RESPAWN_MIN from src/scene/constants.js",
+      "path": "src/scene/constants.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 30,
+      "id": "CRT-026"
+    },
+    {
+      "category": "unused-export",
+      "subject": "COMPASS_RESPAWN_VARIANCE from src/scene/constants.js",
+      "path": "src/scene/constants.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 31,
+      "id": "CRT-027"
+    },
+    {
+      "category": "unused-export",
+      "subject": "MAX_POINT_LIGHTS from src/scene/constants.js",
+      "path": "src/scene/constants.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 6,
+      "id": "CRT-028"
+    },
+    {
+      "category": "unused-export",
+      "subject": "MIN_FIXTURE_DISTANCE from src/scene/constants.js",
+      "path": "src/scene/constants.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 7,
+      "id": "CRT-029"
+    },
+    {
+      "category": "unused-export",
+      "subject": "isPlayableLevel from src/scene/constants.js",
+      "path": "src/scene/constants.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 99,
+      "id": "CRT-030"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createLevelEightFloorTexture from src/scene/level-eight/textures.js",
+      "path": "src/scene/level-eight/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 24,
+      "id": "CRT-031"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createLevelEightWallTexture from src/scene/level-eight/textures.js",
+      "path": "src/scene/level-eight/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 25,
+      "id": "CRT-032"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_ELEVEN_ORIGIN_X from src/scene/level-eleven/layout.js",
+      "path": "src/scene/level-eleven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 8,
+      "id": "CRT-033"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_ELEVEN_ORIGIN_Z from src/scene/level-eleven/layout.js",
+      "path": "src/scene/level-eleven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 9,
+      "id": "CRT-034"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_FIVE_EXIT_TRIGGER_RADIUS from src/scene/level-five/layout.js",
+      "path": "src/scene/level-five/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 8,
+      "id": "CRT-035"
+    },
+    {
+      "category": "unused-export",
+      "subject": "getLevelFiveTargetMount from src/scene/level-five/layout.js",
+      "path": "src/scene/level-five/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 164,
+      "id": "CRT-036"
+    },
+    {
+      "category": "unused-export",
+      "subject": "isInAnyLevelFiveZone from src/scene/level-five/layout.js",
+      "path": "src/scene/level-five/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 151,
+      "id": "CRT-037"
+    },
+    {
+      "category": "unused-export",
+      "subject": "addLevelFiveExitDoor from src/scene/level-five/props.js",
+      "path": "src/scene/level-five/props.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 220,
+      "id": "CRT-038"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createLevelFiveBoilerWallTexture from src/scene/level-five/textures.js",
+      "path": "src/scene/level-five/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 161,
+      "id": "CRT-039"
+    },
+    {
+      "category": "unused-export",
+      "subject": "addLevelFourStairDoor from src/scene/level-four/props.js",
+      "path": "src/scene/level-four/props.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 6,
+      "id": "CRT-040"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_NINE_MAP from src/scene/level-nine/layout.js",
+      "path": "src/scene/level-nine/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 40,
+      "id": "CRT-041"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_NINE_ORIGIN_X from src/scene/level-nine/layout.js",
+      "path": "src/scene/level-nine/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 8,
+      "id": "CRT-042"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_NINE_ORIGIN_Z from src/scene/level-nine/layout.js",
+      "path": "src/scene/level-nine/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 9,
+      "id": "CRT-043"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_NINE_ROADS from src/scene/level-nine/layout.js",
+      "path": "src/scene/level-nine/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 41,
+      "id": "CRT-044"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_ONE_EXIT_TRIGGER_RADIUS from src/scene/level-one/layout.js",
+      "path": "src/scene/level-one/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 8,
+      "id": "CRT-045"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createLevelOneLayout from src/scene/level-one/layout.js",
+      "path": "src/scene/level-one/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 39,
+      "id": "CRT-046"
+    },
+    {
+      "category": "unused-export",
+      "subject": "addLevelOneElevator from src/scene/level-one/props.js",
+      "path": "src/scene/level-one/props.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 158,
+      "id": "CRT-047"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createLevelOneConcreteTexture from src/scene/level-one/textures.js",
+      "path": "src/scene/level-one/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 8,
+      "id": "CRT-048"
+    },
+    {
+      "category": "unused-export",
+      "subject": "CELL_PLATFORM from src/scene/level-seven/layout.js",
+      "path": "src/scene/level-seven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 12,
+      "id": "CRT-049"
+    },
+    {
+      "category": "unused-export",
+      "subject": "CELL_ROOM from src/scene/level-seven/layout.js",
+      "path": "src/scene/level-seven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 10,
+      "id": "CRT-050"
+    },
+    {
+      "category": "unused-export",
+      "subject": "CELL_WATER from src/scene/level-seven/layout.js",
+      "path": "src/scene/level-seven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 11,
+      "id": "CRT-051"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_SEVEN_EXIT_TRIGGER_RADIUS from src/scene/level-seven/layout.js",
+      "path": "src/scene/level-seven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 7,
+      "id": "CRT-052"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_SEVEN_MAP from src/scene/level-seven/layout.js",
+      "path": "src/scene/level-seven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 87,
+      "id": "CRT-053"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_SEVEN_ORIGIN_X from src/scene/level-seven/layout.js",
+      "path": "src/scene/level-seven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 88,
+      "id": "CRT-054"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_SEVEN_ORIGIN_Z from src/scene/level-seven/layout.js",
+      "path": "src/scene/level-seven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 89,
+      "id": "CRT-055"
+    },
+    {
+      "category": "unused-export",
+      "subject": "countLevelSevenOpenNeighbors from src/scene/level-seven/layout.js",
+      "path": "src/scene/level-seven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 105,
+      "id": "CRT-056"
+    },
+    {
+      "category": "unused-export",
+      "subject": "levelSevenCellType from src/scene/level-seven/layout.js",
+      "path": "src/scene/level-seven/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 95,
+      "id": "CRT-057"
+    },
+    {
+      "category": "unused-export",
+      "subject": "CELL_VOID from src/scene/level-six/layout.js",
+      "path": "src/scene/level-six/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 13,
+      "id": "CRT-058"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_SIX_EXIT_TRIGGER_RADIUS from src/scene/level-six/layout.js",
+      "path": "src/scene/level-six/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 9,
+      "id": "CRT-059"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_SIX_MAP from src/scene/level-six/layout.js",
+      "path": "src/scene/level-six/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 96,
+      "id": "CRT-060"
+    },
+    {
+      "category": "unused-export",
+      "subject": "countLevelSixOpenNeighbors from src/scene/level-six/layout.js",
+      "path": "src/scene/level-six/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 111,
+      "id": "CRT-061"
+    },
+    {
+      "category": "unused-export",
+      "subject": "levelSixCellType from src/scene/level-six/layout.js",
+      "path": "src/scene/level-six/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 106,
+      "id": "CRT-062"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_TEN_ORIGIN_X from src/scene/level-ten/layout.js",
+      "path": "src/scene/level-ten/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 7,
+      "id": "CRT-063"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_TEN_ORIGIN_Z from src/scene/level-ten/layout.js",
+      "path": "src/scene/level-ten/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 8,
+      "id": "CRT-064"
+    },
+    {
+      "category": "unused-export",
+      "subject": "isLevelTenRoadCell from src/scene/level-ten/layout.js",
+      "path": "src/scene/level-ten/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 14,
+      "id": "CRT-065"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_THREE_EXIT_TRIGGER_RADIUS from src/scene/level-three/layout.js",
+      "path": "src/scene/level-three/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 9,
+      "id": "CRT-066"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createLevelThreeLayout from src/scene/level-three/layout.js",
+      "path": "src/scene/level-three/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 40,
+      "id": "CRT-067"
+    },
+    {
+      "category": "unused-export",
+      "subject": "addLevelThreeBreakerDoor from src/scene/level-three/props.js",
+      "path": "src/scene/level-three/props.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 120,
+      "id": "CRT-068"
+    },
+    {
+      "category": "unused-export",
+      "subject": "LEVEL_TWO_EXIT_TRIGGER_RADIUS from src/scene/level-two/layout.js",
+      "path": "src/scene/level-two/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 7,
+      "id": "CRT-069"
+    },
+    {
+      "category": "unused-export",
+      "subject": "levelTwoCellMeta from src/scene/level-two/layout.js",
+      "path": "src/scene/level-two/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 217,
+      "id": "CRT-070"
+    },
+    {
+      "category": "unused-export",
+      "subject": "addLevelTwoServiceDoor from src/scene/level-two/props.js",
+      "path": "src/scene/level-two/props.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 462,
+      "id": "CRT-071"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createLevelTwoGrimyTexture from src/scene/level-two/textures.js",
+      "path": "src/scene/level-two/textures.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 3,
+      "id": "CRT-072"
+    },
+    {
+      "category": "unused-export",
+      "subject": "MANILA_ROOM_ENTRANCE from src/scene/level-zero/layout.js",
+      "path": "src/scene/level-zero/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 7,
+      "id": "CRT-073"
+    },
+    {
+      "category": "unused-export",
+      "subject": "createLayout from src/scene/level-zero/layout.js",
+      "path": "src/scene/level-zero/layout.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 9,
+      "id": "CRT-074"
+    },
+    {
+      "category": "unused-export",
+      "subject": "getExitMount from src/scene/level-zero/world.js",
+      "path": "src/scene/level-zero/world.js",
+      "confidence": "medium",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 0,
+      "bytes": 0,
+      "evidence": [
+        "No reference to the exported symbol was found outside its defining file."
+      ],
+      "caveats": [
+        "Public APIs, re-export patterns, generated declarations, templates, or external consumers may use it."
+      ],
+      "line": 199,
+      "id": "CRT-075"
+    },
+    {
+      "category": "commented-code",
+      "subject": "Comment block in src/scene/level-two/index.js",
+      "path": "src/scene/level-two/index.js",
+      "confidence": "low",
+      "initial_status": "REVIEW",
+      "risk": "medium",
+      "proof_eligible": false,
+      "loc": 4,
+      "bytes": 240,
+      "evidence": [
+        "A block of four or more code-like line comments was found."
+      ],
+      "caveats": [
+        "The block may be documentation, an example, a protocol, or an intentional workaround."
+      ],
+      "line": 381,
+      "id": "CRT-076"
+    }
+  ],
+  "limitations": [
+    "Static analysis cannot prove absence of dynamic, reflective, operational, platform-specific, or external use.",
+    "JavaScript/TypeScript and Python import resolution is intentionally conservative and does not implement every alias or framework convention.",
+    "Unused dependencies and exports are leads only until project-native tooling and focused proof support removal.",
+    "No project code, package command, or dependency was executed by this scanner."
+  ]
+}

@@ -42,7 +42,14 @@ import {
   MANILA_ROOM,
 } from "./layout.js";
 import { createAlmondWaterPickup, createFlashlightPickup, createCompassPickup } from "../items/index.js";
-import { getPickupTarget, tryPickupItems, getFocusedItem } from "../entities/index.js";
+import {
+  createInteractionSpot,
+  getFocusedInteraction,
+  getPickupTarget,
+  tryInteractWithSpots,
+  tryPickupItems,
+  getFocusedItem,
+} from "../entities/index.js";
 
 function createFixtureLightField(fixturePositions) {
   const size = 512;
@@ -148,6 +155,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   const exitPosition = cellCenter(EXIT_CELL.col, EXIT_CELL.row);
 
   const pickupInitial = initialState?.pickups ?? {};
+  const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
   const { northSouth, eastWest, fixturePositions } = collectWallTransforms();
   const fixtureLightField = isLowQuality() ? null : createFixtureLightField(fixturePositions);
@@ -244,6 +252,18 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   addMoodZones(scene);
   const manilaRoom = createManilaRoom(scene, MANILA_ROOM, cellCenter);
   const propColliders = [...manilaRoom.colliders, ...addRoomTables(scene, cellCenter)];
+  const interactions = [
+    createInteractionSpot({
+      id: "level-zero-meg-file",
+      position: manilaRoom.documentationPosition,
+      radius: 2.8,
+      inspectDistance: 7,
+      inspectHeight: 0,
+      inspectRadius: 0.62,
+      initialState: interactionInitial["level-zero-meg-file"] ?? null,
+      onInteract: () => ({ documentId: "level-zero-meg-file" }),
+    }),
+  ];
   const almondWater = createAlmondWaterPickup(scene, {
     cols: COLS,
     rows: ROWS,
@@ -363,6 +383,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       flicker,
       manilaBlackout,
       lightState: updateLightState(delta, flicker),
+      focusInteraction: getFocusedInteraction(camera, playerPosition, interactions),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         superAlmondWater.inspect(camera),
@@ -402,6 +423,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     getPickupTarget: (playerPosition) =>
       getPickupTarget(playerPosition, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) => tryPickupItems(playerPosition, superAlmondWater, compass, flashlight, almondWater),
+    interact: (playerPosition) => tryInteractWithSpots(playerPosition, ...interactions),
     getSnapshot() {
       return {
         pickups: {
@@ -411,7 +433,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },
-        interactions: {},
+        interactions: Object.fromEntries(interactions.map((interaction) => [interaction.id, interaction.getState()])),
         objectives: { reached: exitReached },
         entities: [],
       };

@@ -2,7 +2,7 @@ const STORAGE_KEY = "backrooms-save";
 const SAVE_VERSION = 2;
 const LEGACY_SAVE_VERSION = 1;
 const HUB_LEVEL = -1;
-const PLAYABLE_LEVELS = new Set([HUB_LEVEL, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 37]);
+const PLAYABLE_LEVELS = new Set([HUB_LEVEL, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 37]);
 // A normal save is only a few KB.  Do not let a corrupted or legacy payload
 // monopolize the first menu interaction while it is being parsed.
 const MAX_SAVE_CHARS = 1_000_000;
@@ -79,6 +79,8 @@ function sanitizeEntityState(raw) {
     contact: Boolean(raw.contact),
     alertTimer: clampNumber(raw.alertTimer, 0),
     stunnedTimer: clampNumber(raw.stunnedTimer, 0),
+    patrolIndex: Math.max(0, Math.floor(clampNumber(raw.patrolIndex, 0))),
+    provokedTimer: Math.max(0, clampNumber(raw.provokedTimer, 0)),
   };
 }
 
@@ -329,7 +331,7 @@ export function createPickupSnapshot({ active, respawnTimer, position, rotation 
   };
 }
 
-export function createEntitySnapshot({ id, type, position, contact, alertTimer = 0, stunnedTimer = 0 }) {
+export function createEntitySnapshot({ id, type, position, contact, alertTimer = 0, stunnedTimer = 0, patrolIndex = 0, provokedTimer = 0 }) {
   return {
     id,
     type: typeof type === "string" && /^[a-z0-9-]{1,48}$/.test(type) ? type : "unknown",
@@ -337,5 +339,7 @@ export function createEntitySnapshot({ id, type, position, contact, alertTimer =
     contact: Boolean(contact),
     alertTimer: clampNumber(alertTimer, 0),
     stunnedTimer: clampNumber(stunnedTimer, 0),
+    patrolIndex: Math.max(0, Math.floor(clampNumber(patrolIndex, 0))),
+    provokedTimer: Math.max(0, clampNumber(provokedTimer, 0)),
   };
 }

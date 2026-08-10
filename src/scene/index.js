@@ -11,6 +11,8 @@ const LEVEL_SCENE_LOADERS = new Map([
   [7, [() => import("./level-seven/index.js"), "createLevelSevenScene"]],
   [8, [() => import("./level-eight/index.js"), "createLevelEightScene"]],
   [9, [() => import("./level-nine/index.js"), "createLevelNineScene"]],
+  [10, [() => import("./level-ten/index.js"), "createLevelTenScene"]],
+  [11, [() => import("./level-eleven/index.js"), "createLevelElevenScene"]],
   [37, [() => import("./level-thirty-seven/index.js"), "createLevelThirtySevenScene"]],
   [HUB_LEVEL, [() => import("./hub/index.js"), "createHubScene"]],
 ]);

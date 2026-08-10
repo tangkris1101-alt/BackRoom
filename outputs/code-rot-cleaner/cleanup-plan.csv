@@ -1,0 +1,77 @@
+id,final_status,category,subject,path,line,confidence,risk,proof_eligible,loc,bytes,status_reason
+CRT-001,KEEP,orphan-file,extensions/backrooms3d.js,extensions/backrooms3d.js,,medium,medium,False,598,20031,TurboWarp extension entry point referenced by README and scripts/generate-sb3.mjs.
+CRT-002,KEEP,orphan-file,src/map-preview.js,src/map-preview.js,,medium,medium,False,1667,59763,Development map preview entry point loaded directly by map-preview.html.
+CRT-003,KEEP,orphan-file,src/scene/items/firesalt.js,src/scene/items/firesalt.js,,medium,medium,False,206,7589,Re-exported by src/scene/items/index.js and used by the game item system.
+CRT-004,KEEP,orphan-file,src/scene/level-five/textures.js,src/scene/level-five/textures.js,,medium,medium,False,190,7012,Imported by the playable Level 5 scene.
+CRT-005,KEEP,orphan-file,src/scene/level-one/textures.js,src/scene/level-one/textures.js,,medium,medium,False,83,3404,Imported by the playable Level 1 scene.
+CRT-006,KEEP,orphan-file,src/scene/level-seven/layout.js,src/scene/level-seven/layout.js,,medium,medium,False,161,4836,Imported by the playable Level 7 scene and the development map preview.
+CRT-007,KEEP,orphan-file,src/scene/level-seven/textures.js,src/scene/level-seven/textures.js,,medium,medium,False,107,3280,Imported by the playable Level 7 scene.
+CRT-008,KEEP,orphan-file,src/scene/level-six/textures.js,src/scene/level-six/textures.js,,medium,medium,False,103,3035,Imported by the playable Level 6 scene.
+CRT-009,KEEP,orphan-file,src/scene/level-thirty-seven/textures.js,src/scene/level-thirty-seven/textures.js,,medium,medium,False,50,2322,Imported by the playable Level 37 scene.
+CRT-010,KEEP,orphan-file,src/scene/level-three/props.js,src/scene/level-three/props.js,,medium,medium,False,670,21530,Imported by the playable Level 3 scene.
+CRT-011,KEEP,orphan-file,src/scene/level-two/layout.js,src/scene/level-two/layout.js,,medium,medium,False,439,14557,Imported by the playable Level 2 scene and the development map preview.
+CRT-012,KEEP,orphan-file,src/scene/level-two/textures.js,src/scene/level-two/textures.js,,medium,medium,False,149,5187,Imported by the playable Level 2 scene.
+CRT-013,KEEP,orphan-file,src/ui/level-danger.js,src/ui/level-danger.js,,medium,medium,False,22,719,Imported by src/main.js for level danger UI state.
+CRT-014,REVIEW,unused-export,ALLOW_QUERY_DEBUG from src/debug-mode.js,src/debug-mode.js,5,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-015,REVIEW,unused-export,createPickupSnapshot from src/save.js,src/save.js,325,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-016,REVIEW,unused-export,snapEntityPosition from src/scene/common/snap.js,src/scene/common/snap.js,3,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-017,REVIEW,unused-export,snapEntityState from src/scene/common/snap.js,src/scene/common/snap.js,29,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-018,REVIEW,unused-export,tileHash from src/scene/common/texture-utils.js,src/scene/common/texture-utils.js,42,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-019,REVIEW,unused-export,createCarpetTexture from src/scene/common/textures.js,src/scene/common/textures.js,51,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-020,REVIEW,unused-export,createCeilingTexture from src/scene/common/textures.js,src/scene/common/textures.js,89,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-021,REVIEW,unused-export,createSignTexture from src/scene/common/textures.js,src/scene/common/textures.js,118,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-022,REVIEW,unused-export,createWallpaperTexture from src/scene/common/textures.js,src/scene/common/textures.js,3,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-023,REVIEW,unused-export,LEVEL_KEY_TARGETS from src/scene/common/world-items.js,src/scene/common/world-items.js,17,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-024,REVIEW,unused-export,COMPASS_INSPECT_DISTANCE from src/scene/constants.js,src/scene/constants.js,29,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-025,REVIEW,unused-export,COMPASS_PICKUP_RADIUS from src/scene/constants.js,src/scene/constants.js,28,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-026,REVIEW,unused-export,COMPASS_RESPAWN_MIN from src/scene/constants.js,src/scene/constants.js,30,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-027,REVIEW,unused-export,COMPASS_RESPAWN_VARIANCE from src/scene/constants.js,src/scene/constants.js,31,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-028,REVIEW,unused-export,MAX_POINT_LIGHTS from src/scene/constants.js,src/scene/constants.js,6,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-029,REVIEW,unused-export,MIN_FIXTURE_DISTANCE from src/scene/constants.js,src/scene/constants.js,7,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-030,REVIEW,unused-export,isPlayableLevel from src/scene/constants.js,src/scene/constants.js,99,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-031,REVIEW,unused-export,createLevelEightFloorTexture from src/scene/level-eight/textures.js,src/scene/level-eight/textures.js,24,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-032,REVIEW,unused-export,createLevelEightWallTexture from src/scene/level-eight/textures.js,src/scene/level-eight/textures.js,25,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-033,REVIEW,unused-export,LEVEL_ELEVEN_ORIGIN_X from src/scene/level-eleven/layout.js,src/scene/level-eleven/layout.js,8,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-034,REVIEW,unused-export,LEVEL_ELEVEN_ORIGIN_Z from src/scene/level-eleven/layout.js,src/scene/level-eleven/layout.js,9,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-035,REVIEW,unused-export,LEVEL_FIVE_EXIT_TRIGGER_RADIUS from src/scene/level-five/layout.js,src/scene/level-five/layout.js,8,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-036,REVIEW,unused-export,getLevelFiveTargetMount from src/scene/level-five/layout.js,src/scene/level-five/layout.js,164,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-037,REVIEW,unused-export,isInAnyLevelFiveZone from src/scene/level-five/layout.js,src/scene/level-five/layout.js,151,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-038,REVIEW,unused-export,addLevelFiveExitDoor from src/scene/level-five/props.js,src/scene/level-five/props.js,220,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-039,REVIEW,unused-export,createLevelFiveBoilerWallTexture from src/scene/level-five/textures.js,src/scene/level-five/textures.js,161,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-040,REVIEW,unused-export,addLevelFourStairDoor from src/scene/level-four/props.js,src/scene/level-four/props.js,6,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-041,REVIEW,unused-export,LEVEL_NINE_MAP from src/scene/level-nine/layout.js,src/scene/level-nine/layout.js,40,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-042,REVIEW,unused-export,LEVEL_NINE_ORIGIN_X from src/scene/level-nine/layout.js,src/scene/level-nine/layout.js,8,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-043,REVIEW,unused-export,LEVEL_NINE_ORIGIN_Z from src/scene/level-nine/layout.js,src/scene/level-nine/layout.js,9,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-044,REVIEW,unused-export,LEVEL_NINE_ROADS from src/scene/level-nine/layout.js,src/scene/level-nine/layout.js,41,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-045,REVIEW,unused-export,LEVEL_ONE_EXIT_TRIGGER_RADIUS from src/scene/level-one/layout.js,src/scene/level-one/layout.js,8,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-046,REVIEW,unused-export,createLevelOneLayout from src/scene/level-one/layout.js,src/scene/level-one/layout.js,39,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-047,REVIEW,unused-export,addLevelOneElevator from src/scene/level-one/props.js,src/scene/level-one/props.js,158,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-048,REVIEW,unused-export,createLevelOneConcreteTexture from src/scene/level-one/textures.js,src/scene/level-one/textures.js,8,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-049,REVIEW,unused-export,CELL_PLATFORM from src/scene/level-seven/layout.js,src/scene/level-seven/layout.js,12,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-050,REVIEW,unused-export,CELL_ROOM from src/scene/level-seven/layout.js,src/scene/level-seven/layout.js,10,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-051,REVIEW,unused-export,CELL_WATER from src/scene/level-seven/layout.js,src/scene/level-seven/layout.js,11,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-052,REVIEW,unused-export,LEVEL_SEVEN_EXIT_TRIGGER_RADIUS from src/scene/level-seven/layout.js,src/scene/level-seven/layout.js,7,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-053,REVIEW,unused-export,LEVEL_SEVEN_MAP from src/scene/level-seven/layout.js,src/scene/level-seven/layout.js,87,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-054,REVIEW,unused-export,LEVEL_SEVEN_ORIGIN_X from src/scene/level-seven/layout.js,src/scene/level-seven/layout.js,88,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-055,REVIEW,unused-export,LEVEL_SEVEN_ORIGIN_Z from src/scene/level-seven/layout.js,src/scene/level-seven/layout.js,89,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-056,REVIEW,unused-export,countLevelSevenOpenNeighbors from src/scene/level-seven/layout.js,src/scene/level-seven/layout.js,105,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-057,REVIEW,unused-export,levelSevenCellType from src/scene/level-seven/layout.js,src/scene/level-seven/layout.js,95,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-058,REVIEW,unused-export,CELL_VOID from src/scene/level-six/layout.js,src/scene/level-six/layout.js,13,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-059,REVIEW,unused-export,LEVEL_SIX_EXIT_TRIGGER_RADIUS from src/scene/level-six/layout.js,src/scene/level-six/layout.js,9,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-060,REVIEW,unused-export,LEVEL_SIX_MAP from src/scene/level-six/layout.js,src/scene/level-six/layout.js,96,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-061,REVIEW,unused-export,countLevelSixOpenNeighbors from src/scene/level-six/layout.js,src/scene/level-six/layout.js,111,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-062,REVIEW,unused-export,levelSixCellType from src/scene/level-six/layout.js,src/scene/level-six/layout.js,106,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-063,REVIEW,unused-export,LEVEL_TEN_ORIGIN_X from src/scene/level-ten/layout.js,src/scene/level-ten/layout.js,7,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-064,REVIEW,unused-export,LEVEL_TEN_ORIGIN_Z from src/scene/level-ten/layout.js,src/scene/level-ten/layout.js,8,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-065,REVIEW,unused-export,isLevelTenRoadCell from src/scene/level-ten/layout.js,src/scene/level-ten/layout.js,14,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-066,REVIEW,unused-export,LEVEL_THREE_EXIT_TRIGGER_RADIUS from src/scene/level-three/layout.js,src/scene/level-three/layout.js,9,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-067,REVIEW,unused-export,createLevelThreeLayout from src/scene/level-three/layout.js,src/scene/level-three/layout.js,40,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-068,REVIEW,unused-export,addLevelThreeBreakerDoor from src/scene/level-three/props.js,src/scene/level-three/props.js,120,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-069,REVIEW,unused-export,LEVEL_TWO_EXIT_TRIGGER_RADIUS from src/scene/level-two/layout.js,src/scene/level-two/layout.js,7,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-070,REVIEW,unused-export,levelTwoCellMeta from src/scene/level-two/layout.js,src/scene/level-two/layout.js,217,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-071,REVIEW,unused-export,addLevelTwoServiceDoor from src/scene/level-two/props.js,src/scene/level-two/props.js,462,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-072,REVIEW,unused-export,createLevelTwoGrimyTexture from src/scene/level-two/textures.js,src/scene/level-two/textures.js,3,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-073,REVIEW,unused-export,MANILA_ROOM_ENTRANCE from src/scene/level-zero/layout.js,src/scene/level-zero/layout.js,7,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-074,REVIEW,unused-export,createLayout from src/scene/level-zero/layout.js,src/scene/level-zero/layout.js,9,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-075,REVIEW,unused-export,getExitMount from src/scene/level-zero/world.js,src/scene/level-zero/world.js,199,medium,medium,False,0,0,Not proven in a disposable copy.
+CRT-076,REVIEW,commented-code,Comment block in src/scene/level-two/index.js,src/scene/level-two/index.js,381,low,medium,False,4,240,Not proven in a disposable copy.

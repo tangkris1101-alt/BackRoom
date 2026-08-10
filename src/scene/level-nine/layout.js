@@ -4,6 +4,7 @@ export const LEVEL_NINE_COLS = 52;
 export const LEVEL_NINE_ROWS = 40;
 export const LEVEL_NINE_START_CELL = { col: 4, row: 34, yaw: -Math.PI / 2 };
 export const LEVEL_NINE_TARGET_CELL = { col: 46, row: 4 };
+export const LEVEL_NINE_FIELD_TARGET_CELL = { col: 2, row: 7 };
 export const LEVEL_NINE_ORIGIN_X = -(LEVEL_NINE_COLS * CELL_SIZE) / 2;
 export const LEVEL_NINE_ORIGIN_Z = -(LEVEL_NINE_ROWS * CELL_SIZE) / 2;
 
