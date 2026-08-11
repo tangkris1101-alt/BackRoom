@@ -48,6 +48,7 @@ export class FirstPersonControls {
     this.resolvePosition = typeof resolvePosition === "function" ? resolvePosition : null;
     this.spawn = spawn;
     this.environmentSpeedMultiplier = movementSpeedMultiplier;
+    this.environmentStaminaRecoveryMultiplier = 1;
     this.eyeHeight = 1.62;
     this.moveSpeed = 3.05;
     this.sprintMultiplier = 1.85;
@@ -200,11 +201,46 @@ export class FirstPersonControls {
     this.resolvePosition = typeof resolvePosition === "function" ? resolvePosition : null;
     this.spawn = spawn;
     this.environmentSpeedMultiplier = movementSpeedMultiplier;
+    this.environmentStaminaRecoveryMultiplier = 1;
     this.defaultFov = camera.fov;
     this.zoomFov = Math.max(ZOOM_FOV_MIN, this.defaultFov * ZOOM_FOV_FACTOR);
     this.keys.clear();
     this.resetJoystick();
     this.reset();
+  }
+
+  setEnvironmentModifiers({ movementSpeedMultiplier = 1, staminaRecoveryMultiplier = 1 } = {}) {
+    this.environmentSpeedMultiplier = clamp(
+      Number.isFinite(movementSpeedMultiplier) ? movementSpeedMultiplier : 1,
+      0.35,
+      2,
+    );
+    this.environmentStaminaRecoveryMultiplier = clamp(
+      Number.isFinite(staminaRecoveryMultiplier) ? staminaRecoveryMultiplier : 1,
+      0,
+      3,
+    );
+  }
+
+  relocate({ x, z, yaw = this.yaw } = {}) {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
+    const floorHeight = this.resolveFloorHeight(x, z);
+    if (floorHeight === null) return false;
+    this.camera.position.x = x;
+    this.camera.position.z = z;
+    this.groundY = floorHeight + this.eyeHeight;
+    this.bodyY = this.groundY;
+    this.camera.position.y = this.bodyY;
+    this.verticalVelocity = 0;
+    this.hasFloorSupport = true;
+    this.isGrounded = true;
+    this.jumpQueued = false;
+    this.headBobY = 0;
+    this.yaw = Number.isFinite(yaw) ? yaw : this.yaw;
+    this.applyRotation();
+    this.syncViewModelMotion();
+    this.syncCameraState();
+    return true;
   }
 
   applyState(state) {
@@ -340,7 +376,10 @@ export class FirstPersonControls {
     this.canvas.dataset.almondWaterRemaining = this.almondWaterTimer.toFixed(1);
     this.canvas.dataset.superAlmondWaterActive = String(this.superAlmondWaterTimer > 0);
     this.canvas.dataset.superAlmondWaterRemaining = this.superAlmondWaterTimer.toFixed(1);
-    this.canvas.dataset.staminaRecoveryMultiplier = this.getStaminaRecoveryMultiplier().toFixed(1);
+    this.canvas.dataset.staminaRecoveryMultiplier = (
+      this.getStaminaRecoveryMultiplier() * this.environmentStaminaRecoveryMultiplier
+    ).toFixed(2);
+    this.canvas.dataset.environmentSpeedMultiplier = this.environmentSpeedMultiplier.toFixed(2);
     this.canvas.dataset.sprinting = String(this.isSprinting);
     this.canvas.dataset.sprintExhausted = String(this.sprintExhausted);
     this.canvas.dataset.health = this.health.toFixed(0);
@@ -688,12 +727,12 @@ export class FirstPersonControls {
     if (moving) {
       const targetSpeed = this.moveSpeed * (this.isSprinting ? this.sprintMultiplier : 1);
       const speedRatio = horizontalDistance / Math.max(delta * targetSpeed, 0.0001);
-      const cadence = (this.isSprinting ? 10.35 : 9.4) * Math.min(1.18, Math.max(0.55, speedRatio));
+      const cadence = (this.isSprinting ? 11.4 : 7.8) * Math.min(1.18, Math.max(0.55, speedRatio));
       this.walkCycle += cadence * delta;
     }
 
-    const verticalAmplitude = this.isSprinting ? 0.038 : 0.032;
-    const rollAmplitude = this.isSprinting ? 0.014 : 0.012;
+    const verticalAmplitude = this.isSprinting ? 0.044 : 0.026;
+    const rollAmplitude = this.isSprinting ? 0.017 : 0.009;
     this.headBobY = Math.sin(this.walkCycle * 2) * verticalAmplitude * this.walkBobStrength;
     this.rollOffset = Math.sin(this.walkCycle) * rollAmplitude * this.walkBobStrength;
     this.camera.position.y = this.bodyY + this.headBobY;
@@ -799,7 +838,8 @@ export class FirstPersonControls {
       if (this.staminaRecoveryDelay === 0) {
         const recoveryRate =
           (hasMovementInput ? STAMINA_RECOVERY_RATE * 0.72 : STAMINA_RECOVERY_RATE) *
-          this.getStaminaRecoveryMultiplier();
+          this.getStaminaRecoveryMultiplier() *
+          this.environmentStaminaRecoveryMultiplier;
         this.stamina = Math.min(this.staminaMax, this.stamina + recoveryRate * delta);
       }
     }
@@ -825,7 +865,7 @@ export class FirstPersonControls {
       superAlmondWaterActive: this.superAlmondWaterTimer > 0,
       superAlmondWaterRemaining: this.superAlmondWaterTimer,
       superAlmondWaterDuration: SUPER_ALMOND_WATER_EFFECT_DURATION,
-      staminaRecoveryMultiplier: this.getStaminaRecoveryMultiplier(),
+      staminaRecoveryMultiplier: this.getStaminaRecoveryMultiplier() * this.environmentStaminaRecoveryMultiplier,
       activeBuffs: this.getActiveBuffs(),
       health: this.health,
       healthMax: this.healthMax,

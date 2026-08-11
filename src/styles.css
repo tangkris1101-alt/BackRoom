@@ -2241,6 +2241,23 @@ body {
   animation: static-shift 0.34s steps(2, end) infinite;
 }
 
+.static-layer[data-test-card="true"] {
+  opacity: 0.42 !important;
+  background-image:
+    linear-gradient(90deg,
+      #f2f2f2 0 14.28%, #c8c8c8 14.28% 28.56%, #9e9e9e 28.56% 42.84%,
+      #747474 42.84% 57.12%, #4c4c4c 57.12% 71.4%, #262626 71.4% 85.68%, #050505 85.68%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.18) 0 1px, transparent 1px 4px);
+  background-size: 100% 24%, auto;
+  background-position: center, center;
+  background-repeat: no-repeat, repeat;
+  mix-blend-mode: screen;
+}
+
+#game-canvas {
+  transition: filter 160ms linear;
+}
+
 .joystick {
   position: fixed;
   left: max(22px, env(safe-area-inset-left));

@@ -406,6 +406,16 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     };
   }
 
+  function getFootstepSurface(position) {
+    const { col, row } = levelFiveWorldToCell(position.x, position.z);
+    const isInside = (zone) => col >= zone.col && col < zone.col + zone.width
+      && row >= zone.row && row < zone.row + zone.height;
+    if (isInside(LEVEL_FIVE_BOILER_ROOM)) return "metal";
+    if (isInside({ col: 2, row: 13, width: 13, height: 3 })) return "wood";
+    if (isInside({ col: 28, row: 13, width: 14, height: 3 })) return "concrete";
+    return "carpet";
+  }
+
   return {
     level: 5,
     levelLabel: "LEVEL 5",
@@ -421,6 +431,7 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     spawn,
     targetPosition,
     isWalkable,
+    getFootstepSurface,
     decorativeItemSpawns: [
       { id: "hotel-token", position: levelFiveCellCenter(20, 12), grounded: true, rotation: 0.45 },
       { id: "crumpled-note", position: levelFiveCellCenter(28, 14), grounded: true, rotation: -0.3, tiltX: 0.05 },

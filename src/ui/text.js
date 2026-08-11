@@ -112,6 +112,20 @@ export const ENTITY_TEXT = {
       action: "\u8fdc\u79bb\u6df1\u8272\u6c34\u57df",
       failSubtitle: "\u88ab\u6df1\u6c34\u5f02\u5f62\u62d6\u5165\u6c34\u4e0b",
     },
+    faceling: {
+      name: "\u65e0\u9762\u4eba",
+      marker: "\u524d\u53f0\u65e0\u9762\u4eba",
+      effect: "\u9ed8\u9ed8\u503c\u5b88Level 13\u524d\u53f0\uff0c\u6ca1\u6709\u654c\u610f",
+      action: "F / \u6309\u94ae\u8be2\u95ee\u516c\u5bd3",
+      failSubtitle: "LEVEL 13 SIGNAL LOST",
+    },
+    "window-entity": {
+      name: "\u7a97\u6237\u5b9e\u4f53",
+      marker: "\u5371\u9669\u7a97\u6237",
+      effect: "\u7a97\u5916\u7684\u84dd\u8272\u7a7a\u95f4\u4f1a\u5bf9\u9760\u8fd1\u8005\u9020\u6210\u4f24\u5bb3",
+      action: "\u4e0d\u8981\u89e6\u78b0\u73bb\u7483",
+      failSubtitle: "\u88ab\u7a97\u5916\u7684\u84dd\u8272\u7a7a\u95f4\u541e\u6ca1",
+    },
   },
   en: {
     smiler: {
@@ -148,6 +162,20 @@ export const ENTITY_TEXT = {
       effect: "Moves with the water surface; contact is lethal.",
       action: "AVOID DARK WATER",
       failSubtitle: "DRAGGED UNDERWATER",
+    },
+    faceling: {
+      name: "FACELING",
+      marker: "DESK FACELING",
+      effect: "A passive attendant waiting behind the Level 13 front desk.",
+      action: "F / BUTTON ASK FOR AN APARTMENT",
+      failSubtitle: "LEVEL 13 SIGNAL LOST",
+    },
+    "window-entity": {
+      name: "WINDOW ENTITY",
+      marker: "DANGEROUS WINDOW",
+      effect: "The blue void beyond the glass harms anything that approaches.",
+      action: "DO NOT TOUCH THE GLASS",
+      failSubtitle: "TAKEN BY THE BLUE VOID",
     },
   },
 };

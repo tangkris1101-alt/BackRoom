@@ -14,7 +14,7 @@ const LEVEL_KEY_SPAWN_CHANCE = 0.17;
 const HUB_BONUS_LEVEL_KEY_ROLLS = 2;
 const KEY_MODEL_SCALE = 0.1875;
 
-export const LEVEL_KEY_TARGETS = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 37]);
+export const LEVEL_KEY_TARGETS = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 37]);
 export const LEVEL_KEY_IDS = Object.freeze(LEVEL_KEY_TARGETS.map((level) => `level-key-${level}`));
 
 export function isLevelKeyId(id) {

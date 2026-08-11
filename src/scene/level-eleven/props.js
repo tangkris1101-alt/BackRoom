@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { createGameMaterial, isLowQuality } from "../common/materials.js";
 import { enableAoUv } from "../common/texture-utils.js";
+import { CELL_SIZE } from "../constants.js";
 import { levelElevenCellCenter } from "./layout.js";
 import {
   createLevelElevenBrickMaps,
@@ -177,6 +178,54 @@ export function addLevelElevenDetails(scene, { coarse = false } = {}) {
         bulb.material.emissiveIntensity = 1.7 + flicker * 1.2;
       });
       lobby.light.intensity = 1.55 + Math.sin(elapsed * 0.8) * 0.18;
+    },
+  };
+}
+
+export function addLevelElevenExpansionEntrances(scene) {
+  const matrixCell = levelElevenCellCenter(19, 12);
+  const windowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xc8f4ff,
+    transparent: true,
+    opacity: 0.78,
+    toneMapped: false,
+  });
+  const matrixWindow = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 2.25), windowMaterial);
+  matrixWindow.name = "level-eleven-matrix-window";
+  matrixWindow.position.set(matrixCell.x, 1.55, matrixCell.z + CELL_SIZE / 2 - 0.04);
+  matrixWindow.rotation.y = Math.PI;
+  scene.add(matrixWindow);
+  const glow = new THREE.PointLight(0xc8f4ff, 1.4, 8, 2.2);
+  glow.position.set(matrixCell.x, 1.8, matrixCell.z + 0.8);
+  scene.add(glow);
+
+  const apartmentCell = levelElevenCellCenter(37, 40);
+  const numberCanvas = document.createElement("canvas");
+  numberCanvas.width = 256;
+  numberCanvas.height = 128;
+  const context = numberCanvas.getContext("2d");
+  context.fillStyle = "#191710";
+  context.fillRect(0, 0, 256, 128);
+  context.fillStyle = "#d9cfae";
+  context.font = "bold 64px Arial";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText("13", 128, 66);
+  const numberTexture = new THREE.CanvasTexture(numberCanvas);
+  numberTexture.colorSpace = THREE.SRGBColorSpace;
+  const number = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.1, 0.5),
+    new THREE.MeshBasicMaterial({ map: numberTexture }),
+  );
+  number.name = "level-eleven-apartment-thirteen-number";
+  number.position.set(apartmentCell.x, 2.85, apartmentCell.z + CELL_SIZE / 2 - 0.06);
+  number.rotation.y = Math.PI;
+  scene.add(number);
+
+  return {
+    update(elapsed) {
+      matrixWindow.material.opacity = 0.68 + Math.sin(elapsed * 2.7) * 0.12;
+      glow.intensity = 1.2 + Math.sin(elapsed * 3.1) * 0.35;
     },
   };
 }

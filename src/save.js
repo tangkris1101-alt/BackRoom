@@ -2,7 +2,7 @@ const STORAGE_KEY = "backrooms-save";
 const SAVE_VERSION = 2;
 const LEGACY_SAVE_VERSION = 1;
 const HUB_LEVEL = -1;
-const PLAYABLE_LEVELS = new Set([HUB_LEVEL, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 37]);
+const PLAYABLE_LEVELS = new Set([HUB_LEVEL, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 37]);
 // A normal save is only a few KB.  Do not let a corrupted or legacy payload
 // monopolize the first menu interaction while it is being parsed.
 const MAX_SAVE_CHARS = 1_000_000;

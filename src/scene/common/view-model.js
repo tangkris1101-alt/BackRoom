@@ -233,16 +233,27 @@ export function updateFirstPersonHazmatViewModel(viewModel, elapsed) {
   const motion = viewModel.parent?.userData.firstPersonMotion;
   const walkAmount = THREE.MathUtils.clamp(motion?.walkBobStrength ?? 0, 0, 1);
   const stridePhase = Number.isFinite(motion?.walkCycle) ? motion.walkCycle : 0;
-  const sprintAmount = motion?.sprinting ? walkAmount : 0;
-  const strideScale = THREE.MathUtils.lerp(1, 1.2, sprintAmount);
+  const lastElapsed = viewModel.userData.lastMotionElapsed ?? elapsed;
+  const motionDelta = THREE.MathUtils.clamp(elapsed - lastElapsed, 0, 0.1);
+  viewModel.userData.lastMotionElapsed = elapsed;
+  const targetSprintBlend = motion?.sprinting && walkAmount > 0.05 ? 1 : 0;
+  viewModel.userData.sprintBlend = THREE.MathUtils.damp(
+    viewModel.userData.sprintBlend ?? 0,
+    targetSprintBlend,
+    targetSprintBlend ? 10 : 7,
+    motionDelta,
+  );
+  const sprintBlend = viewModel.userData.sprintBlend;
+  const strideScale = THREE.MathUtils.lerp(0.72, 1.68, sprintBlend);
+  const bodyScale = THREE.MathUtils.lerp(0.72, 1.35, sprintBlend);
   const breathe = Math.sin(elapsed * 1.8) * 0.0045;
-  const bob = Math.sin(stridePhase * 2) * 0.0045 * walkAmount * strideScale;
-  const sway = Math.sin(stridePhase) * 0.0055 * walkAmount * strideScale;
+  const bob = Math.sin(stridePhase * 2) * 0.0045 * walkAmount * bodyScale;
+  const sway = Math.sin(stridePhase) * 0.0055 * walkAmount * bodyScale;
   viewModel.position.set(sway, breathe + bob, 0);
   viewModel.rotation.set(
-    Math.sin(stridePhase * 2) * 0.0035 * walkAmount,
-    Math.sin(stridePhase) * 0.004 * walkAmount,
-    -Math.sin(stridePhase) * 0.003 * walkAmount,
+    Math.sin(stridePhase * 2) * 0.0035 * walkAmount * bodyScale,
+    Math.sin(stridePhase) * 0.004 * walkAmount * bodyScale,
+    -Math.sin(stridePhase) * 0.003 * walkAmount * bodyScale,
   );
 
   const arms = viewModel.userData.arms;
@@ -258,7 +269,7 @@ export function updateFirstPersonHazmatViewModel(viewModel, elapsed) {
     if (!mesh || !restPosition || !restQuaternion) continue;
     mesh.position.set(
       restPosition.x - sideSign * stride * 0.012,
-      restPosition.y + Math.sin(stridePhase * 2) * 0.008 * walkAmount,
+      restPosition.y + Math.sin(stridePhase * 2) * 0.008 * walkAmount * bodyScale,
       restPosition.z + returnSwing * 0.022,
     );
     motionEuler.set(

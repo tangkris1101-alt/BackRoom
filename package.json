@@ -15,8 +15,6 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
-    "jszip": "^3.10.1",
-    "scratch-vm": "^5.0.300",
     "three": "0.184.0"
   },
   "devDependencies": {

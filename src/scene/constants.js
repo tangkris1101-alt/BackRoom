@@ -68,6 +68,8 @@ export const PLAYABLE_LEVEL_IDS = Object.freeze([
   9,
   10,
   11,
+  12,
+  13,
   37,
 ]);
 
@@ -89,6 +91,8 @@ const LEVEL_INFOS = new Map([
   [9, { level: 9, levelLabel: "LEVEL 9", levelName: "THE SUBURBS", danger: "critical" }],
   [10, { level: 10, levelLabel: "LEVEL 10", levelName: "FIELD OF WHEAT", danger: "minimal" }],
   [11, { level: 11, levelLabel: "LEVEL 11", levelName: "THE ENDLESS CITY", danger: "moderate" }],
+  [12, { level: 12, levelLabel: "LEVEL 12", levelName: "MATRIX", danger: "minimal" }],
+  [13, { level: 13, levelLabel: "LEVEL 13", levelName: "THE INFINITE APARTMENTS", danger: "moderate" }],
   [37, { level: 37, levelLabel: "LEVEL 37", levelName: "SUBLIMITY", danger: "safe" }],
 ]);
 

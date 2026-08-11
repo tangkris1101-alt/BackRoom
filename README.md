@@ -2,12 +2,7 @@
 
 一个 [Backrooms](https://backrooms.fandom.com/wiki/Backrooms_Wiki) 主题的第一人称探索小游戏。
 
-仓库提供**两条平行的产品线**，共享美术与设计：
-
-| 路线 | 渲染 | 入口 | 用途 |
-|---|---|---|---|
-| **Three.js 独立版** | 真 3D（WebGL + Three.js）| `app.html` / `backrooms.html` | 桌面浏览器、移动端浏览器，独立运行 |
-| **TurboWarp 扩展** | Canvas 2D raycaster（沙箱内安全）| `extensions/backrooms3d.js` → `dist/app.sb3` | 在 [TurboWarp](https://turbowarp.org/) 中以 Scratch 项目形式运行 |
+项目使用 Three.js + WebGL 实现，入口为 `app.html`，并可构建为直接打开的独立版 `backrooms.html`。
 
 ---
 
@@ -56,13 +51,8 @@
 │   ├── ambient-audio.js          #   Web Audio 环境音
 │   └── styles.css                #   HUD / 弹窗 / 道具栏样式
 ├── app.html                      # Vite 入口（独立 HTML 模板）
-├── extensions/
-│   └── backrooms3d.js            # TurboWarp 自定义扩展（Canvas 2D raycaster）
 ├── scripts/
-│   ├── generate-sb3.mjs          # sb3 打包（file/local-http/embedded 三种模式）
-│   ├── make-standalone.mjs       # 把 Vite 构建产物内联为单 HTML
-│   ├── validate-sb3.mjs          # sb3 schema 校验
-│   └── verify-sb3.mjs            # sb3 结构检查
+│   └── make-standalone.mjs       # 把 Vite 构建产物内联为单 HTML
 └── vite.config.js
 ```
 
@@ -91,61 +81,6 @@ npm run build
 - **自动更新部署**：上传 `dist/`（其中的 `backrooms-version.json` 会让旧页面自动切换到新版本）
 - **单文件部署**：只上传 `backrooms.html` 仍可运行，但无法自动检测后续更新
 - 仓库根目录的 `index.html` 会读取版本清单后再跳转到 `backrooms.html`
-
----
-
-## TurboWarp 扩展版
-
-### 为什么需要单独的扩展版本？
-TurboWarp 在线版（turbowarp.org）的扩展运行在 Web Worker 沙箱中，**没有 DOM 访问能力**，所以用 Canvas 2D + 自实现 raycaster 重写了一份：
-
-- 19×19 迷宫（与 Level 1 风格一致）
-- 120 条射线的 DDA 墙渲染
-- 4 个监视器 block：`distance` / `signal` / `flicker` / `lock`
-- Web Audio 低频嗡鸣（沙箱允许）
-- 远景统一黄色雾，避免黑色空洞
-
-### 打包 sb3
-```bash
-node scripts/generate-sb3.mjs   # 默认 file:// 模式
-```
-
-三种加载模式（环境变量 `LOAD_MODE`）：
-
-| `LOAD_MODE` | 行为 | 适用 |
-|---|---|---|
-| `file`（默认）| 引用 `file:///path/to/extensions/backrooms3d.js` | TurboWarp 桌面版 |
-| `local-http` | 引用 `http://localhost:PORT/extensions/backrooms3d.js` | 在线版 + 本地 HTTP 服务器 + Chrome 标志 |
-| `embedded` | 内联 base64 data URL | 任意环境（仅非沙箱） |
-
-### 加载 sb3
-
-**方式 A：TurboWarp 桌面版**
-1. 安装 [TurboWarp Desktop](https://desktop.turbowarp.org/)
-2. 把 `dist/app.sb3` 与 `extensions/backrooms3d.js` 放同目录
-3. 编辑 `app.sb3` 内的 `project.json`，把扩展 URL 改为你机器的实际路径
-4. 打开运行
-
-**方式 B：在线版 + 本地 HTTP**
-```bash
-npx http-server -p 8080 -c-1     # 项目根目录启动
-set LOAD_MODE=local-http
-set PORT=8080
-node scripts/generate-sb3.mjs
-```
-Chrome 启动加 `--allow-file-access-from-files --disable-web-security`，访问 `http://localhost:8080/dist/app.sb3`
-
-**方式 C：部署扩展到公网 HTTPS**
-```bash
-set EXT_FILE_URL=https://your-domain.com/backrooms3d.js
-node scripts/generate-sb3.mjs
-```
-直接用 https://turbowarp.org/editor 打开 `dist/app.sb3`。
-
-### 校验
-```bash
-node scripts/validate-sb3.mjs    # 输出: VALIDATION OK
-```
 
 ---
 
@@ -200,7 +135,5 @@ node scripts/validate-sb3.mjs    # 输出: VALIDATION OK
 
 - [Three.js](https://threejs.org/) 0.184
 - [Vite](https://vitejs.dev/) 8
-- [scratch-vm](https://github.com/scratchfoundation/scratch-vm) 5 + [jszip](https://stuk.github.io/jszip/) 3（仅 sb3 生成）
-- Canvas 2D（TurboWarp 扩展版 raycaster）
 - Web Audio API（环境音）
 - Pointer Lock API + Touch Events

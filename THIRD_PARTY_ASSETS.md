@@ -14,8 +14,14 @@ All third-party files are bundled locally. The game performs no runtime requests
 - `Pavement 04` by Jan Burghardt, CC0 1.0: https://polyhaven.com/a/pavement_04
 - `Red Brick 03` by Rob Tuytel, CC0 1.0: https://polyhaven.com/a/red_brick_03
 - `Concrete Wall 006` by Charlotte Baglioni and Dario Barresi, CC0 1.0: https://polyhaven.com/a/concrete_wall_006
+- `Beige Wall 001` by Dimitrios Savva and Rico Cilliers, CC0 1.0: https://polyhaven.com/a/beige_wall_001
+- `Carpet 011` by ambientCG, CC0 1.0: https://ambientcg.com/view?id=Carpet011
+- `Laminate Floor 03` by Charlotte Baglioni and Dario Barresi, CC0 1.0: https://polyhaven.com/a/laminate_floor_03
+- `Rusty Metal 05` by Amal Kumar, CC0 1.0: https://polyhaven.com/a/rusty_metal_05
 
 The Level 10/11 derivatives are 768 px JPEGs created from the official 1K downloads. Exact paths, dimensions, sizes, and SHA-256 values are recorded in `src/assets/textures/LEVEL_10_11_ASSET_MANIFEST.md`.
+
+The Level 12/13 derivatives are 768 px JPEGs created from official 1K downloads. Level 13 also integrates the existing Rusty Metal 05 files without modifying them. Exact paths, dimensions, sizes, usage status, and SHA-256 values are recorded in `src/assets/textures/LEVEL_12_13_ASSET_MANIFEST.md`.
 
 ## Audio
 

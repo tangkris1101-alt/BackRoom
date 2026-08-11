@@ -200,6 +200,11 @@ export function createLevelNineScene({ initialState = null } = {}) {
     };
   }
 
+  function getFootstepSurface(position) {
+    const { col, row } = levelNineWorldToCell(position.x, position.z);
+    return isLevelNineRoadCell(col, row) ? "asphalt" : "grass";
+  }
+
   return {
     level: 9,
     levelLabel: "LEVEL 9",
@@ -212,6 +217,7 @@ export function createLevelNineScene({ initialState = null } = {}) {
     spawn,
     targetPosition,
     isWalkable,
+    getFootstepSurface,
     flashlightEffectiveness: 1.12,
     decorativeItemSpawns: [
       { id: "empty-can", position: { ...levelNineCellCenter(14, 33), y: 0.15 }, rotation: 0.42, tiltX: 0.08 },

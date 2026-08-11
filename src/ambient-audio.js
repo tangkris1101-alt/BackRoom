@@ -1,14 +1,15 @@
 import breathingTiredUrl from "./assets/audio/breathing-tired.ogg?url";
 import levelFiveJazzUrl from "./assets/audio/level-five-jazz-improv.mp3?url";
+import { getFootstepProfile, normalizeFootstepSurface } from "./scene/common/footstep-surfaces.js";
 
 export function createAmbientHum() {
   let context = null;
   let master = null;
   let flickerGain = null;
   let started = false;
-  let stepFilter = null;
   let lastStepAt = 0;
   let stepNoiseBuffer = null;
+  let stepSide = -1;
   let suspendedByPause = false;
   let breathAudio = null;
   let breathGain = null;
@@ -64,18 +65,12 @@ export function createAmbientHum() {
     highHum.start();
     noise.start();
 
-    const stepBufferSize = Math.floor(context.sampleRate * 0.08);
+    const stepBufferSize = Math.floor(context.sampleRate * 0.26);
     stepNoiseBuffer = context.createBuffer(1, stepBufferSize, context.sampleRate);
     const stepChannel = stepNoiseBuffer.getChannelData(0);
     for (let i = 0; i < stepBufferSize; i += 1) {
       stepChannel[i] = (Math.random() * 2 - 1) * (1 - i / stepBufferSize);
     }
-
-    stepFilter = context.createBiquadFilter();
-    stepFilter.type = "lowpass";
-    stepFilter.frequency.value = 1800;
-    stepFilter.Q.value = 0.7;
-    stepFilter.connect(master);
 
     breathAudio = new Audio(breathingTiredUrl);
     breathAudio.loop = true;
@@ -121,34 +116,73 @@ export function createAmbientHum() {
     }
   }
 
-  function playFootstep({ sprinting }) {
-    if (!context || !stepFilter || !stepNoiseBuffer) return;
+  function playFootstep({ sprinting, surface }) {
+    if (!context || !master || !stepNoiseBuffer) return;
     tryUnlockContext();
     const now = context.currentTime;
+    const profile = getFootstepProfile(surface);
+    const effort = sprinting ? 1.28 : 1;
+    const pitchVariation = 0.94 + Math.random() * 0.12;
+    stepSide *= -1;
+
+    const output = context.createGain();
+    output.gain.value = effort;
+    if (context.createStereoPanner) {
+      const panner = context.createStereoPanner();
+      panner.pan.value = stepSide * 0.12;
+      output.connect(panner);
+      panner.connect(master);
+    } else {
+      output.connect(master);
+    }
 
     const noise = context.createBufferSource();
     noise.buffer = stepNoiseBuffer;
+    noise.playbackRate.value = pitchVariation;
+    const stepFilter = context.createBiquadFilter();
+    stepFilter.type = profile.filterType;
+    stepFilter.frequency.value = profile.cutoff * pitchVariation;
+    stepFilter.Q.value = profile.q;
     const noiseGain = context.createGain();
-    noiseGain.gain.setValueAtTime(0, now);
-    noiseGain.gain.linearRampToValueAtTime(sprinting ? 1.4 : 1.0, now + 0.01);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + (sprinting ? 0.18 : 0.16));
+    noiseGain.gain.setValueAtTime(0.001, now);
+    noiseGain.gain.linearRampToValueAtTime(profile.noiseGain, now + 0.008);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + profile.duration);
     noise.connect(noiseGain);
     noiseGain.connect(stepFilter);
+    stepFilter.connect(output);
     noise.start(now);
-    noise.stop(now + 0.22);
+    noise.stop(now + profile.duration + 0.03);
 
     const thump = context.createOscillator();
     thump.type = "sine";
-    thump.frequency.setValueAtTime(sprinting ? 88 : 72, now);
-    thump.frequency.exponentialRampToValueAtTime(sprinting ? 52 : 44, now + 0.1);
+    thump.frequency.setValueAtTime(profile.thumpStart * pitchVariation, now);
+    thump.frequency.exponentialRampToValueAtTime(profile.thumpEnd * pitchVariation, now + 0.1);
     const thumpGain = context.createGain();
-    thumpGain.gain.setValueAtTime(0, now);
-    thumpGain.gain.linearRampToValueAtTime(sprinting ? 0.7 : 0.55, now + 0.006);
+    thumpGain.gain.setValueAtTime(0.001, now);
+    thumpGain.gain.linearRampToValueAtTime(profile.thumpGain, now + 0.006);
     thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
     thump.connect(thumpGain);
-    thumpGain.connect(master);
+    thumpGain.connect(output);
     thump.start(now);
     thump.stop(now + 0.16);
+    let cleanupSource = thump;
+
+    if (profile.toneType) {
+      const tone = context.createOscillator();
+      tone.type = profile.toneType;
+      tone.frequency.setValueAtTime(profile.toneStart * pitchVariation, now);
+      tone.frequency.exponentialRampToValueAtTime(profile.toneEnd * pitchVariation, now + profile.toneDuration);
+      const toneGain = context.createGain();
+      toneGain.gain.setValueAtTime(0.001, now);
+      toneGain.gain.linearRampToValueAtTime(profile.toneGain, now + 0.005);
+      toneGain.gain.exponentialRampToValueAtTime(0.001, now + profile.toneDuration);
+      tone.connect(toneGain);
+      toneGain.connect(output);
+      tone.start(now);
+      tone.stop(now + profile.toneDuration + 0.02);
+      if (profile.toneDuration + 0.02 >= 0.16) cleanupSource = tone;
+    }
+    cleanupSource.addEventListener("ended", () => output.disconnect(), { once: true });
   }
 
   function update(flicker, movementState = {}) {
@@ -182,7 +216,7 @@ export function createAmbientHum() {
       ? Math.max(0.4, 0.5 - speed * 0.012)
       : Math.max(0.58, 0.72 - speed * 0.025);
     if (now - lastStepAt >= stepInterval) {
-      playFootstep({ sprinting });
+      playFootstep({ sprinting, surface: normalizeFootstepSurface(movementState.footstepSurface) });
       lastStepAt = now;
     }
   }

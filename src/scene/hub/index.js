@@ -197,7 +197,9 @@ export function createHubScene({ initialState = null, entryContext = null } = {}
     { level: 1, side: -1, z: -111, symbolSeed: 7 },
     { level: 6, side: 1, z: -83, symbolSeed: 2 },
     { level: 3, side: -1, z: -54, symbolSeed: 9 },
+    { level: 12, side: 1, z: -54, symbolSeed: 31 },
     { level: 0, side: 1, z: -17, symbolSeed: 4 },
+    { level: 13, side: -1, z: -17, symbolSeed: 37 },
     { level: 7, side: -1, z: 21, symbolSeed: 1 },
     { level: 10, side: 1, z: 21, symbolSeed: 23 },
     { level: 2, side: 1, z: 57, symbolSeed: 11 },
@@ -297,6 +299,7 @@ export function createHubScene({ initialState = null, entryContext = null } = {}
     exitMode: "network",
     nextLevel: null,
     isWalkable,
+    getFootstepSurface: (position) => Math.abs(position.x) <= 6 ? "asphalt" : "concrete",
     update,
     interact: (playerPosition, access) => exitNetwork.interact(playerPosition, access),
     getLevelKeyTargetPosition: (targetLevel) =>

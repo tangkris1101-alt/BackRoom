@@ -24,14 +24,19 @@ const levelEight = await import("../src/scene/level-eight/layout.js");
 const levelNine = await import("../src/scene/level-nine/layout.js");
 const levelTen = await import("../src/scene/level-ten/layout.js");
 const levelEleven = await import("../src/scene/level-eleven/layout.js");
+const levelTwelve = await import("../src/scene/level-twelve/layout.js");
+const levelThirteen = await import("../src/scene/level-thirteen/layout.js");
 const levelThirtySeven = await import("../src/scene/level-thirty-seven/layout.js");
 const levelZero = await import("../src/scene/level-zero/layout.js");
 const levelZeroWorld = await import("../src/scene/level-zero/world.js");
-const { CELL_SIZE, FIRESALT_EFFECT_RADIUS, FIRESALT_STUN_DURATION } = await import("../src/scene/constants.js");
+const { CELL_SIZE, FIRESALT_EFFECT_RADIUS, FIRESALT_STUN_DURATION, PLAYABLE_LEVEL_IDS } = await import("../src/scene/constants.js");
 const { createExitNetwork } = await import("../src/scene/common/exit-network.js");
+const { createLocalRelocationNetwork } = await import("../src/scene/common/local-relocation.js");
+const { createMatrixProgression } = await import("../src/scene/level-twelve/matrix-progression.js");
 const { createPassivePatrolState } = await import("../src/scene/entities/passive-patrol.js");
 const { createInteractionSpot } = await import("../src/scene/entities/interactions.js");
 const { resolveHubEntry } = await import("../src/scene/hub/entry.js");
+const { LEVEL_KEY_TARGETS } = await import("../src/scene/common/world-items.js");
 
 function canReach({ cols, rows, start, target, isOpen }) {
   const queue = [[start.col, start.row]];
@@ -98,13 +103,33 @@ assert.equal(levelTen.LEVEL_TEN_WHEAT_PLOTS.length, 12);
 assert.deepEqual([levelEleven.LEVEL_ELEVEN_COLS, levelEleven.LEVEL_ELEVEN_ROWS], [60, 48]);
 assert.equal(canReach({ cols: 60, rows: 48, start: levelEleven.LEVEL_ELEVEN_START_CELL, target: levelEleven.LEVEL_ELEVEN_BACKROAD_CELL, isOpen: levelEleven.isLevelElevenOpenCell }), true);
 assert.equal(canReach({ cols: 60, rows: 48, start: levelEleven.LEVEL_ELEVEN_START_CELL, target: levelEleven.LEVEL_ELEVEN_POOL_EXIT_CELL, isOpen: levelEleven.isLevelElevenOpenCell }), true);
+assert.equal(canReach({ cols: 60, rows: 48, start: levelEleven.LEVEL_ELEVEN_START_CELL, target: levelEleven.LEVEL_ELEVEN_MATRIX_WINDOW_CELL, isOpen: levelEleven.isLevelElevenOpenCell }), true);
+assert.equal(canReach({ cols: 60, rows: 48, start: levelEleven.LEVEL_ELEVEN_START_CELL, target: levelEleven.LEVEL_ELEVEN_APARTMENT_EXIT_CELL, isOpen: levelEleven.isLevelElevenOpenCell }), true);
+assert.deepEqual([levelTwelve.LEVEL_TWELVE_COLS, levelTwelve.LEVEL_TWELVE_ROWS], [40, 34]);
+for (const target of [levelTwelve.LEVEL_TWELVE_COPYCAT_CELL, levelTwelve.LEVEL_TWELVE_STAIR_CELL, levelTwelve.LEVEL_TWELVE_EXIT_CELL]) {
+  assert.equal(canReach({ cols: 40, rows: 34, start: levelTwelve.LEVEL_TWELVE_START_CELL, target, isOpen: levelTwelve.isLevelTwelveOpenCell }), true);
+}
+assert.deepEqual([levelThirteen.LEVEL_THIRTEEN_COLS, levelThirteen.LEVEL_THIRTEEN_ROWS], [72, 42]);
+assert.deepEqual(levelThirteen.LEVEL_THIRTEEN_FLOORS.map((floor) => floor.id), [0, 71, 283]);
+assert.equal(levelThirteen.LEVEL_THIRTEEN_APARTMENTS.length, 5);
+assert.equal(levelThirteen.getLevelThirteenSpawnFloor(11).id, 0);
+assert.equal(levelThirteen.getLevelThirteenSpawnFloor(12).id, 283);
+assert.equal(levelThirteen.getLevelThirteenSpawnFloor(-1).id, 71);
+assert.equal(levelThirteen.updateLevelThirteenLethargy(0, true, 45), 1);
+assert.equal(levelThirteen.updateLevelThirteenLethargy(1, false, 12), 0);
+for (const [col, row] of [[11, 37], [35, 37], [35, 4], [59, 4], [18, 7], [42, 12], [55, 19], [41, 12]]) {
+  assert.equal(levelThirteen.isLevelThirteenOpenCell(col, row), true, `Level 13 route cell ${col},${row} must be open`);
+}
 assert.equal(canReach({ cols: 48, rows: 36, start: levelThirtySeven.LEVEL_THIRTY_SEVEN_START_CELL, target: levelThirtySeven.LEVEL_THIRTY_SEVEN_TARGET_CELL, isOpen: levelThirtySeven.isLevelThirtySevenOpenCell }), true);
 assert.equal(loadFixture(1, 8).player.level, -1);
 assert.equal(loadFixture(2, 8).player.level, 8);
 assert.equal(loadFixture(2, 9).player.level, 9);
 assert.equal(loadFixture(2, 10).player.level, 10);
 assert.equal(loadFixture(2, 11).player.level, 11);
+assert.equal(loadFixture(2, 12).player.level, 12);
+assert.equal(loadFixture(2, 13).player.level, 13);
 assert.equal(loadFixture(2, 37).player.level, 37);
+assert.deepEqual(LEVEL_KEY_TARGETS, PLAYABLE_LEVEL_IDS.filter((level) => level !== -1));
 
 const savedSmiler = loadFixture(2, 8, {
   8: [{ id: "smiler-1", type: "smiler", position: { x: 4, z: 5 }, alertTimer: 3, stunnedTimer: 2 }],
@@ -191,6 +216,39 @@ assert.deepEqual(thresholdNetwork.getState(), {});
 assert.equal(thresholdNetwork.update(0.016, { x: 0, z: 0 })?.targetLevel, 10);
 assert.equal(thresholdNetwork.update(0.016, { x: 0, z: 0 }), null);
 
+// Local relocations are one-shot signals, re-arm after leaving, and persist
+// only their interaction count rather than marking a level complete.
+const relocationCamera = new THREE.PerspectiveCamera();
+const relocationNetwork = createLocalRelocationNetwork(relocationCamera, [{
+  id: "test-local-loop",
+  position: { x: 0, z: 0 },
+  destination: { x: 12, z: 8, yaw: Math.PI / 2 },
+  radius: 1.5,
+}], {});
+const firstRelocation = relocationNetwork.update({ x: 0, z: 0 });
+assert.match(firstRelocation.id, /^test-local-loop-1$/);
+assert.deepEqual({ x: firstRelocation.x, z: firstRelocation.z, yaw: firstRelocation.yaw }, { x: 12, z: 8, yaw: Math.PI / 2 });
+assert.equal(relocationNetwork.update({ x: 0, z: 0 }), null);
+relocationNetwork.update({ x: 4, z: 0 });
+assert.match(relocationNetwork.update({ x: 0, z: 0 }).id, /^test-local-loop-2$/);
+assert.deepEqual(relocationNetwork.getState(), { "test-local-loop": { count: 2 } });
+
+const matrixProgression = createMatrixProgression();
+assert.equal(matrixProgression.beginChairObservation(), false);
+assert.equal(matrixProgression.completeCopycat(), false);
+assert.equal(matrixProgression.tryDoor(), false);
+assert.equal(matrixProgression.beginChairObservation(), true);
+assert.equal(matrixProgression.updateChairObservation(4, true), false);
+assert.equal(matrixProgression.updateChairObservation(4, false), false);
+assert.equal(matrixProgression.updateChairObservation(4, true), true);
+assert.equal(matrixProgression.tryDoor(), false);
+assert.equal(matrixProgression.completeCopycat(), true);
+assert.equal(matrixProgression.tryDoor(), true);
+const restoredMatrix = createMatrixProgression(matrixProgression.getInteractionState());
+assert.equal(restoredMatrix.doorOpened, true);
+assert.equal(restoredMatrix.chairCompleted, true);
+assert.equal(restoredMatrix.copycatCompleted, true);
+
 // Level 11's hound patrols harmlessly until a Firesalt burst breaks the effect.
 const passivePatrol = createPassivePatrolState({
   points: [{ x: 4, z: 0 }, { x: 4, z: 4 }],
@@ -255,6 +313,7 @@ assert.equal(hubCompletionEntry.spawn, defaultHubSpawn);
 assert.deepEqual(hubCompletionEntry.interactions, {});
 assert.equal(hubCompletionEntry.entryRoute, null);
 const mainSource = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
+const hubSource = await readFile(new URL("../src/scene/hub/index.js", import.meta.url), "utf8");
 const levelZeroSource = await readFile(new URL("../src/scene/level-zero/index.js", import.meta.url), "utf8");
 const uiTextSource = await readFile(new URL("../src/ui/text.js", import.meta.url), "utf8");
 assert.match(levelZeroSource, /id: "level-zero-meg-file"/);
@@ -270,7 +329,14 @@ assert.doesNotMatch(mainSource, /LEVEL_TRANSITION_MS/);
 assert.match(mainSource, /const debugBypassHubLocks = isDebugFeaturesActive\(\) && world\?\.level === HUB_LEVEL;/);
 assert.match(mainSource, /debugBypassHubLocks \|\| getLevelKeyTarget/);
 assert.match(mainSource, /nextLevelInfo\.level === HUB_LEVEL\s*\? \{ type: "door", sourceLevel: world\.level \}/);
+assert.match(mainSource, /\{ type: "route", sourceLevel: world\.level, exitId \}/);
 assert.match(mainSource, /entryContext: transition\.entryContext/);
+assert.match(mainSource, /\(world\.movementSpeedMultiplier \?\? 1\)\s*\* \(metrics\.playerModifiers\?\.movementSpeedMultiplier \?\? 1\)/);
+assert.match(mainSource, /if \(typeof entity\.contact === "boolean"\) return entity\.contact;/);
+const hubRouteBlock = hubSource.match(/const routes = \[([\s\S]*?)\]\.map/)?.[1] ?? "";
+const hubRouteLevels = [...hubRouteBlock.matchAll(/\{ level:\s*(-?\d+)/g)].map((match) => Number(match[1]));
+assert.equal(hubRouteLevels.length, 15);
+assert.deepEqual([...hubRouteLevels].sort((a, b) => a - b), [...LEVEL_KEY_TARGETS].sort((a, b) => a - b));
 const controlsSource = await readFile(new URL("../src/first-person-controls.js", import.meta.url), "utf8");
 assert.match(controlsSource, /event\.code === "KeyC"/);
 assert.match(controlsSource, /this\.camera\.fov = nextFov/);
@@ -295,6 +361,30 @@ assert.equal(zoomCanvas.dataset.zoomed, "true");
 zoomControls.onKeyUp({ code: "KeyC", preventDefault: () => {} });
 zoomControls.update(0.5);
 assert.ok(Math.abs(zoomCamera.fov - 72) < 0.1);
+zoomControls.setEnvironmentModifiers({ movementSpeedMultiplier: 0.78, staminaRecoveryMultiplier: 0.5 });
+assert.equal(zoomControls.environmentSpeedMultiplier, 0.78);
+assert.equal(zoomControls.environmentStaminaRecoveryMultiplier, 0.5);
+zoomControls.verticalVelocity = -18;
+assert.equal(zoomControls.relocate({ x: 9, z: -7, yaw: 1.25 }), true);
+assert.deepEqual([zoomCamera.position.x, zoomCamera.position.z, zoomControls.verticalVelocity, zoomControls.yaw], [9, -7, 0, 1.25]);
+
+const gaitCamera = new THREE.PerspectiveCamera(72, 1, 0.05, 100);
+const gaitControls = new FirstPersonControls({
+  camera: gaitCamera,
+  canvas: zoomCanvas,
+  isWalkable: () => true,
+  getFloorHeight: () => 0,
+  spawn: { x: 0, z: 0, yaw: 0 },
+});
+gaitControls.onKeyDown({ code: "KeyW", preventDefault: () => {} });
+gaitControls.update(0.1);
+const walkingCycleAdvance = gaitControls.walkCycle;
+gaitControls.onKeyDown({ code: "ShiftLeft", preventDefault: () => {} });
+gaitControls.walkCycle = 0;
+gaitControls.update(0.1);
+const sprintingCycleAdvance = gaitControls.walkCycle;
+assert.ok(sprintingCycleAdvance > walkingCycleAdvance * 1.3);
+assert.equal(gaitControls.isSprinting, true);
 
 // Exit furniture must carry a visible fixture and a matching source light.
 // In particular, elevator cabins may not use an opaque threshold plane that
@@ -320,9 +410,13 @@ const sceneIndexSource = await readFile(new URL("../src/scene/index.js", import.
 const levelNineSource = await readFile(new URL("../src/scene/level-nine/index.js", import.meta.url), "utf8");
 const levelTenSource = await readFile(new URL("../src/scene/level-ten/index.js", import.meta.url), "utf8");
 const levelElevenSource = await readFile(new URL("../src/scene/level-eleven/index.js", import.meta.url), "utf8");
+const levelTwelveSource = await readFile(new URL("../src/scene/level-twelve/index.js", import.meta.url), "utf8");
+const levelThirteenSource = await readFile(new URL("../src/scene/level-thirteen/index.js", import.meta.url), "utf8");
 const levelOneSource = await readFile(new URL("../src/scene/level-one/index.js", import.meta.url), "utf8");
 const levelOnePropsSource = await readFile(new URL("../src/scene/level-one/props.js", import.meta.url), "utf8");
 const viewModelSource = await readFile(new URL("../src/scene/common/view-model.js", import.meta.url), "utf8");
+const ambientAudioSource = await readFile(new URL("../src/ambient-audio.js", import.meta.url), "utf8");
+const { getFootstepProfile, resolveFootstepSurface } = await import("../src/scene/common/footstep-surfaces.js");
 assert.match(levelEightSource, /targetLevel:\s*9/);
 assert.match(sceneIndexSource, /level-nine\/index\.js/);
 assert.match(levelNineSource, /targetLevel:\s*10/);
@@ -332,7 +426,20 @@ assert.match(levelTenSource, /targetLevel:\s*11/);
 assert.match(levelTenSource, /level:\s*10/);
 assert.match(levelElevenSource, /targetLevel:\s*10/);
 assert.match(levelElevenSource, /targetLevel:\s*37/);
+assert.match(levelElevenSource, /targetLevel:\s*12/);
+assert.match(levelElevenSource, /targetLevel:\s*13/);
 assert.match(levelElevenSource, /passivePatrol:/);
+assert.match(sceneIndexSource, /level-twelve\/index\.js/);
+assert.match(sceneIndexSource, /level-thirteen\/index\.js/);
+assert.match(levelTwelveSource, /targetLevel:\s*13/);
+assert.match(levelTwelveSource, /nextLevel:\s*doorEntered \? 10/);
+assert.match(levelTwelveSource, /createMatrixProgression\(savedInteractions\)/);
+assert.match(levelThirteenSource, /getLevelThirteenSpawnFloor\(entryContext\?\.sourceLevel\)/);
+assert.match(levelThirteenSource, /targetLevel:\s*3/);
+assert.match(levelThirteenSource, /movementSpeedMultiplier: THREE\.MathUtils\.lerp\(1, 0\.78, lethargy\)/);
+assert.match(levelThirteenSource, /staminaRecoveryMultiplier: THREE\.MathUtils\.lerp\(1, 0\.5, lethargy\)/);
+assert.match(levelThirteenSource, /contactRadius:\s*1\.05/);
+assert.match(levelThirteenSource, /contactDamage:\s*18/);
 assert.match(levelNineSource, /level-nine-asphalt-roads/);
 assert.doesNotMatch(levelNineSource, /collectGridWallTransforms|CEILING_Y|createLevelNineCeilingTexture/);
 const levelNinePropsSource = await readFile(new URL("../src/scene/level-nine/props.js", import.meta.url), "utf8");
@@ -343,5 +450,13 @@ assert.match(levelOneSource, /createLevelOneLights\(scene, fixturePositions, \{ 
 assert.match(levelOneSource, /applyLevelOnePropLightField\(scene, lightField\)/);
 assert.match(levelOnePropsSource, /fixtures\.updatePointLights = \(playerPosition, delta, elapsed\)/);
 assert.match(viewModelSource, /setFirstPersonViewModelLighting/);
+assert.match(viewModelSource, /THREE\.MathUtils\.lerp\(0\.72, 1\.68, sprintBlend\)/);
+assert.match(controlsSource, /this\.isSprinting \? 11\.4 : 7\.8/);
+assert.match(ambientAudioSource, /getFootstepProfile\(surface\)/);
+assert.match(mainSource, /canvas\.dataset\.footstepSurface = footstepSurface/);
+assert.equal(resolveFootstepSurface({ level: 0 }, { x: 0, z: 0 }), "carpet");
+assert.equal(resolveFootstepSurface({ level: 2 }, { x: 0, z: 0 }), "metal");
+assert.equal(resolveFootstepSurface({ level: 9, getFootstepSurface: () => "asphalt" }, { x: 0, z: 0 }), "asphalt");
+assert.notDeepEqual(getFootstepProfile("carpet"), getFootstepProfile("metal"));
 
 console.log("content expansion checks passed");

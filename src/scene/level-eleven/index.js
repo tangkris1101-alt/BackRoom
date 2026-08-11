@@ -14,6 +14,8 @@ import {
   LEVEL_ELEVEN_START_CELL,
   LEVEL_ELEVEN_BACKROAD_CELL,
   LEVEL_ELEVEN_POOL_EXIT_CELL,
+  LEVEL_ELEVEN_MATRIX_WINDOW_CELL,
+  LEVEL_ELEVEN_APARTMENT_EXIT_CELL,
   LEVEL_ELEVEN_HOUND_PATROL_CELLS,
   isLevelElevenOpenCell,
   isLevelElevenRoadCell,
@@ -21,7 +23,7 @@ import {
   levelElevenWorldToCell,
 } from "./layout.js";
 import { createLevelElevenAsphaltMaps, createLevelElevenPavementMaps } from "./textures.js";
-import { addLevelElevenDetails } from "./props.js";
+import { addLevelElevenDetails, addLevelElevenExpansionEntrances } from "./props.js";
 
 export function createLevelElevenScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
@@ -34,6 +36,8 @@ export function createLevelElevenScene({ initialState = null } = {}) {
   const spawnCell = levelElevenCellCenter(LEVEL_ELEVEN_START_CELL.col, LEVEL_ELEVEN_START_CELL.row);
   const backroadPosition = levelElevenCellCenter(LEVEL_ELEVEN_BACKROAD_CELL.col, LEVEL_ELEVEN_BACKROAD_CELL.row);
   const poolExitPosition = levelElevenCellCenter(LEVEL_ELEVEN_POOL_EXIT_CELL.col, LEVEL_ELEVEN_POOL_EXIT_CELL.row);
+  const matrixWindowEntry = levelElevenCellCenter(LEVEL_ELEVEN_MATRIX_WINDOW_CELL.col, LEVEL_ELEVEN_MATRIX_WINDOW_CELL.row);
+  const apartmentEntry = levelElevenCellCenter(LEVEL_ELEVEN_APARTMENT_EXIT_CELL.col, LEVEL_ELEVEN_APARTMENT_EXIT_CELL.row);
   const spawn = { ...spawnCell, yaw: LEVEL_ELEVEN_START_CELL.yaw };
   const coarse = window.matchMedia?.("(pointer: coarse), (max-width: 800px)").matches;
   const low = isLowQuality();
@@ -75,10 +79,13 @@ export function createLevelElevenScene({ initialState = null } = {}) {
   sun.position.set(-45, 78, 36);
   scene.add(sun);
   const details = addLevelElevenDetails(scene, { coarse });
+  const expansionEntrances = addLevelElevenExpansionEntrances(scene);
   const isWalkable = createGridWalkability({ worldToCell: levelElevenWorldToCell, isOpen: isLevelElevenOpenCell, colliders: details.colliders });
   const routes = [
     { id: "level-eleven-backroad-ten", targetLevel: 10, targetLabel: "LEVEL 10", label: "BACK ROAD", kind: "threshold", position: backroadPosition, enterRadius: 5.2 },
     { id: "level-eleven-public-pool-0037", targetLevel: 37, targetLabel: "LEVEL 37", label: "PUBLIC POOL #0037", kind: "door", position: poolExitPosition, rotation: Math.PI / 2, singleDoor: true, canClose: false },
+    { id: "level-eleven-matrix-window", targetLevel: 12, targetLabel: "LEVEL 12", label: "CENSORED WINDOW", kind: "threshold", position: matrixWindowEntry, entryPosition: matrixWindowEntry, enterRadius: 2.25 },
+    { id: "level-eleven-apartment-thirteen", targetLevel: 13, targetLabel: "LEVEL 13", label: "APARTMENTS", kind: "door", position: { x: apartmentEntry.x, z: apartmentEntry.z + CELL_SIZE / 2 - 0.18 }, entryPosition: apartmentEntry, rotation: Math.PI, singleDoor: true, canClose: false },
   ];
   const exitNetwork = createExitNetwork(scene, camera, routes, initialState?.interactions ?? {});
   const pickupSet = createStandardPickupSet(scene, {
@@ -86,7 +93,7 @@ export function createLevelElevenScene({ initialState = null } = {}) {
     rows: LEVEL_ELEVEN_ROWS,
     isCellOpen: isLevelElevenOpenCell,
     getCellCenter: levelElevenCellCenter,
-    avoidPositions: [spawnCell, backroadPosition, poolExitPosition],
+    avoidPositions: [spawnCell, backroadPosition, poolExitPosition, matrixWindowEntry, apartmentEntry],
     blockedAabbs: details.colliders,
     initialState: initialState?.pickups ?? {},
     includeFiresalt: true,
@@ -112,6 +119,7 @@ export function createLevelElevenScene({ initialState = null } = {}) {
 
   function update(delta, elapsed, playerPosition, effects = {}) {
     details.update(elapsed);
+    expansionEntrances.update(elapsed);
     const entered = exitNetwork.update(delta, playerPosition);
     if (entered) objectiveReached = true;
     const pickupStates = pickupSet.update(delta, elapsed, playerPosition);
@@ -119,12 +127,15 @@ export function createLevelElevenScene({ initialState = null } = {}) {
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const backroadDistance = Math.hypot(playerPosition.x - backroadPosition.x, playerPosition.z - backroadPosition.z);
     const poolDistance = Math.hypot(playerPosition.x - poolExitPosition.x, playerPosition.z - poolExitPosition.z);
-    const exitDistance = Math.min(backroadDistance, poolDistance);
+    const matrixDistance = Math.hypot(playerPosition.x - matrixWindowEntry.x, playerPosition.z - matrixWindowEntry.z);
+    const apartmentDistance = Math.hypot(playerPosition.x - apartmentEntry.x, playerPosition.z - apartmentEntry.z);
+    const exitDistance = Math.min(backroadDistance, poolDistance, matrixDistance, apartmentDistance);
     const flicker = 0.82 + Math.sin(elapsed * 0.21) * 0.025;
     return {
       exitDistance: Math.round(exitDistance),
       exitReached: Boolean(entered),
       nextLevel: entered?.targetLevel,
+      exitId: entered?.id ?? null,
       entityContact: houndState.contact,
       flicker,
       pickups: Object.values(pickupStates),
@@ -133,7 +144,12 @@ export function createLevelElevenScene({ initialState = null } = {}) {
       focusInteraction: exitNetwork.inspect(playerPosition),
       focusItem: pickupSet.inspect(camera),
       lightState: updateLightState(delta, flicker),
-      statusText: houndState.provoked ? "THE 11 EFFECT IS BROKEN" : poolDistance < 18 ? "PUBLIC POOL #0037" : backroadDistance < 18 ? "BACK ROAD" : "THE ENDLESS CITY",
+      statusText: houndState.provoked
+        ? "THE 11 EFFECT IS BROKEN"
+        : matrixDistance < 14 ? "THE WINDOW CENSORS ITSELF"
+          : apartmentDistance < 14 ? "APARTMENT BUILDING 13"
+            : poolDistance < 18 ? "PUBLIC POOL #0037"
+              : backroadDistance < 18 ? "BACK ROAD" : "THE ENDLESS CITY",
     };
   }
 

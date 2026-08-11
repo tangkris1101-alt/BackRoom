@@ -5,6 +5,8 @@ export const LEVEL_ELEVEN_ROWS = 48;
 export const LEVEL_ELEVEN_START_CELL = { col: 29, row: 44, yaw: 0 };
 export const LEVEL_ELEVEN_BACKROAD_CELL = { col: 2, row: 37 };
 export const LEVEL_ELEVEN_POOL_EXIT_CELL = { col: 55, row: 9 };
+export const LEVEL_ELEVEN_MATRIX_WINDOW_CELL = { col: 19, row: 12 };
+export const LEVEL_ELEVEN_APARTMENT_EXIT_CELL = { col: 37, row: 40 };
 export const LEVEL_ELEVEN_ORIGIN_X = -(LEVEL_ELEVEN_COLS * CELL_SIZE) / 2;
 export const LEVEL_ELEVEN_ORIGIN_Z = -(LEVEL_ELEVEN_ROWS * CELL_SIZE) / 2;
 

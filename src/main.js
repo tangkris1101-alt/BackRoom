@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import "./styles.css";
 import { createAmbientHum } from "./ambient-audio.js";
+import { resolveFootstepSurface } from "./scene/common/footstep-surfaces.js";
 import { DebugMode, DEBUG_PLAYABLE_LEVELS } from "./debug-mode.js";
 import { createBackroomsScene, getBackroomsLevelInfo, preloadLevelScene } from "./scene.js";
 import { FirstPersonControls } from "./first-person-controls.js";
@@ -96,6 +97,8 @@ const healthMeter = document.querySelector(".health-meter");
 const healthLabel = document.querySelector("#health-label");
 const healthFill = document.querySelector("#health-fill");
 const damageFlash = document.querySelector("#damage-flash");
+const staticLayer = document.querySelector(".static-layer");
+const vignetteLayer = document.querySelector(".vignette");
 const flashlightMeter = document.querySelector(".flashlight-meter");
 const flashlightFill = document.querySelector("#flashlight-fill");
 const flashlightReadout = document.querySelector("#flashlight-readout");
@@ -1068,7 +1071,14 @@ let pickedUpItems = loadStringSet(PICKED_UP_KEY);
 }
 
 function getLocalizedText(collection, id) {
-  const lookupId = collection === ENTITY_TEXT && String(id).includes("smiler") ? "smiler" : id;
+  const normalizedEntityId = String(id).includes("smiler")
+    ? "smiler"
+    : String(id).includes("window-entity")
+      ? "window-entity"
+      : String(id).includes("faceling")
+        ? "faceling"
+        : id;
+  const lookupId = collection === ENTITY_TEXT ? normalizedEntityId : id;
   return collection[currentLanguage]?.[lookupId] ?? collection.en?.[lookupId] ?? collection["zh-CN"]?.[lookupId] ?? {};
 }
 
@@ -2013,11 +2023,11 @@ function showLevelDangerBriefing(levelInfo) {
   }, 1100);
 }
 
-function beginLevelTransition(nextLevel) {
+function beginLevelTransition(nextLevel, exitId = null) {
   const nextLevelInfo = getBackroomsLevelInfo(nextLevel);
   const entryContext = nextLevelInfo.level === HUB_LEVEL
     ? { type: "door", sourceLevel: world.level }
-    : null;
+    : { type: "route", sourceLevel: world.level, exitId };
   if (levelBriefingTimer) {
     window.clearTimeout(levelBriefingTimer);
     levelBriefingTimer = 0;
@@ -3487,6 +3497,25 @@ function updateHud(metrics, controlState, elapsed) {
 }
 
 let playerHealthCooldown = 0;
+let lastRelocationId = null;
+
+function applyScenePresentation(metrics = {}) {
+  const effects = metrics.screenEffects ?? {};
+  const staticAmount = Math.max(0, Math.min(1, effects.static ?? 0));
+  const whiteout = Math.max(0, Math.min(1, effects.whiteout ?? 0));
+  const desaturation = Math.max(0, Math.min(1, effects.desaturation ?? 0));
+  const vignette = Math.max(0, Math.min(1, effects.vignette ?? 0));
+  if (staticLayer) {
+    staticLayer.style.opacity = String(0.035 + staticAmount * 0.25);
+    staticLayer.dataset.testCard = effects.testCard ? "true" : "false";
+  }
+  if (vignetteLayer) {
+    const edge = 0.08 + vignette * 0.34;
+    const lower = 0.075 + vignette * 0.2;
+    vignetteLayer.style.background = `radial-gradient(circle at 50% 48%, transparent 0 54%, rgba(0, 0, 0, ${edge}) 80%), linear-gradient(to bottom, rgba(0, 0, 0, 0.04), transparent 24%, rgba(0, 0, 0, ${lower}))`;
+  }
+  canvas.style.filter = `saturate(${1 - desaturation * 0.82}) brightness(${1 + whiteout * 0.28})`;
+}
 
 function applyEntityContactDamage(delta, metrics) {
   if (isDebugFeaturesActive()) return;
@@ -3501,14 +3530,19 @@ function applyEntityContactDamage(delta, metrics) {
   const hit = entities.find((entity) => {
     if (!entity?.active || entity.stunned) return false;
     if (!Number.isFinite(entity.distance)) return false;
+    if (Number.isFinite(entity.contactDamage) && entity.contactDamage <= 0) return false;
+    if (typeof entity.contact === "boolean") return entity.contact;
     const id = entity.id ?? "";
-    const radius = id.includes("hound") ? HOUND_CONTACT_RADIUS : BACTERIA_CONTACT_RADIUS;
-    return entity.contact === true || entity.distance <= radius;
+    const radius = Number.isFinite(entity.contactRadius)
+      ? Math.max(0.1, entity.contactRadius)
+      : id.includes("hound") ? HOUND_CONTACT_RADIUS : BACTERIA_CONTACT_RADIUS;
+    return entity.distance <= radius;
   });
   if (!hit) return;
   const id = hit.id ?? "";
   let damage;
-  if (id === "level-seven-thing") damage = LEVEL_SEVEN_THING_DAMAGE;
+  if (Number.isFinite(hit.contactDamage)) damage = Math.max(0, hit.contactDamage);
+  else if (id === "level-seven-thing") damage = LEVEL_SEVEN_THING_DAMAGE;
   else if (id.includes("hound")) damage = HOUND_DAMAGE;
   else if (id.includes("smiler")) damage = SMILER_DAMAGE;
   else damage = BACTERIA_DAMAGE;
@@ -3611,6 +3645,20 @@ function animate(timestamp) {
     firesaltPosition: firesaltState.position,
     firesaltRadius: firesaltState.radius,
   });
+  controls.setEnvironmentModifiers({
+    movementSpeedMultiplier: (world.movementSpeedMultiplier ?? 1)
+      * (metrics.playerModifiers?.movementSpeedMultiplier ?? 1),
+    staminaRecoveryMultiplier: metrics.playerModifiers?.staminaRecoveryMultiplier ?? 1,
+  });
+  applyScenePresentation(metrics);
+  if (metrics.relocation?.id && metrics.relocation.id !== lastRelocationId) {
+    controls.relocate(metrics.relocation);
+    lastRelocationId = metrics.relocation.id;
+    canvas.dataset.relocationId = metrics.relocation.id;
+  } else if (!metrics.relocation) {
+    lastRelocationId = null;
+    delete canvas.dataset.relocationId;
+  }
   const looseItems = worldItems?.update(world.camera.position) ?? [];
   const looseItemFocus = worldItems?.inspect(world.camera) ?? null;
   metrics = {
@@ -3629,7 +3677,7 @@ function animate(timestamp) {
   if (shouldEnterExit(metrics) && !gameFailed && !exitComplete && !levelTransition) {
     const nextLevel = metrics.nextLevel ?? world.nextLevel;
     if (nextLevel !== null && nextLevel !== undefined) {
-      beginLevelTransition(nextLevel);
+      beginLevelTransition(nextLevel, metrics.exitId ?? null);
     } else {
       expireCompassAtExit();
       exitComplete = true;
@@ -3645,7 +3693,9 @@ function animate(timestamp) {
   if (levelTransition) {
     ambientHum.stopAllEntityAudio();
   } else {
-    ambientHum.update(metrics.flicker, controlState);
+    const footstepSurface = resolveFootstepSurface(world, world.camera.position);
+    canvas.dataset.footstepSurface = footstepSurface;
+    ambientHum.update(metrics.flicker, { ...controlState, footstepSurface });
     ambientHum.updateLevelAudio(world.level);
     ambientHum.updateEntityAudio(metrics.entities);
   }
