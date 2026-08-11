@@ -1,6 +1,7 @@
 // Generated from local Git history by `npm.cmd run changelog:sync`.
 // English titles preserve commit subjects; Chinese titles reuse saved translations or CLI overrides.
 export const CHANGELOG_ENTRIES = [
+  { commit: "ec5aadf", date: "2026-08-11", title: "feat: add Levels 12 and 13 and retire TurboWarp tooling", titleZh: "新增 Level 12、Level 13、地面脚步反馈并退役 TurboWarp 工具链" },
   { commit: "48468e9", date: "2026-08-11", title: "feat: add Levels 10 and 11 with HUD fixes", titleZh: "新增 Level 10、Level 11 并修复移动端体力标识" },
   { commit: "d06336d", date: "2026-08-11", title: "fix: restore quality controls and sync changelog", titleZh: "fix: restore quality controls and sync changelog" },
   { commit: "ecc729f", date: "2026-08-10", title: "fix: complete mobile material resource cleanup", titleZh: "完善移动端材质资源清理" },
@@ -12,5 +13,4 @@ export const CHANGELOG_ENTRIES = [
   { commit: "2659ba7", date: "2026-07-27", title: "Update Backrooms build ID", titleZh: "更新 Backrooms 构建标识" },
   { commit: "10e9392", date: "2026-07-27", title: "Update Backrooms standalone build", titleZh: "更新 Backrooms 独立版构建" },
   { commit: "14b1cfb", date: "2026-07-27", title: "Expand Backrooms gameplay and level content", titleZh: "扩展 Backrooms 玩法与层级内容" },
-  { commit: "924d2fd", date: "2026-07-26", title: "Fix mobile HUD layout: raise inventory bar above touch controls", titleZh: "修复移动端 HUD：将背包栏上移至触控按键上方" },
 ];
