@@ -23,10 +23,10 @@ function createLampPoolTexture() {
   canvas.height = 128;
   const context = canvas.getContext("2d");
   const gradient = context.createRadialGradient(64, 64, 4, 64, 64, 64);
-  gradient.addColorStop(0, "rgba(255, 232, 177, 0.9)");
-  gradient.addColorStop(0.28, "rgba(255, 196, 105, 0.45)");
-  gradient.addColorStop(0.68, "rgba(255, 174, 76, 0.1)");
-  gradient.addColorStop(1, "rgba(255, 174, 76, 0)");
+  gradient.addColorStop(0, "rgba(255, 255, 255, 0.92)");
+  gradient.addColorStop(0.28, "rgba(255, 255, 255, 0.48)");
+  gradient.addColorStop(0.68, "rgba(255, 255, 255, 0.11)");
+  gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
   context.fillStyle = gradient;
   context.fillRect(0, 0, 128, 128);
   const texture = new THREE.CanvasTexture(canvas);
@@ -40,10 +40,10 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
   const windowMaterial = new THREE.MeshStandardMaterial({ color: 0xb9a766, emissive: 0xd19c3d, emissiveIntensity: 0.35, roughness: 0.42 });
   const porchMaterial = new THREE.MeshStandardMaterial({ color: 0x6a6257, roughness: 0.88 });
   const lampMetal = new THREE.MeshStandardMaterial({ color: 0x242b30, roughness: 0.8, metalness: 0.68 });
-  const lampGlass = new THREE.MeshStandardMaterial({ color: 0xffe7ac, emissive: 0xffbd52, emissiveIntensity: 3.2, roughness: 0.2 });
+  const lampGlass = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 3.2, roughness: 0.2 });
   const roadReflector = new THREE.MeshBasicMaterial({ color: 0xc6b98c, transparent: true, opacity: 0.52 });
   const lampPoolTexture = createLampPoolTexture();
-  const lampPoolGeometry = new THREE.CircleGeometry(7.6, 32);
+  const lampPoolGeometry = new THREE.CircleGeometry(15.2, 32);
   const colliders = [];
 
   HOUSE_CELLS.forEach((house, index) => {
@@ -90,11 +90,11 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
     group.add(pole, arm, bulb);
     // The lamps are roughly 40-48m apart, so each one needs a broad but soft
     // reach to keep the road readable without turning the night scene flat.
-    const light = new THREE.PointLight(0xffd18b, 0, 34, 1.45);
+    const light = new THREE.PointLight(0xffffff, 0, 68, 1.45);
     light.position.set(0.62, 3.05, 0);
     const poolMaterial = new THREE.MeshBasicMaterial({
       map: lampPoolTexture,
-      color: 0xffcf83,
+      color: 0xffffff,
       transparent: true,
       opacity: 0,
       depthWrite: false,
@@ -146,7 +146,7 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
         const strength = (fogSurge ? 0.52 : 0.88) * flicker;
         light.intensity = strength * 3.6;
         bulb.material.emissiveIntensity = 2.1 + strength * 4.2;
-        pool.material.opacity = (fogSurge ? 0.2 : 0.38) * flicker;
+        pool.material.opacity = (fogSurge ? 0.12 : 0.24) * flicker;
         pool.scale.setScalar(fogSurge ? 0.88 : 1);
       });
     },
