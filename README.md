@@ -87,6 +87,7 @@ npm run build
 - **整站部署**：必须把 `dist/` 作为静态站点根目录；不要把仓库根目录作为线上静态根目录
 - **在线入口**：`dist/index.html` 按需加载关卡 chunk，账户验证/重置查询参数可直接由该入口处理
 - **缓存策略**：`index.html` 使用 `no-cache`；`dist/assets/` 中的哈希资源使用 `public, max-age=31536000, immutable`
+- **配置隔离**：Vite 构建不读取项目根 `.env`；该文件只由账户 API 使用
 - **自动更新部署**：WebHook 在服务器执行 `npm ci`、检查、账户测试和 `npm run build` 后再切换/刷新站点
 - **单文件部署**：只上传 `backrooms.html` 仍可运行，但无法自动检测后续更新
 - 仓库根目录的 `index.html` 仅用于单文件发行/本地入口，不作为生产网站首页
