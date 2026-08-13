@@ -515,16 +515,6 @@ export function createAccountSystem(hooks) {
     event.preventDefault();
     setOpen(false);
   });
-  elements.modal?.addEventListener("pointerdown", (event) => {
-    if (event.target === elements.modal) setOpen(false);
-  });
-  window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && elements.modal && !elements.modal.hasAttribute("hidden")) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      setOpen(false);
-    }
-  }, true);
   elements.tabs.forEach((tab) => tab.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     setMode(tab.dataset.accountMode);

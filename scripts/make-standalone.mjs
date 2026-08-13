@@ -1,14 +1,14 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const distDirectory = resolve(projectRoot, "dist");
-const sourcePath = resolve(distDirectory, "app.html");
+const standaloneBuildDirectory = resolve(projectRoot, ".standalone-dist");
+const sourcePath = resolve(standaloneBuildDirectory, "app.html");
 const outputPath = resolve(projectRoot, "backrooms.html");
 const distOutputPath = resolve(distDirectory, "backrooms.html");
-const distIndexPath = resolve(distDirectory, "index.html");
 const versionManifestPath = resolve(projectRoot, "backrooms-version.json");
 const distVersionManifestPath = resolve(distDirectory, "backrooms-version.json");
 
@@ -39,7 +39,7 @@ if (!stylesheetMatch || !scriptMatch) {
 }
 
 const resolveAsset = (assetPath) =>
-  resolve(distDirectory, assetPath.replace(/^\/+/, ""));
+  resolve(standaloneBuildDirectory, assetPath.replace(/^\/+/, ""));
 
 const stylesheetPath = resolveAsset(stylesheetMatch[1]);
 const [css, javascript] = await Promise.all([
@@ -158,9 +158,10 @@ html = html
 await Promise.all([
   writeFileWithRetry(outputPath, html, "utf8"),
   writeFileWithRetry(distOutputPath, html, "utf8"),
-  writeFileWithRetry(distIndexPath, html, "utf8"),
   writeFileWithRetry(versionManifestPath, `${JSON.stringify({ buildId })}\n`, "utf8"),
   writeFileWithRetry(distVersionManifestPath, `${JSON.stringify({ buildId })}\n`, "utf8"),
 ]);
+
+await rm(standaloneBuildDirectory, { recursive: true, force: true });
 
 console.log(`Created standalone Backrooms build ${buildId}`);

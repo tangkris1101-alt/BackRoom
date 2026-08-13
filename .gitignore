@@ -1,6 +1,7 @@
 backup/
 node_modules/
 dist/
+.standalone-dist/
 
 .agents/
 .codex/

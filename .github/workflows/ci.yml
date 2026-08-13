@@ -41,3 +41,6 @@ jobs:
 
       - name: Build production artifacts
         run: npm run build
+
+      - name: Test online and standalone outputs
+        run: npm run test:build

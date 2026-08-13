@@ -57,7 +57,7 @@
 └── vite.config.js
 ```
 
-> `dist/`、`backrooms.html` 由 `npm run build` 生成，已被 `.gitignore` 忽略。
+> `dist/` 和临时构建目录由 `npm run build` 生成并忽略；根目录 `backrooms.html` 是随版本更新的单文件发行产物。
 
 ---
 
@@ -77,15 +77,19 @@ npm run test:accounts
 ```bash
 npm run build
 # 产出：
-#   dist/app.html             — Vite 构建产物
+#   dist/index.html           — 在线入口（动态分包）
+#   dist/assets/              — 带哈希、可长期缓存的在线资源
+#   dist/backrooms.html       — 独立版下载副本
 #   backrooms.html (根目录)    — 内联所有资源的单文件版
 ```
 
 ### 部署
-- **整站部署**：把 `dist/` 作为静态站点根目录
-- **自动更新部署**：上传 `dist/`（其中的 `backrooms-version.json` 会让旧页面自动切换到新版本）
+- **整站部署**：必须把 `dist/` 作为静态站点根目录；不要把仓库根目录作为线上静态根目录
+- **在线入口**：`dist/index.html` 按需加载关卡 chunk，账户验证/重置查询参数可直接由该入口处理
+- **缓存策略**：`index.html` 使用 `no-cache`；`dist/assets/` 中的哈希资源使用 `public, max-age=31536000, immutable`
+- **自动更新部署**：WebHook 在服务器执行 `npm ci`、检查、账户测试和 `npm run build` 后再切换/刷新站点
 - **单文件部署**：只上传 `backrooms.html` 仍可运行，但无法自动检测后续更新
-- 仓库根目录的 `index.html` 会读取版本清单后再跳转到 `backrooms.html`
+- 仓库根目录的 `index.html` 仅用于单文件发行/本地入口，不作为生产网站首页
 
 ---
 
