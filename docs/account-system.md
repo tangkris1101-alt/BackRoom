@@ -61,7 +61,7 @@ npm run build
 ## 未来生产配置（本轮未执行）
 
 1. 新建权限受限的 MySQL 用户和独立数据库，执行 `server/migrations/001_accounts.sql`。
-2. 复制 `server/config.example.env` 到受保护的进程环境，替换数据库和 SMTP 占位值；不要提交真实密钥。
+2. 复制 `server/config.example.env` 为项目根目录 `.env`，替换数据库和 SMTP 占位值并设置为仅运行用户可读；不要提交真实密钥。服务启动时会自动读取该文件，进程管理器不必重复保存这些变量。
 3. 设置 `NODE_ENV=production`、`BACKROOMS_DB_MODE=mysql`、精确的 `BACKROOMS_ALLOWED_ORIGINS` 和 HTTPS `BACKROOMS_PUBLIC_URL`。
 4. 以独立低权限系统用户运行 `node server/index.js`，只监听 `127.0.0.1:8787`。
 5. 在现有 HTTPS Nginx 站点中仅反代 `/api/` 到本地 API，并保留原始 `Host`、`X-Forwarded-Proto` 和客户端地址。

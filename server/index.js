@@ -1,9 +1,18 @@
 import { createServer } from "node:http";
+import { loadEnvFile } from "node:process";
+import { fileURLToPath } from "node:url";
 import { createAccountApiHandler } from "./app.js";
 import { loadServerConfig } from "./config.js";
 import { createConsoleMailer, createSmtpMailer } from "./mailer.js";
 import { MemoryAccountStore } from "./memory-store.js";
 import { MysqlAccountStore } from "./mysql-store.js";
+
+const projectEnvPath = fileURLToPath(new URL("../.env", import.meta.url));
+try {
+  loadEnvFile(projectEnvPath);
+} catch (error) {
+  if (error?.code !== "ENOENT") throw error;
+}
 
 const config = loadServerConfig();
 const store = config.databaseMode === "mysql"
