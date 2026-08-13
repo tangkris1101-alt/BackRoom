@@ -244,7 +244,7 @@ export function updateFirstPersonHazmatViewModel(viewModel, elapsed) {
     motionDelta,
   );
   const sprintBlend = viewModel.userData.sprintBlend;
-  const strideScale = THREE.MathUtils.lerp(0.72, 1.68, sprintBlend);
+  const strideScale = THREE.MathUtils.lerp(0.78, 2.2, sprintBlend);
   const bodyScale = THREE.MathUtils.lerp(0.72, 1.35, sprintBlend);
   const breathe = Math.sin(elapsed * 1.8) * 0.0045;
   const bob = Math.sin(stridePhase * 2) * 0.0045 * walkAmount * bodyScale;
@@ -273,14 +273,14 @@ export function updateFirstPersonHazmatViewModel(viewModel, elapsed) {
     const restQuaternion = mesh?.userData.viewModelRestQuaternion;
     if (!mesh || !restPosition || !restQuaternion) continue;
     mesh.position.set(
-      restPosition.x - sideSign * stride * 0.012,
+      restPosition.x - sideSign * stride * 0.028,
       restPosition.y + Math.sin(stridePhase * 2) * 0.008 * walkAmount * bodyScale - landingImpact * 0.016,
-      restPosition.z + returnSwing * 0.022 + (airborne ? 0.012 : 0),
+      restPosition.z + returnSwing * 0.06 + (airborne ? 0.012 : 0),
     );
     motionEuler.set(
-      returnSwing * 0.016 + landingImpact * 0.018,
-      sideSign * stride * 0.012,
-      sideSign * stride * 0.018,
+      returnSwing * 0.055 + landingImpact * 0.018,
+      sideSign * stride * 0.04,
+      sideSign * stride * 0.065,
     );
     motionQuaternion.setFromEuler(motionEuler);
     mesh.quaternion.copy(restQuaternion).multiply(motionQuaternion);

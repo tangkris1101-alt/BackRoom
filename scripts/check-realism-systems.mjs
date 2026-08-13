@@ -7,16 +7,31 @@ import {
   GROUND_BRAKING,
   GRAVITY,
   JUMP_VELOCITY,
+  SPRINT_STEP_DISTANCE,
   WALK_STEP_DISTANCE,
   moveToward,
 } from "../src/first-person-controls.js";
-import { HUB_LEVEL, PLAYABLE_LEVEL_IDS } from "../src/scene/constants.js";
+import { HUB_LEVEL, PLAYABLE_LEVEL_IDS, circleIntersectsAabb } from "../src/scene/constants.js";
 import {
   getLevelPresentation,
   getSurfaceState,
   hasLevelPresentation,
 } from "../src/scene/common/presentation.js";
-import { createContactAttackCycle } from "../src/scene/entities/behavior.js";
+import {
+  createContactAttackCycle,
+  createEntityNavCellFilter,
+  getEntityPlayerDistance,
+} from "../src/scene/entities/behavior.js";
+import { aStar, createNavGrid } from "../src/scene/entities/pathfinding.js";
+import {
+  LEVEL_ELEVEN_COLS,
+  LEVEL_ELEVEN_HOUND_PATROL_CELLS,
+  LEVEL_ELEVEN_ROWS,
+  isLevelElevenOpenCell,
+  levelElevenCellCenter,
+  levelElevenWorldToCell,
+} from "../src/scene/level-eleven/layout.js";
+import { snapEntityStateToNavCell } from "../src/scene/common/snap.js";
 
 const high = getGraphicsProfile("high");
 const low = getGraphicsProfile("low");
@@ -55,7 +70,16 @@ assert.ok(getSurfaceState("grass").traction < 1);
 assert.equal(GROUND_ACCELERATION, 14);
 assert.equal(GROUND_BRAKING, 18);
 assert.equal(AIR_CONTROL, 0.35);
-assert.equal(WALK_STEP_DISTANCE, 0.72);
+assert.equal(WALK_STEP_DISTANCE, 1.35);
+assert.equal(SPRINT_STEP_DISTANCE, 1.75);
+assert.ok(
+  (3.05 / WALK_STEP_DISTANCE) < (5.64 / SPRINT_STEP_DISTANCE),
+  "sprint foot-plant cadence stays faster than walking without doubling it",
+);
+assert.ok(
+  (5.64 / SPRINT_STEP_DISTANCE) < 3.3,
+  "sprint camera bob stays below 3.3 vertical cycles per second",
+);
 let groundVelocity = 0;
 for (let index = 0; index < 10; index += 1) {
   groundVelocity = moveToward(groundVelocity, 3.05, GROUND_ACCELERATION * 0.1);
@@ -67,6 +91,65 @@ for (let index = 0; index < 2; index += 1) {
 assert.equal(groundVelocity, 0, "ground braking reaches rest without reversing");
 assert.equal(moveToward(0, 3.05, GROUND_ACCELERATION * AIR_CONTROL * 0.1), 0.49);
 assert.ok(Math.abs((JUMP_VELOCITY ** 2) / (2 * GRAVITY) - 1.153) < 0.01);
+
+assert.equal(
+  getEntityPlayerDistance({ x: 0, z: 0 }, { x: 2, z: 0 }),
+  2,
+  "entity HUD distance remains relative to the player",
+);
+const colliderAwareCellOpen = createEntityNavCellFilter({
+  isCellOpen: (col, row) => col >= 0 && row >= 0,
+  cellCenter: (col, row) => ({ x: col * 4 + 2, z: row * 4 + 2 }),
+  isWalkable: (x, z, radius) => Math.hypot(x - 14, z - 6) > 2.1 + radius,
+});
+assert.equal(colliderAwareCellOpen(3, 1), false, "entity navigation blocks a prop-occupied cell");
+assert.equal(colliderAwareCellOpen(3, 2), true, "entity navigation keeps the adjacent road cell open");
+assert.equal(colliderAwareCellOpen(-1, 1), false, "entity navigation preserves the base grid boundary");
+
+const levelElevenCarCenter = levelElevenCellCenter(34, 37);
+const levelElevenCarBounds = {
+  minX: levelElevenCarCenter.x - 2.1,
+  maxX: levelElevenCarCenter.x + 2.1,
+  minZ: levelElevenCarCenter.z - 1,
+  maxZ: levelElevenCarCenter.z + 1,
+};
+const levelElevenHoundCellOpen = createEntityNavCellFilter({
+  isCellOpen: isLevelElevenOpenCell,
+  cellCenter: levelElevenCellCenter,
+  isWalkable: (x, z, radius) => !circleIntersectsAabb(x, z, radius, levelElevenCarBounds),
+});
+const levelElevenHoundNav = createNavGrid({
+  cols: LEVEL_ELEVEN_COLS,
+  rows: LEVEL_ELEVEN_ROWS,
+  isCellOpen: levelElevenHoundCellOpen,
+});
+const levelElevenPatrolPath = aStar(
+  levelElevenHoundNav,
+  LEVEL_ELEVEN_HOUND_PATROL_CELLS[0],
+  LEVEL_ELEVEN_HOUND_PATROL_CELLS[1],
+);
+assert.ok(levelElevenPatrolPath?.length > 0, "Level 11 Hound keeps a route around the parked car");
+assert.equal(
+  levelElevenPatrolPath.some(({ col, row }) => col === 34 && row === 37),
+  false,
+  "Level 11 Hound patrol path does not cross the parked-car collider",
+);
+const stuckLevelElevenHound = {
+  id: "hound-level-eleven",
+  position: { ...levelElevenCellCenter(34, 37) },
+};
+const recoveredLevelElevenHound = snapEntityStateToNavCell(stuckLevelElevenHound, {
+  isCellOpen: levelElevenHoundCellOpen,
+  worldToCell: levelElevenWorldToCell,
+  cellCenter: levelElevenCellCenter,
+  cols: LEVEL_ELEVEN_COLS,
+  rows: LEVEL_ELEVEN_ROWS,
+});
+assert.notDeepEqual(
+  recoveredLevelElevenHound.position,
+  stuckLevelElevenHound.position,
+  "a Level 11 Hound saved in the parked-car cell relocates to an open navigation cell",
+);
 
 const attack = createContactAttackCycle({ windup: 0.3, hitDuration: 0.1, recovery: 0.5 });
 assert.equal(attack.update(0.1, true).phase, "windup");
@@ -82,6 +165,7 @@ assert.equal(attack.phase, "idle");
 const renderingSource = await readFile(new URL("../src/rendering-pipeline.js", import.meta.url), "utf8");
 const audioSource = await readFile(new URL("../src/ambient-audio.js", import.meta.url), "utf8");
 const mainSource = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
+const houndSource = await readFile(new URL("../src/scene/entities/hound.js", import.meta.url), "utf8");
 assert.match(renderingSource, /GTAOPass/);
 assert.match(renderingSource, /PCFShadowMap/);
 assert.match(renderingSource, /canReducePixelRatio/);
@@ -101,6 +185,11 @@ assert.doesNotMatch(
   "Level 5 music must not download when another level starts",
 );
 assert.match(audioSource, /if \(inHotel\) ensureHotelJazzAudio\(\);/);
+assert.match(
+  houndSource,
+  /distance:\s*playerDistance/,
+  "Hound markers must expose player-relative distance while passive patrol targets a waypoint",
+);
 assert.match(mainSource, /averageFrameMs/);
 assert.match(mainSource, /onePercentLowFps/);
 assert.match(mainSource, /renderingPipeline\.prewarm/);

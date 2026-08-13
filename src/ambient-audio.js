@@ -9,6 +9,10 @@ const AUDIO_VOLUME_KEYS = Object.freeze({
   music: "backrooms:audio:music",
 });
 
+// Foot plants need to sit above the continuous electrical hum without also
+// raising breathing, entities, or the other foley routed through foleyBus.
+const FOOTSTEP_OUTPUT_GAIN = 2.1;
+
 function loadVolume(key, fallback) {
   try {
     const stored = window.localStorage?.getItem(key);
@@ -199,7 +203,7 @@ export function createAmbientHum() {
     stepSide *= -1;
 
     const output = context.createGain();
-    output.gain.value = effort;
+    output.gain.value = effort * FOOTSTEP_OUTPUT_GAIN;
     if (context.createStereoPanner) {
       const panner = context.createStereoPanner();
       panner.pan.value = stepSide * 0.12;
@@ -286,8 +290,8 @@ export function createAmbientHum() {
     const speed = Math.max(0, movementState.movementSpeed ?? 0);
     const sprinting = Boolean(movementState.sprinting);
     const stepInterval = sprinting
-      ? Math.max(0.4, 0.5 - speed * 0.012)
-      : Math.max(0.58, 0.72 - speed * 0.025);
+      ? Math.max(0.28, 0.38 - speed * 0.012)
+      : Math.max(0.42, 0.54 - speed * 0.025);
     if (now - lastStepAt >= stepInterval) {
       playFootstep({ sprinting, surface: normalizeFootstepSurface(movementState.footstepSurface) });
       lastStepAt = now;

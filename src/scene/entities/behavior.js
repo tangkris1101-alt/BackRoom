@@ -8,6 +8,21 @@ const DEFAULT_STUCK_MIN_PROGRESS = 0.22;
 const DEFAULT_DIRECT_CHASE_DISTANCE = 7.5;
 const PLAYER_DIRECT_LOOK_MINIMUM_DOT = 0.985;
 
+export function getEntityPlayerDistance(entityPosition, playerPosition) {
+  return Math.hypot(
+    playerPosition.x - entityPosition.x,
+    playerPosition.z - entityPosition.z,
+  );
+}
+
+export function createEntityNavCellFilter({ isCellOpen, cellCenter, isWalkable, radius = 0.32 }) {
+  return (col, row) => {
+    if (!isCellOpen(col, row)) return false;
+    const center = cellCenter(col, row);
+    return Boolean(center && isWalkable(center.x, center.z, radius));
+  };
+}
+
 export function createContactAttackCycle({
   windup = 0.32,
   hitDuration = 0.12,

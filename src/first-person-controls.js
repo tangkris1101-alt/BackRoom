@@ -30,7 +30,11 @@ const ZOOM_RESPONSE = 18;
 export const GROUND_ACCELERATION = 14;
 export const GROUND_BRAKING = 18;
 export const AIR_CONTROL = 0.35;
-export const WALK_STEP_DISTANCE = 0.72;
+// One full vertical bob represents the next foot plant. These distances keep
+// the visual gait near a natural walking/running cadence instead of tying the
+// animation directly to the much shorter collision step length.
+export const WALK_STEP_DISTANCE = 1.35;
+export const SPRINT_STEP_DISTANCE = 1.75;
 
 export function moveToward(current, target, maxDelta) {
   if (Math.abs(target - current) <= maxDelta) return target;
@@ -781,7 +785,10 @@ export class FirstPersonControls {
     const blend = Math.min(1, delta * (moving ? 10 : 7));
     this.walkBobStrength += (targetStrength - this.walkBobStrength) * blend;
 
-    if (moving) this.walkCycle += (horizontalDistance / WALK_STEP_DISTANCE) * Math.PI;
+    if (moving) {
+      const gaitStepDistance = this.isSprinting ? SPRINT_STEP_DISTANCE : WALK_STEP_DISTANCE;
+      this.walkCycle += (horizontalDistance / gaitStepDistance) * Math.PI;
+    }
 
     const verticalAmplitude = this.isSprinting ? 0.044 : 0.026;
     const rollAmplitude = this.isSprinting ? 0.017 : 0.009;

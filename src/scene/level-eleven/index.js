@@ -5,7 +5,8 @@ import { createGridWalkability, createStandardPickupSet } from "../common/grid-w
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createExitNetwork } from "../common/exit-network.js";
 import { createHoundEntity, getFocusedEntity } from "../entities/index.js";
-import { snapEntityStates } from "../common/snap.js";
+import { createEntityNavCellFilter } from "../entities/behavior.js";
+import { snapEntityStateToNavCell, snapEntityStates } from "../common/snap.js";
 import { enableAoUv } from "../common/texture-utils.js";
 import { CELL_SIZE } from "../constants.js";
 import {
@@ -81,6 +82,11 @@ export function createLevelElevenScene({ initialState = null } = {}) {
   const details = addLevelElevenDetails(scene, { coarse });
   const expansionEntrances = addLevelElevenExpansionEntrances(scene);
   const isWalkable = createGridWalkability({ worldToCell: levelElevenWorldToCell, isOpen: isLevelElevenOpenCell, colliders: details.colliders });
+  const isHoundCellOpen = createEntityNavCellFilter({
+    isCellOpen: isLevelElevenOpenCell,
+    cellCenter: levelElevenCellCenter,
+    isWalkable,
+  });
   const routes = [
     { id: "level-eleven-backroad-ten", targetLevel: 10, targetLabel: "LEVEL 10", label: "BACK ROAD", kind: "threshold", position: backroadPosition, enterRadius: 5.2 },
     { id: "level-eleven-public-pool-0037", targetLevel: 37, targetLabel: "LEVEL 37", label: "PUBLIC POOL #0037", kind: "door", position: poolExitPosition, rotation: Math.PI / 2, singleDoor: true, canClose: false },
@@ -100,6 +106,16 @@ export function createLevelElevenScene({ initialState = null } = {}) {
     firesaltSpawnChance: 1,
   });
   const savedEntities = snapEntityStates(initialState?.entities ?? [], isWalkable);
+  const savedHoundState = snapEntityStateToNavCell(
+    savedEntities.find((entity) => entity.id === "hound-level-eleven") ?? null,
+    {
+      isCellOpen: isHoundCellOpen,
+      worldToCell: levelElevenWorldToCell,
+      cellCenter: levelElevenCellCenter,
+      cols: LEVEL_ELEVEN_COLS,
+      rows: LEVEL_ELEVEN_ROWS,
+    },
+  );
   const patrolPoints = LEVEL_ELEVEN_HOUND_PATROL_CELLS.map(({ col, row }) => levelElevenCellCenter(col, row));
   const hound = createHoundEntity(scene, {
     id: "hound-level-eleven",
@@ -107,10 +123,10 @@ export function createLevelElevenScene({ initialState = null } = {}) {
     isWalkable,
     speed: 1.55,
     passivePatrol: { points: patrolPoints, provokeDuration: 12 },
-    initialState: savedEntities.find((entity) => entity.id === "hound-level-eleven") ?? null,
+    initialState: savedHoundState,
     cols: LEVEL_ELEVEN_COLS,
     rows: LEVEL_ELEVEN_ROWS,
-    isCellOpen: isLevelElevenOpenCell,
+    isCellOpen: isHoundCellOpen,
     worldToCell: levelElevenWorldToCell,
     cellCenter: levelElevenCellCenter,
   });

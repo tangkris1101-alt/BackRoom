@@ -43,7 +43,7 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
   const lampGlass = new THREE.MeshStandardMaterial({ color: 0xffe7ac, emissive: 0xffbd52, emissiveIntensity: 3.2, roughness: 0.2 });
   const roadReflector = new THREE.MeshBasicMaterial({ color: 0xc6b98c, transparent: true, opacity: 0.52 });
   const lampPoolTexture = createLampPoolTexture();
-  const lampPoolGeometry = new THREE.CircleGeometry(4.15, 32);
+  const lampPoolGeometry = new THREE.CircleGeometry(7.6, 32);
   const colliders = [];
 
   HOUSE_CELLS.forEach((house, index) => {
@@ -88,8 +88,9 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
     const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), lampGlass);
     bulb.position.set(0.63, 3.19, 0);
     group.add(pole, arm, bulb);
-    // Keep the physical light local; the separate radial pool is its visible wet-asphalt reflection.
-    const light = new THREE.PointLight(0xffd18b, 0, 16, 2.05);
+    // The lamps are roughly 40-48m apart, so each one needs a broad but soft
+    // reach to keep the road readable without turning the night scene flat.
+    const light = new THREE.PointLight(0xffd18b, 0, 34, 1.45);
     light.position.set(0.62, 3.05, 0);
     const poolMaterial = new THREE.MeshBasicMaterial({
       map: lampPoolTexture,
@@ -143,10 +144,10 @@ export function addLevelNineDetails(scene, cellCenter, { coarse = false } = {}) 
       lamps.forEach(({ light, bulb, pool, phase }) => {
         const flicker = Math.sin(elapsed * 2.3 + phase) > 0.94 ? 0.18 : 1;
         const strength = (fogSurge ? 0.52 : 0.88) * flicker;
-        light.intensity = strength * 2.8;
+        light.intensity = strength * 3.6;
         bulb.material.emissiveIntensity = 2.1 + strength * 4.2;
-        pool.material.opacity = (fogSurge ? 0.18 : 0.34) * flicker;
-        pool.scale.setScalar(fogSurge ? 0.84 : 1);
+        pool.material.opacity = (fogSurge ? 0.2 : 0.38) * flicker;
+        pool.scale.setScalar(fogSurge ? 0.88 : 1);
       });
     },
   };

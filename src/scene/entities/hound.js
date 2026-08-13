@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { HOUND_CONTACT_RADIUS } from "../constants.js";
 import { createLimbSegment } from "../common/view-model.js";
-import { createContactAttackCycle, createEntityMover } from "./behavior.js";
+import { createContactAttackCycle, createEntityMover, getEntityPlayerDistance } from "./behavior.js";
 import { createPassivePatrolState } from "./passive-patrol.js";
 
 const HOUND_RECOMPUTE_INTERVAL = 0.42;
@@ -224,6 +224,10 @@ export function createHoundEntity(
         !stunned && (!passiveMode || provoked) && moveState.contact,
       );
       contact = attack.shouldDamage;
+      // In passive patrol mode the mover targets the next patrol point, so its
+      // distance describes the route target rather than the player. HUD
+      // markers and focus checks must always expose player-relative distance.
+      const playerDistance = getEntityPlayerDistance(group.position, playerPosition);
 
       const gait = Math.sin(elapsed * 7.2) * 0.035;
       group.position.y = isDormant
@@ -244,7 +248,7 @@ export function createHoundEntity(
         velocity: moveState.velocity ?? { x: 0, z: 0 },
         attackPhase: attack.phase,
         perception: moveState.perception ?? { lineOfSight: false, heardPlayer: false },
-        distance: moveState.distance,
+        distance: playerDistance,
         x: group.position.x,
         y: 0.9,
         z: group.position.z,

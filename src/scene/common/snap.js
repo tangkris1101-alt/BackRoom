@@ -37,3 +37,40 @@ export function snapEntityStates(entityStates, isWalkable) {
   if (!Array.isArray(entityStates)) return [];
   return entityStates.map((entity) => snapEntityState(entity, isWalkable));
 }
+
+export function snapEntityStateToNavCell(
+  entityState,
+  { isCellOpen, worldToCell, cellCenter, cols, rows, maxRadius = 8 } = {},
+) {
+  const position = entityState?.position;
+  if (
+    !position ||
+    !Number.isFinite(position.x) ||
+    !Number.isFinite(position.z) ||
+    typeof isCellOpen !== "function" ||
+    typeof worldToCell !== "function" ||
+    typeof cellCenter !== "function"
+  ) {
+    return entityState;
+  }
+
+  const origin = worldToCell(position.x, position.z);
+  if (isCellOpen(origin.col, origin.row)) return entityState;
+  const limit = Math.max(1, Math.floor(maxRadius));
+  for (let radius = 1; radius <= limit; radius += 1) {
+    for (let rowOffset = -radius; rowOffset <= radius; rowOffset += 1) {
+      for (let colOffset = -radius; colOffset <= radius; colOffset += 1) {
+        if (Math.abs(colOffset) + Math.abs(rowOffset) !== radius) continue;
+        const col = origin.col + colOffset;
+        const row = origin.row + rowOffset;
+        if (col < 0 || row < 0 || col >= cols || row >= rows || !isCellOpen(col, row)) continue;
+        const center = cellCenter(col, row);
+        return {
+          ...entityState,
+          position: { ...position, x: center.x, z: center.z },
+        };
+      }
+    }
+  }
+  return entityState;
+}
