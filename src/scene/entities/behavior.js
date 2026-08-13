@@ -8,6 +8,58 @@ const DEFAULT_STUCK_MIN_PROGRESS = 0.22;
 const DEFAULT_DIRECT_CHASE_DISTANCE = 7.5;
 const PLAYER_DIRECT_LOOK_MINIMUM_DOT = 0.985;
 
+export function createContactAttackCycle({
+  windup = 0.32,
+  hitDuration = 0.12,
+  recovery = 0.72,
+} = {}) {
+  let phase = "idle";
+  let timer = 0;
+  let hitConsumed = false;
+
+  return {
+    reset() {
+      phase = "idle";
+      timer = 0;
+      hitConsumed = false;
+    },
+    update(delta, inRange) {
+      let shouldDamage = false;
+      if (phase === "idle" && inRange) {
+        phase = "windup";
+        timer = windup;
+        hitConsumed = false;
+      } else if (phase === "windup" && !inRange) {
+        phase = "idle";
+        timer = 0;
+      }
+
+      if (phase !== "idle") timer -= Math.max(0, delta);
+      if (phase === "windup" && timer <= 1e-6) {
+        phase = "hit";
+        timer = hitDuration;
+      }
+      if (phase === "hit" && !hitConsumed) {
+        shouldDamage = inRange;
+        hitConsumed = true;
+      }
+      if (phase === "hit" && timer <= 1e-6) {
+        phase = "recovery";
+        timer = recovery;
+      }
+      if (phase === "recovery" && timer <= 1e-6) {
+        phase = "idle";
+        timer = 0;
+      }
+
+      return { phase, shouldDamage, progress: timer };
+    },
+    get phase() {
+      return phase;
+    },
+  };
+}
+
 function smoothAngle(current, target, maxStep) {
   let delta = ((target - current + Math.PI) % (Math.PI * 2)) - Math.PI;
   if (delta < -Math.PI) delta += Math.PI * 2;
@@ -127,6 +179,11 @@ export function createEntityMover({
       const directGazeChase =
         !isDormant &&
         playerDirectlyLooksAtEntity(effects.playerView, group, worldToCell, isCellOpen);
+      const lineOfSight = hasClearCellLine(group.position, playerPosition, worldToCell, isCellOpen);
+      const heardPlayer = Boolean(
+        (effects.playerSprinting && distance <= 24) ||
+        (effects.playerMoving && distance <= 10),
+      );
       const directChaseAllowed =
         (distance <= directChaseDistance || directGazeChase) &&
         stuckTimer <= stuckThreshold * 0.6;
@@ -252,6 +309,8 @@ export function createEntityMover({
         }
       }
 
+      const velocityX = delta > 0 ? (nextX - lastPositionX) / delta : 0;
+      const velocityZ = delta > 0 ? (nextZ - lastPositionZ) / delta : 0;
       group.position.x = nextX;
       group.position.z = nextZ;
       lastPositionX = nextX;
@@ -268,13 +327,30 @@ export function createEntityMover({
         playerPosition.x - group.position.x,
         playerPosition.z - group.position.z,
       );
+      const contact = !repelActive && !isDormant && currentDistance <= contactRadius;
+      const state = isDormant
+        ? "idle"
+        : repelActive
+          ? "retreat"
+          : contact
+            ? "attack"
+            : lineOfSight || directGazeChase
+              ? "chase"
+              : heardPlayer
+                ? "investigate"
+                : advanced
+                  ? "search"
+                  : "idle";
       return {
         repelActive,
         distance: currentDistance,
-        contact: !repelActive && !isDormant && currentDistance <= contactRadius,
+        contact,
         movementSpeed,
         advanced,
         dormant: isDormant,
+        state,
+        velocity: { x: velocityX, z: velocityZ },
+        perception: { lineOfSight, heardPlayer, directGaze: directGazeChase },
       };
     },
   };

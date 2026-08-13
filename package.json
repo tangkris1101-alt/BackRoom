@@ -4,17 +4,24 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "api:dev": "node server/index.js",
+    "api:mysql": "node --env-file=.env server/index.js",
+    "smtp:verify": "node scripts/verify-smtp.mjs",
     "bake:arms": "node scripts/bake-fps-arms.mjs",
     "dev": "vite --host 127.0.0.1",
     "prebuild": "node scripts/check-encoding.mjs src app.html",
-    "build": "npm run prebuild && vite build && node scripts/make-standalone.mjs",
-    "check": "node scripts/check-encoding.mjs && node scripts/check-content-expansion.mjs && node scripts/check-material-quality.mjs && node scripts/check-platform-collision.mjs && node scripts/check-item-ground-shadows.mjs",
+    "build": "npm run prebuild && vite build && node scripts/make-standalone.mjs && node scripts/check-standalone.mjs",
+    "check": "node scripts/check-encoding.mjs && node scripts/check-content-expansion.mjs && node scripts/check-material-quality.mjs && node scripts/check-platform-collision.mjs && node scripts/check-item-ground-shadows.mjs && node scripts/check-realism-systems.mjs",
     "changelog:sync": "node scripts/sync-changelog.mjs",
     "changelog:check": "node scripts/sync-changelog.mjs --check",
+    "test:accounts": "node --test tests/account-api.test.mjs tests/save-schema.test.mjs tests/server-config.test.mjs",
     "write:utf8": "node scripts/write-utf8.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "argon2": "^0.45.1",
+    "mysql2": "^3.23.3",
+    "nodemailer": "^9.0.5",
     "three": "0.184.0"
   },
   "devDependencies": {

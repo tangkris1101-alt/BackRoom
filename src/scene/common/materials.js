@@ -7,6 +7,16 @@ export const MATERIAL_QUALITY = {
   LOW: "low",
 };
 
+export const MATERIAL_PRESETS = Object.freeze({
+  wallpaper: Object.freeze({ roughness: 0.9, metalness: 0 }),
+  concrete: Object.freeze({ roughness: 0.94, metalness: 0 }),
+  carpet: Object.freeze({ roughness: 0.98, metalness: 0 }),
+  wood: Object.freeze({ roughness: 0.76, metalness: 0 }),
+  metal: Object.freeze({ roughness: 0.48, metalness: 0.72 }),
+  wet: Object.freeze({ roughness: 0.34, metalness: 0.04 }),
+  entitySkin: Object.freeze({ roughness: 0.68, metalness: 0 }),
+});
+
 let _currentQuality = null;
 
 function loadQuality() {
@@ -61,6 +71,16 @@ export function createGameMaterial(propsOrFactory = {}) {
     return new THREE.MeshLambertMaterial(lambertProps);
   }
   return new THREE.MeshStandardMaterial(props);
+}
+
+export function createSemanticMaterial(preset, propsOrFactory = {}) {
+  const defaults = MATERIAL_PRESETS[preset] ?? {};
+  return createGameMaterial(({ lowQuality }) => {
+    const props = typeof propsOrFactory === "function"
+      ? propsOrFactory({ lowQuality })
+      : propsOrFactory;
+    return { ...defaults, ...props };
+  });
 }
 
 /**

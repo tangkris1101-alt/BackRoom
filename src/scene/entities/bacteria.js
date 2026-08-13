@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { BACTERIA_CONTACT_RADIUS } from "../constants.js";
 import { createLimbSegment } from "../common/view-model.js";
-import { createEntityMover } from "./behavior.js";
+import { createContactAttackCycle, createEntityMover } from "./behavior.js";
 
 const BACTERIA_RECOMPUTE_INTERVAL = 0.48;
 const BACTERIA_STUCK_THRESHOLD = 0.66;
@@ -181,6 +181,7 @@ export function createBacteriaEntity(
     directChaseDistance: BACTERIA_DIRECT_CHASE_DISTANCE,
     turnRate: 7.2,
   });
+  const attackCycle = createContactAttackCycle({ windup: 0.38, hitDuration: 0.12, recovery: 0.74 });
 
   return {
     getState() {
@@ -195,7 +196,8 @@ export function createBacteriaEntity(
       const moveState = mover.update(delta, elapsed, playerPosition, effects, {
         speedScale: BACTERIA_PURSUIT_TENSION * (1 + Math.sin(elapsed * 2.4) * 0.035),
       });
-      contact = moveState.contact;
+      const attack = attackCycle.update(delta, moveState.contact);
+      contact = attack.shouldDamage;
 
       const proximity = Math.max(0, 1 - moveState.distance / 9);
       const sway = Math.sin(elapsed * 2.25) * (0.045 + proximity * 0.035);
@@ -203,9 +205,9 @@ export function createBacteriaEntity(
       group.rotation.z = sway;
       const baseScale = group.userData.baseScale ?? new THREE.Vector3(1, 1, 1);
       group.scale.set(
-        baseScale.x * (1 + Math.sin(elapsed * 4.2) * 0.012 * proximity),
-        baseScale.y * (1 + Math.sin(elapsed * 3.1) * 0.018 * proximity),
-        baseScale.z,
+        baseScale.x * (1 + Math.sin(elapsed * 4.2) * 0.012 * proximity + (attack.phase === "windup" ? 0.04 : 0)),
+        baseScale.y * (1 + Math.sin(elapsed * 3.1) * 0.018 * proximity - (attack.phase === "windup" ? 0.05 : 0)),
+        baseScale.z * (attack.phase === "hit" ? 1.12 : 1),
       );
       if (group.userData.head) {
         group.userData.head.rotation.x = Math.sin(elapsed * 1.9) * 0.12;
@@ -219,6 +221,10 @@ export function createBacteriaEntity(
         id,
         active: true,
         contact,
+        state: attack.phase === "idle" ? moveState.state : attack.phase === "recovery" ? "recover" : "attack",
+        velocity: moveState.velocity,
+        attackPhase: attack.phase,
+        perception: moveState.perception,
         distance: moveState.distance,
         x: group.position.x,
         y: 1.72,

@@ -2,10 +2,10 @@ import * as THREE from "three";
 import { SILENCE_LIQUID_DURATION } from "./scene/constants.js";
 
 const PLAYER_RADIUS = 0.36;
-const GRAVITY = 11.5;
+export const GRAVITY = 11.5;
 // 5.15 reaches roughly 1.15m, enough for the game\'s 0.9–1.1m tables while
 // keeping the jump below wall and shelf height.
-const JUMP_VELOCITY = 5.15;
+export const JUMP_VELOCITY = 5.15;
 const MAX_STAMINA = 100;
 const STAMINA_DRAIN_RATE = 10;
 const STAMINA_RECOVERY_RATE = 20;
@@ -27,6 +27,15 @@ const DEFAULT_HEALTH_REGEN_DURATION = 5;
 const ZOOM_FOV_FACTOR = 0.58;
 const ZOOM_FOV_MIN = 30;
 const ZOOM_RESPONSE = 18;
+export const GROUND_ACCELERATION = 14;
+export const GROUND_BRAKING = 18;
+export const AIR_CONTROL = 0.35;
+export const WALK_STEP_DISTANCE = 0.72;
+
+export function moveToward(current, target, maxDelta) {
+  if (Math.abs(target - current) <= maxDelta) return target;
+  return current + Math.sign(target - current) * maxDelta;
+}
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -68,6 +77,7 @@ export class FirstPersonControls {
     this.forward = new THREE.Vector3();
     this.right = new THREE.Vector3();
     this.move = new THREE.Vector3();
+    this.horizontalVelocity = new THREE.Vector2();
     this.isLocked = false;
     this.verticalVelocity = 0;
     this.groundY = this.eyeHeight;
@@ -98,6 +108,14 @@ export class FirstPersonControls {
     this.walkBobStrength = 0;
     this.headBobY = 0;
     this.rollOffset = 0;
+    this.turnRollOffset = 0;
+    this.movementPitchOffset = 0;
+    this.landingOffset = 0;
+    this.landingImpact = 0;
+    this.previousYaw = this.yaw;
+    this.previousMovementSpeed = 0;
+    this.surfaceTraction = 1;
+    this.surfaceState = { id: "concrete", traction: 1, wetness: 0 };
     this.isMoving = false;
     this.movementSpeed = 0;
     this.zoomRequested = false;
@@ -155,6 +173,11 @@ export class FirstPersonControls {
     this.bodyY = this.groundY;
     this.headBobY = 0;
     this.rollOffset = 0;
+    this.turnRollOffset = 0;
+    this.movementPitchOffset = 0;
+    this.landingOffset = 0;
+    this.landingImpact = 0;
+    this.horizontalVelocity.set(0, 0);
     this.walkCycle = 0;
     this.walkBobStrength = 0;
     this.camera.position.set(this.spawn.x, this.bodyY, this.spawn.z);
@@ -178,6 +201,8 @@ export class FirstPersonControls {
     this.movementSpeed = 0;
     this.yaw = this.spawn.yaw;
     this.pitch = -0.025;
+    this.previousYaw = this.yaw;
+    this.previousMovementSpeed = 0;
     this.applyRotation();
     this.syncViewModelMotion();
     this.syncCameraState();
@@ -191,6 +216,10 @@ export class FirstPersonControls {
     motion.movementSpeed = this.movementSpeed;
     motion.sprinting = this.isSprinting;
     motion.grounded = this.isGrounded;
+    motion.verticalVelocity = this.verticalVelocity;
+    motion.landingImpact = this.landingImpact;
+    motion.accelerationPitch = this.movementPitchOffset;
+    motion.turnRoll = this.turnRollOffset;
     this.camera.userData.firstPersonMotion = motion;
   }
 
@@ -209,7 +238,7 @@ export class FirstPersonControls {
     this.reset();
   }
 
-  setEnvironmentModifiers({ movementSpeedMultiplier = 1, staminaRecoveryMultiplier = 1 } = {}) {
+  setEnvironmentModifiers({ movementSpeedMultiplier = 1, staminaRecoveryMultiplier = 1, traction = this.surfaceTraction } = {}) {
     this.environmentSpeedMultiplier = clamp(
       Number.isFinite(movementSpeedMultiplier) ? movementSpeedMultiplier : 1,
       0.35,
@@ -220,6 +249,16 @@ export class FirstPersonControls {
       0,
       3,
     );
+    this.surfaceTraction = clamp(Number.isFinite(traction) ? traction : 1, 0.55, 1.2);
+  }
+
+  setSurfaceState(surfaceState = {}) {
+    this.surfaceState = {
+      id: typeof surfaceState.id === "string" ? surfaceState.id : "concrete",
+      traction: clamp(Number.isFinite(surfaceState.traction) ? surfaceState.traction : 1, 0.55, 1.2),
+      wetness: clamp(Number.isFinite(surfaceState.wetness) ? surfaceState.wetness : 0, 0, 1),
+    };
+    this.surfaceTraction = this.surfaceState.traction;
   }
 
   relocate({ x, z, yaw = this.yaw } = {}) {
@@ -232,10 +271,13 @@ export class FirstPersonControls {
     this.bodyY = this.groundY;
     this.camera.position.y = this.bodyY;
     this.verticalVelocity = 0;
+    this.horizontalVelocity.set(0, 0);
     this.hasFloorSupport = true;
     this.isGrounded = true;
     this.jumpQueued = false;
     this.headBobY = 0;
+    this.landingOffset = 0;
+    this.landingImpact = 0;
     this.yaw = Number.isFinite(yaw) ? yaw : this.yaw;
     this.applyRotation();
     this.syncViewModelMotion();
@@ -285,6 +327,7 @@ export class FirstPersonControls {
       : ALMOND_WATER_STAMINA_BONUS;
     this.drinkCancelled = false;
     this.verticalVelocity = 0;
+    this.horizontalVelocity.set(0, 0);
     this.hasFloorSupport = this.resolveFloorHeight(
       this.camera.position.x,
       this.camera.position.z,
@@ -354,8 +397,8 @@ export class FirstPersonControls {
   applyRotation() {
     this.camera.rotation.order = "YXZ";
     this.camera.rotation.y = this.yaw;
-    this.camera.rotation.x = this.pitch;
-    this.camera.rotation.z = this.rollOffset;
+    this.camera.rotation.x = clampPitch(this.pitch + this.movementPitchOffset + this.landingOffset * 0.24);
+    this.camera.rotation.z = this.rollOffset + this.turnRollOffset;
     this.syncCameraState();
   }
 
@@ -390,6 +433,11 @@ export class FirstPersonControls {
     this.canvas.dataset.silenceLiquidRemaining = this.silenceLiquidTimer.toFixed(1);
     this.canvas.dataset.moving = String(this.isMoving);
     this.canvas.dataset.movementSpeed = this.movementSpeed.toFixed(3);
+    this.canvas.dataset.velocityX = this.horizontalVelocity.x.toFixed(3);
+    this.canvas.dataset.velocityZ = this.horizontalVelocity.y.toFixed(3);
+    this.canvas.dataset.surface = this.surfaceState.id;
+    this.canvas.dataset.surfaceTraction = this.surfaceTraction.toFixed(2);
+    this.canvas.dataset.landingImpact = this.landingImpact.toFixed(3);
     this.canvas.dataset.headBob = this.headBobY.toFixed(3);
     this.canvas.dataset.walkCycle = this.walkCycle.toFixed(3);
     this.canvas.dataset.walkBobStrength = this.walkBobStrength.toFixed(3);
@@ -573,6 +621,7 @@ export class FirstPersonControls {
     this.isSprinting = false;
     this.isMoving = false;
     this.movementSpeed = 0;
+    this.horizontalVelocity.set(0, 0);
     this.zoomRequested = false;
     this.resetJoystick();
     this.syncViewModelMotion();
@@ -657,6 +706,8 @@ export class FirstPersonControls {
 
     if (!this.hasFloorSupport) this.isGrounded = false;
 
+    const wasGrounded = this.isGrounded;
+    const fallingVelocity = this.verticalVelocity;
     this.verticalVelocity -= GRAVITY * delta;
     this.bodyY += this.verticalVelocity * delta;
 
@@ -664,7 +715,13 @@ export class FirstPersonControls {
       this.bodyY = this.groundY;
       this.verticalVelocity = 0;
       this.isGrounded = true;
+      if (!wasGrounded && fallingVelocity < -2.5) {
+        this.landingImpact = clamp((-fallingVelocity - 2.5) / 5.5, 0, 1);
+        this.landingOffset = Math.max(this.landingOffset, 0.022 + this.landingImpact * 0.058);
+      }
     }
+    this.landingOffset *= Math.exp(-delta * 10.5);
+    this.landingImpact *= Math.exp(-delta * 4.8);
   }
 
   getStaminaRecoveryMultiplier() {
@@ -717,25 +774,27 @@ export class FirstPersonControls {
   }
 
   updateHeadBob(delta, horizontalDistance, hasMovementInput) {
-    const moving = hasMovementInput && horizontalDistance > 0.0001 && this.isGrounded;
+    const moving = horizontalDistance > 0.0001 && this.isGrounded;
     this.isMoving = moving;
     this.movementSpeed = delta > 0 ? horizontalDistance / delta : 0;
     const targetStrength = moving ? 1 : 0;
     const blend = Math.min(1, delta * (moving ? 10 : 7));
     this.walkBobStrength += (targetStrength - this.walkBobStrength) * blend;
 
-    if (moving) {
-      const targetSpeed = this.moveSpeed * (this.isSprinting ? this.sprintMultiplier : 1);
-      const speedRatio = horizontalDistance / Math.max(delta * targetSpeed, 0.0001);
-      const cadence = (this.isSprinting ? 11.4 : 7.8) * Math.min(1.18, Math.max(0.55, speedRatio));
-      this.walkCycle += cadence * delta;
-    }
+    if (moving) this.walkCycle += (horizontalDistance / WALK_STEP_DISTANCE) * Math.PI;
 
     const verticalAmplitude = this.isSprinting ? 0.044 : 0.026;
     const rollAmplitude = this.isSprinting ? 0.017 : 0.009;
     this.headBobY = Math.sin(this.walkCycle * 2) * verticalAmplitude * this.walkBobStrength;
     this.rollOffset = Math.sin(this.walkCycle) * rollAmplitude * this.walkBobStrength;
-    this.camera.position.y = this.bodyY + this.headBobY;
+    const speedDelta = this.movementSpeed - this.previousMovementSpeed;
+    const targetPitch = clamp(-speedDelta * 0.0035, -0.018, 0.018);
+    this.movementPitchOffset = THREE.MathUtils.damp(this.movementPitchOffset, targetPitch, 8, delta);
+    const yawDelta = Math.atan2(Math.sin(this.yaw - this.previousYaw), Math.cos(this.yaw - this.previousYaw));
+    this.turnRollOffset = THREE.MathUtils.damp(this.turnRollOffset, clamp(-yawDelta * 1.25, -0.022, 0.022), 10, delta);
+    this.camera.position.y = this.bodyY + this.headBobY - this.landingOffset;
+    this.previousMovementSpeed = this.movementSpeed;
+    this.previousYaw = this.yaw;
     this.syncViewModelMotion();
   }
 
@@ -767,6 +826,9 @@ export class FirstPersonControls {
     this.updateVerticalMotion(delta);
     this.resolveEmbeddedPosition(delta);
 
+    const inputMagnitude = Math.min(1, inputLength);
+    let targetVelocityX = 0;
+    let targetVelocityZ = 0;
     if (inputLength >= 0.01) {
       hasMovementInput = true;
       if (inputLength > 1) {
@@ -813,24 +875,37 @@ export class FirstPersonControls {
 
       const drinkMultiplier = this.isDrinking ? DRINK_MOVE_MULTIPLIER : 1;
       const superAlmondSpeedMultiplier = this.getMoveSpeedMultiplier();
-      const distance =
+      const targetSpeed =
         this.moveSpeed *
         (this.isSprinting ? this.sprintMultiplier : 1) *
         drinkMultiplier *
         superAlmondSpeedMultiplier *
-        this.environmentSpeedMultiplier *
-        delta;
-      this.move.normalize().multiplyScalar(distance);
+        this.environmentSpeedMultiplier;
+      this.move.normalize();
+      targetVelocityX = this.move.x * targetSpeed * inputMagnitude;
+      targetVelocityZ = this.move.z * targetSpeed * inputMagnitude;
+    }
 
-      const currentX = this.camera.position.x;
-      const currentZ = this.camera.position.z;
-      const resolved = this.resolveMove(
-        currentX + this.move.x,
-        currentZ + this.move.z,
-      );
-      horizontalDistance = Math.hypot(resolved.x - currentX, resolved.z - currentZ);
-      this.camera.position.x = resolved.x;
-      this.camera.position.z = resolved.z;
+    const acceleration = this.isGrounded
+      ? (hasMovementInput ? GROUND_ACCELERATION : GROUND_BRAKING) * this.surfaceTraction
+      : GROUND_ACCELERATION * AIR_CONTROL;
+    const velocityStep = acceleration * delta;
+    this.horizontalVelocity.x = moveToward(this.horizontalVelocity.x, targetVelocityX, velocityStep);
+    this.horizontalVelocity.y = moveToward(this.horizontalVelocity.y, targetVelocityZ, velocityStep);
+
+    const currentX = this.camera.position.x;
+    const currentZ = this.camera.position.z;
+    const plannedX = this.horizontalVelocity.x * delta;
+    const plannedZ = this.horizontalVelocity.y * delta;
+    const resolved = this.resolveMove(currentX + plannedX, currentZ + plannedZ);
+    const actualX = resolved.x - currentX;
+    const actualZ = resolved.z - currentZ;
+    horizontalDistance = Math.hypot(actualX, actualZ);
+    this.camera.position.x = resolved.x;
+    this.camera.position.z = resolved.z;
+    if (delta > 0) {
+      if (Math.abs(actualX - plannedX) > 0.0001) this.horizontalVelocity.x = actualX / delta;
+      if (Math.abs(actualZ - plannedZ) > 0.0001) this.horizontalVelocity.y = actualZ / delta;
     }
 
     if (!this.isSprinting && !this.unlimitedStamina) {
@@ -859,6 +934,9 @@ export class FirstPersonControls {
       moving: this.isMoving,
       grounded: this.isGrounded,
       movementSpeed: this.movementSpeed,
+      velocity: { x: this.horizontalVelocity.x, z: this.horizontalVelocity.y },
+      landingImpact: this.landingImpact,
+      surface: this.surfaceState.id,
       almondWaterActive: this.almondWaterTimer > 0,
       almondWaterRemaining: this.almondWaterTimer,
       almondWaterDuration: ALMOND_WATER_EFFECT_DURATION,

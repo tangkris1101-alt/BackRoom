@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { HOUND_CONTACT_RADIUS } from "../constants.js";
 import { createLimbSegment } from "../common/view-model.js";
-import { createEntityMover } from "./behavior.js";
+import { createContactAttackCycle, createEntityMover } from "./behavior.js";
 import { createPassivePatrolState } from "./passive-patrol.js";
 
 const HOUND_RECOMPUTE_INTERVAL = 0.42;
@@ -153,6 +153,7 @@ export function createHoundEntity(
     directChaseDistance: HOUND_DIRECT_CHASE_DISTANCE,
     turnRate: 10.5,
   });
+  const attackCycle = createContactAttackCycle({ windup: 0.3, hitDuration: 0.1, recovery: 0.66 });
 
   function isFlashlightHit(effects) {
     const beam = effects.flashlightBeam;
@@ -218,7 +219,11 @@ export function createHoundEntity(
             dormant: isDormant,
             speedScale: (passiveMode && !provoked ? 0.42 : closeSurge) * stride,
           });
-      contact = !stunned && (!passiveMode || provoked) && moveState.contact;
+      const attack = attackCycle.update(
+        delta,
+        !stunned && (!passiveMode || provoked) && moveState.contact,
+      );
+      contact = attack.shouldDamage;
 
       const gait = Math.sin(elapsed * 7.2) * 0.035;
       group.position.y = isDormant
@@ -227,6 +232,7 @@ export function createHoundEntity(
           ? 0.025 + Math.abs(Math.sin(elapsed * 19)) * 0.018
           : Math.abs(Math.sin(elapsed * 5.4)) * 0.032;
       group.rotation.z = isDormant ? Math.sin(elapsed * 0.9) * 0.012 : stunned ? Math.sin(elapsed * 27) * 0.085 : gait;
+      group.rotation.x = attack.phase === "windup" ? -0.12 : attack.phase === "hit" ? 0.16 : 0;
       stunLight.visible = stunned;
       stunLight.intensity = stunned ? 1.15 + Math.sin(elapsed * 18) * 0.35 : 0;
 
@@ -234,6 +240,10 @@ export function createHoundEntity(
         id,
         active: true,
         contact,
+        state: stunned ? "stunned" : attack.phase === "recovery" ? "recover" : attack.phase === "idle" ? moveState.state : "attack",
+        velocity: moveState.velocity ?? { x: 0, z: 0 },
+        attackPhase: attack.phase,
+        perception: moveState.perception ?? { lineOfSight: false, heardPlayer: false },
         distance: moveState.distance,
         x: group.position.x,
         y: 0.9,

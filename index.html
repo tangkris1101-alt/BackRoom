@@ -28,6 +28,10 @@
     <a id="backrooms-link" href="./backrooms.html">进入 Backrooms</a>
     <script>
       const gameUrl = new URL("./backrooms.html", window.location.href);
+      for (const [key, value] of new URLSearchParams(window.location.search)) {
+        gameUrl.searchParams.append(key, value);
+      }
+      gameUrl.hash = window.location.hash;
 
       if (window.location.protocol === "file:") {
         // The single-file distribution runs without a manifest; fetching over

@@ -11,5 +11,6 @@ dev.log
 
 .env
 .env.*
+server/migrations/*.local.sql
 .DS_Store
 Thumbs.db

@@ -53,6 +53,10 @@
               <strong id="main-menu-start-label">正在加载...</strong>
               <small id="main-menu-start-hint">正在初始化</small>
             </button>
+            <button id="main-menu-account" class="main-menu__button" type="button" aria-haspopup="dialog" aria-controls="account-modal">
+              <strong id="main-menu-account-label">游客模式</strong>
+              <small id="main-menu-account-hint">存档仅保存在此设备</small>
+            </button>
             <button id="main-menu-settings" class="main-menu__button" type="button" aria-expanded="false" aria-controls="main-menu-settings-panel">
               <strong id="main-menu-settings-label">设置</strong>
               <small id="main-menu-settings-hint">语言</small>
@@ -87,11 +91,91 @@
               <button class="quality-option" type="button" data-quality="low">低画质</button>
             </div>
           </div>
+          <div class="settings-option-group audio-volume-settings">
+            <span id="main-menu-audio-label" class="settings-option-group__label">音频</span>
+            <label class="audio-volume-control"><span data-audio-label="master">主音量</span><input type="range" min="0" max="100" step="1" value="78" data-audio-volume="master"><output data-audio-output="master">78%</output></label>
+            <label class="audio-volume-control"><span data-audio-label="ambient">环境音</span><input type="range" min="0" max="100" step="1" value="86" data-audio-volume="ambient"><output data-audio-output="ambient">86%</output></label>
+            <label class="audio-volume-control"><span data-audio-label="music">音乐</span><input type="range" min="0" max="100" step="1" value="68" data-audio-volume="music"><output data-audio-output="music">68%</output></label>
+          </div>
           <button id="main-menu-changelog" class="settings-changelog-button" type="button">
             <strong id="main-menu-changelog-label">更新日志</strong>
             <small id="main-menu-changelog-hint">查看最近的更新记录</small>
           </button>
         </section>
+      </section>
+
+      <section id="account-modal" class="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title" hidden>
+        <article class="account-modal__panel">
+          <header class="account-modal__header">
+            <div>
+              <span class="account-modal__eyebrow">BACKROOMS IDENTITY</span>
+              <h2 id="account-title">账户与云存档</h2>
+            </div>
+            <button id="account-close" class="account-modal__close" type="button" aria-label="关闭账户面板">×</button>
+          </header>
+          <p id="account-description" class="account-modal__description">登录后可跨设备保留进度；不登录仍可使用本地存档。</p>
+          <p id="account-message" class="account-modal__message" role="status" hidden></p>
+
+          <div id="account-guest-view" class="account-modal__guest">
+            <nav class="account-modal__tabs" aria-label="Account actions">
+              <button type="button" data-account-mode="login" aria-pressed="true">登录</button>
+              <button type="button" data-account-mode="register" aria-pressed="false">注册</button>
+              <button type="button" data-account-mode="forgot" aria-pressed="false">找回密码</button>
+            </nav>
+            <form class="account-modal__form" data-account-form="login">
+              <label><span>EMAIL</span><input id="account-login-email" name="email" type="email" maxlength="254" autocomplete="email" required></label>
+              <label><span>PASSWORD</span><input id="account-login-password" name="password" type="password" minlength="10" maxlength="128" autocomplete="current-password" required></label>
+              <button id="account-login-submit" class="account-modal__primary" type="submit">登录账户</button>
+            </form>
+            <form class="account-modal__form" data-account-form="register" hidden>
+              <label><span>DISPLAY NAME</span><input id="account-register-name" name="displayName" type="text" minlength="2" maxlength="32" autocomplete="nickname" required></label>
+              <label><span>EMAIL</span><input id="account-register-email" name="email" type="email" maxlength="254" autocomplete="email" required></label>
+              <label><span>PASSWORD</span><input id="account-register-password" name="password" type="password" minlength="10" maxlength="128" autocomplete="new-password" required></label>
+              <button id="account-register-submit" class="account-modal__primary" type="submit">创建账户</button>
+            </form>
+            <form class="account-modal__form" data-account-form="verify" hidden>
+              <label><span>EMAIL</span><input id="account-verify-email" name="email" type="email" maxlength="254" autocomplete="email"></label>
+              <label><span>VERIFICATION TOKEN</span><input id="account-verify-token" name="token" type="text" minlength="20" maxlength="256" autocomplete="one-time-code" required></label>
+              <button id="account-verify-submit" class="account-modal__primary" type="submit">完成验证</button>
+              <button id="account-resend-verification" class="account-modal__secondary" type="button">重新发送验证邮件</button>
+            </form>
+            <form class="account-modal__form" data-account-form="forgot" hidden>
+              <label><span>EMAIL</span><input id="account-forgot-email" name="email" type="email" maxlength="254" autocomplete="email" required></label>
+              <button id="account-forgot-submit" class="account-modal__primary" type="submit">发送重置邮件</button>
+            </form>
+            <form class="account-modal__form" data-account-form="reset" hidden>
+              <label><span>RESET TOKEN</span><input id="account-reset-token" name="token" type="text" minlength="20" maxlength="256" autocomplete="one-time-code" required></label>
+              <label><span>NEW PASSWORD</span><input id="account-reset-password" name="password" type="password" minlength="10" maxlength="128" autocomplete="new-password" required></label>
+              <button id="account-reset-submit" class="account-modal__primary" type="submit">更新密码</button>
+            </form>
+          </div>
+
+          <div id="account-signed-in-view" class="account-modal__signed-in" hidden>
+            <section class="account-modal__identity">
+              <span id="account-user-name"></span>
+              <small id="account-user-email"></small>
+              <output id="account-sync-state" data-state="idle">云存档已同步</output>
+            </section>
+            <div class="account-modal__signed-actions">
+              <button id="account-sync" class="account-modal__primary" type="button">立即同步</button>
+              <button id="account-logout" type="button">退出账户</button>
+            </div>
+            <section id="account-conflict" class="account-conflict" hidden>
+              <h3 id="account-conflict-title">检测到两份不同的存档</h3>
+              <p id="account-conflict-hint"></p>
+              <div class="account-conflict__copies">
+                <article><strong>THIS DEVICE</strong><span id="account-local-summary">--</span></article>
+                <article><strong>CLOUD</strong><span id="account-cloud-summary">--</span></article>
+              </div>
+              <div class="account-conflict__actions">
+                <button id="account-keep-local" type="button">保留当前设备并覆盖云端</button>
+                <button id="account-use-cloud" type="button">使用云端存档</button>
+                <button id="account-import-guest" type="button" hidden>复制游客进度到账户</button>
+                <button id="account-start-blank" type="button" hidden>账户从头开始</button>
+              </div>
+            </section>
+          </div>
+        </article>
       </section>
 
       <script>
@@ -113,12 +197,16 @@
               start: "开始游戏",
               startHint: "进入 LEVEL 0",
               settings: "设置",
-              settingsHint: "语言 · 帧数 · 画质",
+              settingsHint: "语言 · 帧数 · 画质 · 音频",
               settingsTitle: "设置",
               language: "语言",
               frameRate: "帧数",
               automatic: "自动",
               quality: "画质",
+              audio: "音频",
+              audioMaster: "主音量",
+              audioAmbient: "环境音",
+              audioMusic: "音乐",
               buttonLoading: "正在加载...",
               statusLoading: "正在加载资源…",
               statusReady: "加载完成",
@@ -130,12 +218,16 @@
               start: "START GAME",
               startHint: "ENTER LEVEL 0",
               settings: "SETTINGS",
-              settingsHint: "LANGUAGE · FRAME RATE · QUALITY",
+              settingsHint: "LANGUAGE · FRAME RATE · QUALITY · AUDIO",
               settingsTitle: "SETTINGS",
               language: "LANGUAGE",
               frameRate: "FRAME RATE",
               automatic: "AUTO",
               quality: "QUALITY",
+              audio: "AUDIO",
+              audioMaster: "MASTER",
+              audioAmbient: "AMBIENCE",
+              audioMusic: "MUSIC",
               buttonLoading: "LOADING...",
               statusLoading: "LOADING ASSETS…",
               statusReady: "READY",
@@ -158,6 +250,10 @@
           setText("main-menu-language-title", text.language);
           setText("main-menu-frame-rate-title", text.frameRate);
           setText("main-menu-quality-label", text.quality);
+          setText("main-menu-audio-label", text.audio);
+          document.querySelectorAll('[data-audio-label="master"]').forEach((element) => { element.textContent = text.audioMaster; });
+          document.querySelectorAll('[data-audio-label="ambient"]').forEach((element) => { element.textContent = text.audioAmbient; });
+          document.querySelectorAll('[data-audio-label="music"]').forEach((element) => { element.textContent = text.audioMusic; });
           document.querySelector('[data-frame-rate="auto"]')?.replaceChildren(text.automatic);
           document.getElementById("main-menu-language-zh")?.setAttribute("aria-pressed", String(language === "zh-CN"));
           document.getElementById("main-menu-language-en")?.setAttribute("aria-pressed", String(language === "en"));
@@ -455,6 +551,12 @@
               <button class="quality-option" type="button" data-quality="high">高画质</button>
               <button class="quality-option" type="button" data-quality="low">低画质</button>
             </div>
+          </div>
+          <div class="settings-option-group audio-volume-settings">
+            <span id="pause-audio-label" class="settings-option-group__label">音频</span>
+            <label class="audio-volume-control"><span data-audio-label="master">主音量</span><input type="range" min="0" max="100" step="1" value="78" data-audio-volume="master"><output data-audio-output="master">78%</output></label>
+            <label class="audio-volume-control"><span data-audio-label="ambient">环境音</span><input type="range" min="0" max="100" step="1" value="86" data-audio-volume="ambient"><output data-audio-output="ambient">86%</output></label>
+            <label class="audio-volume-control"><span data-audio-label="music">音乐</span><input type="range" min="0" max="100" step="1" value="68" data-audio-volume="music"><output data-audio-output="music">68%</output></label>
           </div>
           <button id="pause-changelog" class="settings-changelog-button" type="button">
             <strong id="pause-changelog-label">更新日志</strong>

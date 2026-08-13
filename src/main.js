@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import "./styles.css";
 import { createAmbientHum } from "./ambient-audio.js";
+import { getGraphicsProfile } from "./graphics-profile.js";
+import { createRenderingPipeline } from "./rendering-pipeline.js";
 import { resolveFootstepSurface } from "./scene/common/footstep-surfaces.js";
 import { DebugMode, DEBUG_PLAYABLE_LEVELS } from "./debug-mode.js";
 import { createBackroomsScene, getBackroomsLevelInfo, preloadLevelScene } from "./scene.js";
@@ -20,11 +22,19 @@ import {
 } from "./scene/constants.js";
 import {
   hasSavedGame,
+  loadGuestSave,
   loadSave,
+  replaceSave,
   writeSave,
   clearSave,
   getInitialLevelFromSave,
 } from "./save.js";
+import { createAccountSystem } from "./account-system.js";
+import {
+  getActiveSaveAccountId,
+  getScopedStorageKey,
+  setActiveSaveAccount,
+} from "./save-scope.js";
 import {
   getMaterialQuality,
   setMaterialQuality,
@@ -70,6 +80,7 @@ const mainMenuSettingsClose = document.querySelector("#main-menu-settings-close"
 const mainMenuLanguageTitle = document.querySelector("#main-menu-language-title");
 const mainMenuFrameRateTitle = document.querySelector("#main-menu-frame-rate-title");
 const mainMenuQualityLabel = document.querySelector("#main-menu-quality-label");
+const mainMenuAudioLabel = document.querySelector("#main-menu-audio-label");
 const mainMenuLanguageZh = document.querySelector("#main-menu-language-zh");
 const mainMenuLanguageEn = document.querySelector("#main-menu-language-en");
 const mainMenuChangelog = document.querySelector("#main-menu-changelog");
@@ -158,6 +169,7 @@ const pauseSettingsClose = document.querySelector("#pause-settings-close");
 const pauseLanguageTitle = document.querySelector("#pause-language-title");
 const pauseFrameRateTitle = document.querySelector("#pause-frame-rate-title");
 const pauseQualityLabel = document.querySelector("#pause-quality-label");
+const pauseAudioLabel = document.querySelector("#pause-audio-label");
 const pauseLanguageZh = document.querySelector("#pause-language-zh");
 const pauseLanguageEn = document.querySelector("#pause-language-en");
 const pauseChangelog = document.querySelector("#pause-changelog");
@@ -171,6 +183,9 @@ const changelogList = document.querySelector("#changelog-list");
 const changelogClose = document.querySelector("#changelog-close");
 const frameRateButtons = [...document.querySelectorAll("[data-frame-rate]")];
 const qualityButtons = [...document.querySelectorAll("[data-quality]")];
+const audioVolumeInputs = [...document.querySelectorAll("[data-audio-volume]")];
+const audioVolumeOutputs = [...document.querySelectorAll("[data-audio-output]")];
+const audioVolumeLabels = [...document.querySelectorAll("[data-audio-label]")];
 const pauseResetButton = document.querySelector("#pause-reset");
 const pauseResetLabel = document.querySelector("#pause-reset-label");
 const pauseResetHint = document.querySelector("#pause-reset-hint");
@@ -215,10 +230,8 @@ let tutorialPage = 0;
 let tutorialActive = false;
 let changelogReturnFocus = null;
 
-const MAX_PIXEL_RATIO = 1.25;
-const MIN_PIXEL_RATIO = 0.75;
 const FPS_SAMPLE_INTERVAL = 0.75;
-const FPS_LOW_THRESHOLD = 48;
+const FPS_LOW_THRESHOLD = 54;
 const FPS_HIGH_THRESHOLD = 58;
 const OVERLAY_FADE_MS = 460;
 const LEVEL_TRANSITION_FADE_IN_MS = 720;
@@ -421,7 +434,13 @@ function scheduleNextAnimation() {
 
   const now = performance.now();
   const frameInterval = 1000 / frameRateLimit;
-  nextFixedFrameAt = Math.max(now, nextFixedFrameAt) + frameInterval;
+  // Schedule against the previous target, not the end of the current render.
+  // Otherwise render time is added on top of the requested interval and a
+  // nominal 30 FPS cap settles around 24–26 FPS.
+  if (nextFixedFrameAt <= 0 || now - nextFixedFrameAt > frameInterval * 2) {
+    nextFixedFrameAt = now;
+  }
+  nextFixedFrameAt += frameInterval;
   scheduledAnimationKind = "timeout";
   scheduledAnimationHandle = window.setTimeout(() => {
     scheduledAnimationHandle = 0;
@@ -462,11 +481,13 @@ const renderer = new THREE.WebGLRenderer({
   antialias: true,
   powerPreference: "high-performance",
 });
-let renderPixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
+let graphicsProfile = getGraphicsProfile();
+let renderPixelRatio = Math.min(window.devicePixelRatio, graphicsProfile.maxPixelRatio);
 renderer.setPixelRatio(renderPixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.18;
+renderer.toneMappingExposure = 1;
+let renderingPipeline = createRenderingPipeline(renderer, canvas, graphicsProfile);
 
 const flashlightLight = new THREE.SpotLight(0xfff2c5, 0, FLASHLIGHT_MAX_DISTANCE, 0.56, 0.74, 1.42);
 flashlightLight.position.set(0.18, -0.12, -0.16);
@@ -501,7 +522,7 @@ function getInitialLevel() {
   if (debugMode.queryEnabled && DEBUG_PLAYABLE_LEVELS.has(requested)) return requested;
   if (requested === 0) return 0;
   try {
-    const reached = JSON.parse(window.localStorage?.getItem(REACHED_KEY) ?? "[]");
+    const reached = JSON.parse(window.localStorage?.getItem(getScopedStorageKey(REACHED_KEY)) ?? "[]");
     if (!Array.isArray(reached)) return 0;
     return reached.includes(requested) ? requested : 0;
   } catch {
@@ -516,6 +537,9 @@ let controls = null;
 let animationFrameStarted = false;
 let saveDirtyTimer = 0;
 let gameStarted = false;
+let accountSystem = null;
+let accountInitialization = Promise.resolve();
+let suppressAccountSync = false;
 
 function attachFlashlightToCamera(camera) {
   camera.add(flashlightLight);
@@ -527,6 +551,30 @@ function attachDebugAreaLightToCamera(camera) {
   debugMode.attachAreaLight(camera);
 }
 const ambientHum = createAmbientHum();
+
+function syncAudioVolumeControls() {
+  const values = ambientHum.getVolumes();
+  audioVolumeInputs.forEach((input) => {
+    const value = values[input.dataset.audioVolume] ?? 1;
+    input.value = String(Math.round(value * 100));
+  });
+  audioVolumeOutputs.forEach((output) => {
+    const value = values[output.dataset.audioOutput] ?? 1;
+    output.textContent = `${Math.round(value * 100)}%`;
+  });
+}
+
+function updateAudioVolumeText(text) {
+  if (mainMenuAudioLabel) mainMenuAudioLabel.textContent = text.audio ?? "音频";
+  if (pauseAudioLabel) pauseAudioLabel.textContent = text.audio ?? formatLocalizedStatus("settingsAudio");
+  audioVolumeLabels.forEach((label) => {
+    const key = label.dataset.audioLabel;
+    if (key === "master") label.textContent = text.audioMaster ?? "主音量";
+    if (key === "ambient") label.textContent = text.audioAmbient ?? "环境音";
+    if (key === "music") label.textContent = text.audioMusic ?? "音乐";
+  });
+  syncAudioVolumeControls();
+}
 
 class GameTimer extends THREE.Timer {
   get elapsedTime() {
@@ -558,6 +606,7 @@ let frameCount = 0;
 let sampleFrameCount = 0;
 let sampleElapsed = 0;
 let displayedFps = 0;
+const frameTimeSamples = [];
 let loadingComplete = false;
 let exitComplete = false;
 let gameFailed = false;
@@ -900,6 +949,7 @@ function updateMainMenuText() {
   if (mainMenuLanguageTitle) mainMenuLanguageTitle.textContent = text.language;
   if (mainMenuFrameRateTitle) mainMenuFrameRateTitle.textContent = text.frameRate;
   if (mainMenuQualityLabel) mainMenuQualityLabel.textContent = text.quality;
+  updateAudioVolumeText(text);
   qualityButtons.forEach((button) => {
     if (button.dataset.quality === "high") button.textContent = text.qualityHigh ?? "高画质";
     if (button.dataset.quality === "low") button.textContent = text.qualityLow ?? "低画质";
@@ -977,6 +1027,7 @@ function setLanguage(nextLanguage) {
   document.documentElement.lang = currentLanguage;
   canvas.dataset.language = currentLanguage;
   updateMainMenuText();
+  accountSystem?.render();
   updateHudLabels();
   if (controls) {
     updateBuffCards(controls.getState());
@@ -1012,13 +1063,15 @@ function setLanguage(nextLanguage) {
 updateMainMenuText();
 updateHudLabels();
 
-function loadIntegerSet(key) {
+function loadIntegerSet(key, accountId) {
   try {
-    const raw = window.localStorage?.getItem(key);
+    const raw = window.localStorage?.getItem(getScopedStorageKey(key, accountId));
     if (!raw) return new Set();
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return new Set();
-    const progressVersion = Number(window.localStorage?.getItem(PROGRESS_VERSION_KEY) ?? 1);
+    const progressVersion = Number(
+      window.localStorage?.getItem(getScopedStorageKey(PROGRESS_VERSION_KEY, accountId)) ?? 1,
+    );
     return new Set(parsed
       .filter((n) => Number.isInteger(n) && PLAYABLE_LEVEL_IDS.includes(n))
       .map((n) => progressVersion < PROGRESS_VERSION && n === 8 ? HUB_LEVEL : n));
@@ -1027,9 +1080,9 @@ function loadIntegerSet(key) {
   }
 }
 
-function loadStringSet(key) {
+function loadStringSet(key, accountId) {
   try {
-    const raw = window.localStorage?.getItem(key);
+    const raw = window.localStorage?.getItem(getScopedStorageKey(key, accountId));
     if (!raw) return new Set();
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return new Set();
@@ -1041,18 +1094,23 @@ function loadStringSet(key) {
 
 function saveIntegerSet(key, set) {
   try {
-    window.localStorage?.setItem(key, JSON.stringify([...set].sort((a, b) => a - b)));
+    window.localStorage?.setItem(
+      getScopedStorageKey(key),
+      JSON.stringify([...set].sort((a, b) => a - b)),
+    );
   } catch {
     // localStorage may be unavailable.
   }
+  if (!suppressAccountSync) accountSystem?.notifyLocalChange();
 }
 
 function saveStringSet(key, set) {
   try {
-    window.localStorage?.setItem(key, JSON.stringify([...set].sort()));
+    window.localStorage?.setItem(getScopedStorageKey(key), JSON.stringify([...set].sort()));
   } catch {
     // localStorage may be unavailable.
   }
+  if (!suppressAccountSync) accountSystem?.notifyLocalChange();
 }
 
 let reachedLevels = loadIntegerSet(REACHED_KEY);
@@ -1064,10 +1122,89 @@ let pickedUpItems = loadStringSet(PICKED_UP_KEY);
   reachedLevels.add(initialLevel);
   saveIntegerSet(REACHED_KEY, reachedLevels);
   try {
-    window.localStorage?.setItem(PROGRESS_VERSION_KEY, String(PROGRESS_VERSION));
+    window.localStorage?.setItem(getScopedStorageKey(PROGRESS_VERSION_KEY), String(PROGRESS_VERSION));
   } catch {
     // Progress migration is best-effort when storage is unavailable.
   }
+}
+
+function reloadActiveProgress() {
+  suppressAccountSync = true;
+  try {
+    reachedLevels = loadIntegerSet(REACHED_KEY);
+    completedLevels = loadIntegerSet(COMPLETED_KEY);
+    pickedUpItems = loadStringSet(PICKED_UP_KEY);
+    reachedLevels.add(0);
+    window.localStorage?.setItem(getScopedStorageKey(PROGRESS_VERSION_KEY), String(PROGRESS_VERSION));
+  } catch {
+    reachedLevels = new Set([0]);
+    completedLevels = new Set();
+    pickedUpItems = new Set();
+  } finally {
+    suppressAccountSync = false;
+  }
+  if (world) syncLevelHud();
+}
+
+function buildCloudEnvelope(save, progress) {
+  if (!save) return null;
+  return {
+    schemaVersion: 1,
+    gameSave: save,
+    progress: {
+      reachedLevels: [...progress.reachedLevels].sort((a, b) => a - b),
+      completedLevels: [...progress.completedLevels].sort((a, b) => a - b),
+      pickedUpItems: [...progress.pickedUpItems].sort(),
+    },
+    gameBuild: document.querySelector('meta[name="backrooms-build"]')?.content ?? "development",
+    deviceId: "",
+    clientSavedAt: save.savedAt ?? Date.now(),
+  };
+}
+
+function getActiveCloudEnvelope() {
+  return buildCloudEnvelope(loadSave(), { reachedLevels, completedLevels, pickedUpItems });
+}
+
+function getGuestCloudEnvelope() {
+  const guestSave = loadGuestSave();
+  return buildCloudEnvelope(guestSave, {
+    reachedLevels: loadIntegerSet(REACHED_KEY, null),
+    completedLevels: loadIntegerSet(COMPLETED_KEY, null),
+    pickedUpItems: loadStringSet(PICKED_UP_KEY, null),
+  });
+}
+
+function applyCloudEnvelope(envelope) {
+  if (!envelope?.gameSave || !replaceSave(envelope.gameSave)) return false;
+  const progress = envelope.progress ?? {};
+  suppressAccountSync = true;
+  try {
+    window.localStorage?.setItem(
+      getScopedStorageKey(REACHED_KEY),
+      JSON.stringify(Array.isArray(progress.reachedLevels) ? progress.reachedLevels : [0]),
+    );
+    window.localStorage?.setItem(
+      getScopedStorageKey(COMPLETED_KEY),
+      JSON.stringify(Array.isArray(progress.completedLevels) ? progress.completedLevels : []),
+    );
+    window.localStorage?.setItem(
+      getScopedStorageKey(PICKED_UP_KEY),
+      JSON.stringify(Array.isArray(progress.pickedUpItems) ? progress.pickedUpItems : []),
+    );
+    window.localStorage?.setItem(getScopedStorageKey(PROGRESS_VERSION_KEY), String(PROGRESS_VERSION));
+    reloadActiveProgress();
+  } finally {
+    suppressAccountSync = false;
+  }
+  return true;
+}
+
+function activateAccountScope(user) {
+  setActiveSaveAccount(user?.id ?? null);
+  reloadActiveProgress();
+  const savedLevel = hasSavedGame() ? getInitialLevelFromSave(loadSave()) : 0;
+  preloadLevelScene(savedLevel ?? 0);
 }
 
 function getLocalizedText(collection, id) {
@@ -1553,6 +1690,15 @@ function disposeWorld(previousWorld) {
   disposeWorldResources(previousWorld, renderer);
 }
 
+function ensureRenderingPipelineProfile() {
+  const nextProfile = getGraphicsProfile();
+  if (nextProfile.id === graphicsProfile.id) return;
+  renderingPipeline.dispose();
+  graphicsProfile = nextProfile;
+  renderingPipeline = createRenderingPipeline(renderer, canvas, graphicsProfile);
+  setRenderPixelRatio(renderPixelRatio);
+}
+
 function updateLevelUrl(level) {
   const url = new URL(window.location.href);
   url.searchParams.set("level", String(level));
@@ -1642,7 +1788,9 @@ function writeSaveSnapshot() {
     entities: snapshot?.entities ? { [level]: snapshot.entities } : {},
     worldItems: { [level]: worldItems?.getState?.() ?? [] },
   };
-  return writeSave(payload);
+  const saved = writeSave(payload);
+  if (saved && !suppressAccountSync) accountSystem?.notifyLocalChange();
+  return saved;
 }
 
 function markDirty() {
@@ -1676,6 +1824,7 @@ async function loadLevel(level, { updateUrl = false, entryContext = null } = {})
     return false;
   }
   world = nextWorld;
+  ensureRenderingPipelineProfile();
   firesaltEffects = createFiresaltEffectManager(world.scene, world.isWalkable);
   worldItems = createWorldItemManager(
     world.scene,
@@ -1715,6 +1864,7 @@ async function loadLevel(level, { updateUrl = false, entryContext = null } = {})
   entityMarkers?.replaceChildren();
   syncLevelHud();
   if (updateUrl) updateLevelUrl(world.level);
+  renderingPipeline.setWorld(world);
   resize();
   disposeWorld(previousWorld);
   return true;
@@ -1732,6 +1882,7 @@ async function bootstrapWorld(level, save) {
     return;
   }
   world = nextWorld;
+  ensureRenderingPipelineProfile();
   firesaltEffects = createFiresaltEffectManager(world.scene, world.isWalkable);
   worldItems = createWorldItemManager(
     world.scene,
@@ -1764,6 +1915,7 @@ async function bootstrapWorld(level, save) {
     controls.applyState(save.player);
   }
   syncDebugState();
+  renderingPipeline.setWorld(world);
   exitComplete = false;
   gameFailed = false;
   playerHealthCooldown = 0;
@@ -1824,7 +1976,8 @@ function setMainMenuStarting(starting) {
   }
 }
 
-function finishMainMenuStart() {
+async function finishMainMenuStart() {
+  await accountInitialization;
   let save = null;
   try {
     save = hasSavedGame() ? loadSave() : null;
@@ -1941,6 +2094,7 @@ function updatePauseOverlay() {
   if (pauseLanguageTitle) pauseLanguageTitle.textContent = formatLocalizedStatus("settingsLanguage");
   if (pauseFrameRateTitle) pauseFrameRateTitle.textContent = formatLocalizedStatus("settingsFrameRate");
   if (pauseQualityLabel) pauseQualityLabel.textContent = formatLocalizedStatus("settingsQuality");
+  if (pauseAudioLabel) pauseAudioLabel.textContent = formatLocalizedStatus("settingsAudio");
   if (pauseChangelogLabel) pauseChangelogLabel.textContent = formatLocalizedStatus("changelogLabel");
   if (pauseChangelogHint) pauseChangelogHint.textContent = formatLocalizedStatus("changelogHint");
   frameRateButtons.forEach((button) => {
@@ -1949,6 +2103,7 @@ function updatePauseOverlay() {
   pauseLanguageZh?.setAttribute("aria-pressed", String(currentLanguage === "zh-CN"));
   pauseLanguageEn?.setAttribute("aria-pressed", String(currentLanguage === "en"));
   updateFrameRateControls();
+  updateAudioVolumeText(MAIN_MENU_TEXT[currentLanguage] ?? MAIN_MENU_TEXT.en);
 }
 
 function setPauseSettingsOpen(open) {
@@ -2091,7 +2246,7 @@ function startLevelTransitionLoad(transition) {
       // uses KHR_parallel_shader_compile, preventing first-visible-frame shader
       // stalls from spilling into player control.
       try {
-        await renderer.compileAsync?.(world.scene, world.camera);
+        await renderingPipeline.prewarm();
       } catch (error) {
         console.warn("Failed to precompile level scene", error);
       }
@@ -2200,14 +2355,15 @@ function resize() {
   const width = window.innerWidth;
   const height = window.innerHeight;
   renderer.setSize(width, height, false);
+  renderingPipeline.setSize(width, height, renderPixelRatio);
   world.camera.aspect = width / height;
   world.camera.updateProjectionMatrix();
 }
 
 function setRenderPixelRatio(nextPixelRatio) {
   const clamped = Math.max(
-    MIN_PIXEL_RATIO,
-    Math.min(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO), nextPixelRatio),
+    graphicsProfile.minPixelRatio,
+    Math.min(Math.min(window.devicePixelRatio, graphicsProfile.maxPixelRatio), nextPixelRatio),
   );
   if (Math.abs(clamped - renderPixelRatio) < 0.01) return;
   renderPixelRatio = clamped;
@@ -2226,13 +2382,21 @@ function getAdaptiveFpsThresholds() {
 }
 
 function updatePerformanceReadout(delta) {
+  frameTimeSamples.push(delta * 1000);
+  if (frameTimeSamples.length > 240) frameTimeSamples.shift();
   sampleFrameCount += 1;
   sampleElapsed += delta;
   if (sampleElapsed < FPS_SAMPLE_INTERVAL) return;
 
   displayedFps = Math.round(sampleFrameCount / sampleElapsed);
+  const sortedFrameTimes = [...frameTimeSamples].sort((a, b) => a - b);
+  const p99FrameTime = sortedFrameTimes[Math.min(sortedFrameTimes.length - 1, Math.floor(sortedFrameTimes.length * 0.99))] ?? 0;
+  const averageFrameTime = sortedFrameTimes.length
+    ? sortedFrameTimes.reduce((sum, value) => sum + value, 0) / sortedFrameTimes.length
+    : 0;
   const thresholds = getAdaptiveFpsThresholds();
-  if (displayedFps < thresholds.low) {
+  const pipelineAdaptation = renderingPipeline.updateAdaptive(displayedFps);
+  if (displayedFps < thresholds.low && pipelineAdaptation?.canReducePixelRatio) {
     setRenderPixelRatio(renderPixelRatio - 0.1);
   } else if (displayedFps > thresholds.high) {
     setRenderPixelRatio(renderPixelRatio + 0.05);
@@ -2242,6 +2406,8 @@ function updatePerformanceReadout(delta) {
   fpsReadout.dataset.quality = renderPixelRatio < 1 ? "LOW" : "HIGH";
   canvas.dataset.fps = String(displayedFps);
   canvas.dataset.pixelRatio = renderPixelRatio.toFixed(2);
+  canvas.dataset.averageFrameMs = averageFrameTime.toFixed(2);
+  canvas.dataset.onePercentLowFps = p99FrameTime > 0 ? (1000 / p99FrameTime).toFixed(1) : "0";
   sampleFrameCount = 0;
   sampleElapsed = 0;
 }
@@ -2798,7 +2964,7 @@ function armPauseReset() {
   }, PAUSE_RESET_ARM_TIMEOUT_MS);
 }
 
-function resetAllProgress() {
+async function resetAllProgress() {
   isResettingProgress = true;
   if (saveDirtyTimer) {
     window.clearTimeout(saveDirtyTimer);
@@ -2808,11 +2974,20 @@ function resetAllProgress() {
     window.clearTimeout(pauseResetArmedTimer);
     pauseResetArmedTimer = 0;
   }
+  if (getActiveSaveAccountId() && accountSystem && !await accountSystem.deleteCloudSave()) {
+    isResettingProgress = false;
+    pickupFlashText = currentLanguage === "en"
+      ? "CLOUD SAVE CONFLICT — RESET CANCELLED"
+      : "云存档存在冲突，已取消重置";
+    pickupFlashUntil = clock.elapsedTime + 2.4;
+    return;
+  }
+  clearSave();
   try {
-    window.localStorage?.removeItem("backrooms-save");
-    window.localStorage?.removeItem(REACHED_KEY);
-    window.localStorage?.removeItem(COMPLETED_KEY);
-    window.localStorage?.removeItem(PICKED_UP_KEY);
+    window.localStorage?.removeItem(getScopedStorageKey(REACHED_KEY));
+    window.localStorage?.removeItem(getScopedStorageKey(COMPLETED_KEY));
+    window.localStorage?.removeItem(getScopedStorageKey(PICKED_UP_KEY));
+    window.localStorage?.removeItem(getScopedStorageKey(PROGRESS_VERSION_KEY));
   } catch {
     // localStorage may be unavailable.
   }
@@ -3505,13 +3680,15 @@ function applyScenePresentation(metrics = {}) {
   const whiteout = Math.max(0, Math.min(1, effects.whiteout ?? 0));
   const desaturation = Math.max(0, Math.min(1, effects.desaturation ?? 0));
   const vignette = Math.max(0, Math.min(1, effects.vignette ?? 0));
+  const baseGrain = world?.presentation?.post?.grain ?? 0.035;
+  const baseVignette = world?.presentation?.post?.vignette ?? 0.14;
   if (staticLayer) {
-    staticLayer.style.opacity = String(0.035 + staticAmount * 0.25);
+    staticLayer.style.opacity = String(baseGrain + staticAmount * 0.25);
     staticLayer.dataset.testCard = effects.testCard ? "true" : "false";
   }
   if (vignetteLayer) {
-    const edge = 0.08 + vignette * 0.34;
-    const lower = 0.075 + vignette * 0.2;
+    const edge = 0.04 + baseVignette + vignette * 0.34;
+    const lower = 0.035 + baseVignette * 0.55 + vignette * 0.2;
     vignetteLayer.style.background = `radial-gradient(circle at 50% 48%, transparent 0 54%, rgba(0, 0, 0, ${edge}) 80%), linear-gradient(to bottom, rgba(0, 0, 0, 0.04), transparent 24%, rgba(0, 0, 0, ${lower}))`;
   }
   canvas.style.filter = `saturate(${1 - desaturation * 0.82}) brightness(${1 + whiteout * 0.28})`;
@@ -3531,6 +3708,7 @@ function applyEntityContactDamage(delta, metrics) {
     if (!entity?.active || entity.stunned) return false;
     if (!Number.isFinite(entity.distance)) return false;
     if (Number.isFinite(entity.contactDamage) && entity.contactDamage <= 0) return false;
+    if (entity.attackPhase) return entity.contact === true;
     if (typeof entity.contact === "boolean") return entity.contact;
     const id = entity.id ?? "";
     const radius = Number.isFinite(entity.contactRadius)
@@ -3590,7 +3768,8 @@ function animate(timestamp) {
     updateDoorPrompt(null);
     updatePerformanceReadout(delta);
     updateLoadingOverlay();
-    renderer.render(world.scene, world.camera);
+    renderingPipeline.update(delta, world.camera.position);
+    renderingPipeline.render();
     frameCount += 1;
     canvas.dataset.sceneReady = "true";
     canvas.dataset.frameCount = String(frameCount);
@@ -3598,6 +3777,8 @@ function animate(timestamp) {
     return;
   }
 
+  const surfaceState = world.getSurfaceState?.(world.camera.position) ?? null;
+  controls.setSurfaceState?.(surfaceState);
   if (!exitComplete && !gameFailed && !levelTransition) controls.update(delta);
   syncFirstPersonHeldItem(world.camera, getEquipped()?.id ?? null);
   const controlState = controls.getState();
@@ -3649,6 +3830,7 @@ function animate(timestamp) {
     movementSpeedMultiplier: (world.movementSpeedMultiplier ?? 1)
       * (metrics.playerModifiers?.movementSpeedMultiplier ?? 1),
     staminaRecoveryMultiplier: metrics.playerModifiers?.staminaRecoveryMultiplier ?? 1,
+    traction: surfaceState?.traction ?? 1,
   });
   applyScenePresentation(metrics);
   if (metrics.relocation?.id && metrics.relocation.id !== lastRelocationId) {
@@ -3696,15 +3878,20 @@ function animate(timestamp) {
     const footstepSurface = resolveFootstepSurface(world, world.camera.position);
     canvas.dataset.footstepSurface = footstepSurface;
     ambientHum.update(metrics.flicker, { ...controlState, footstepSurface });
-    ambientHum.updateLevelAudio(world.level);
-    ambientHum.updateEntityAudio(metrics.entities);
+    const audioState = ambientHum.updateWorldAudio(world, world.camera, playerViewDirection);
+    canvas.dataset.audioZone = audioState.zone;
+    canvas.dataset.audioReverb = audioState.reverb;
+    canvas.dataset.audioEmitter = audioState.nearestEmitter;
+    canvas.dataset.audioOcclusion = Number(audioState.occlusion ?? 0).toFixed(2);
+    ambientHum.updateEntityAudio(metrics.entities, world.camera, playerViewDirection, world);
   }
   updateHud(metrics, controlState, elapsed);
   updatePerformanceReadout(delta);
   updateLoadingOverlay();
   updateDrinkingMeter(controlState);
 
-  renderer.render(world.scene, world.camera);
+  renderingPipeline.update(delta, world.camera.position);
+  renderingPipeline.render();
   frameCount += 1;
   canvas.dataset.sceneReady = "true";
   canvas.dataset.frameCount = String(frameCount);
@@ -4335,6 +4522,12 @@ qualityButtons.forEach((button) => {
     requestMaterialQuality(button.dataset.quality);
   });
 });
+audioVolumeInputs.forEach((input) => {
+  input.addEventListener("input", () => {
+    ambientHum.setVolumes({ [input.dataset.audioVolume]: Number(input.value) / 100 });
+    syncAudioVolumeControls();
+  });
+});
 
 mainMenuSettings?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
@@ -4375,6 +4568,15 @@ let pendingSaveForPrompt = null;
 
 showMainMenu();
 
+accountSystem = createAccountSystem({
+  getLanguage: () => currentLanguage,
+  getActiveEnvelope: getActiveCloudEnvelope,
+  getGuestEnvelope: getGuestCloudEnvelope,
+  applyEnvelope: applyCloudEnvelope,
+  activateAccount: activateAccountScope,
+});
+accountInitialization = accountSystem.initialize();
+
 // Signal the inline menu bootstrap (app.html) that handlers are attached and
 // the Start button can be enabled, then warm the first level's chunk so a
 // fresh session starts without an extra module-fetch stall.
@@ -4412,10 +4614,10 @@ if (typeof window !== "undefined") {
       return;
     }
     try {
-      window.localStorage?.removeItem("backrooms-save");
-      window.localStorage?.removeItem(REACHED_KEY);
-      window.localStorage?.removeItem(COMPLETED_KEY);
-      window.localStorage?.removeItem(PICKED_UP_KEY);
+      clearSave();
+      window.localStorage?.removeItem(getScopedStorageKey(REACHED_KEY));
+      window.localStorage?.removeItem(getScopedStorageKey(COMPLETED_KEY));
+      window.localStorage?.removeItem(getScopedStorageKey(PICKED_UP_KEY));
     } catch {
       // localStorage may be unavailable.
     }

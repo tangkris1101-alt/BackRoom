@@ -72,7 +72,7 @@ function getBakedArmMaterial() {
     // The baked vertex colours were intended for the source suit preview,
     // but make the first-person gloves look dirty under the flashlight.
     // Use one material colour while retaining smooth normal-based shading.
-    color: 0xffd92f,
+    color: 0x9a7418,
     vertexColors: false,
     roughness: 0.92,
     metalness: 0,
@@ -83,7 +83,7 @@ function getBakedArmMaterial() {
     // backfaces render through the palms as dirty-looking colour patches.
     depthTest: true,
     depthWrite: true,
-    toneMapped: false,
+    toneMapped: true,
     side: THREE.FrontSide,
   });
   return bakedArmMaterial;
@@ -249,9 +249,14 @@ export function updateFirstPersonHazmatViewModel(viewModel, elapsed) {
   const breathe = Math.sin(elapsed * 1.8) * 0.0045;
   const bob = Math.sin(stridePhase * 2) * 0.0045 * walkAmount * bodyScale;
   const sway = Math.sin(stridePhase) * 0.0055 * walkAmount * bodyScale;
-  viewModel.position.set(sway, breathe + bob, 0);
+  const airborne = motion?.grounded === false;
+  const verticalVelocity = THREE.MathUtils.clamp(motion?.verticalVelocity ?? 0, -7, 6);
+  const landingImpact = THREE.MathUtils.clamp(motion?.landingImpact ?? 0, 0, 1);
+  const airborneY = airborne ? THREE.MathUtils.clamp(verticalVelocity * 0.0035, -0.018, 0.016) : 0;
+  const airborneZ = airborne ? 0.018 : 0;
+  viewModel.position.set(sway, breathe + bob - landingImpact * 0.028 + airborneY, airborneZ + landingImpact * 0.022);
   viewModel.rotation.set(
-    Math.sin(stridePhase * 2) * 0.0035 * walkAmount * bodyScale,
+    Math.sin(stridePhase * 2) * 0.0035 * walkAmount * bodyScale + landingImpact * 0.025,
     Math.sin(stridePhase) * 0.004 * walkAmount * bodyScale,
     -Math.sin(stridePhase) * 0.003 * walkAmount * bodyScale,
   );
@@ -269,11 +274,11 @@ export function updateFirstPersonHazmatViewModel(viewModel, elapsed) {
     if (!mesh || !restPosition || !restQuaternion) continue;
     mesh.position.set(
       restPosition.x - sideSign * stride * 0.012,
-      restPosition.y + Math.sin(stridePhase * 2) * 0.008 * walkAmount * bodyScale,
-      restPosition.z + returnSwing * 0.022,
+      restPosition.y + Math.sin(stridePhase * 2) * 0.008 * walkAmount * bodyScale - landingImpact * 0.016,
+      restPosition.z + returnSwing * 0.022 + (airborne ? 0.012 : 0),
     );
     motionEuler.set(
-      returnSwing * 0.016,
+      returnSwing * 0.016 + landingImpact * 0.018,
       sideSign * stride * 0.012,
       sideSign * stride * 0.018,
     );

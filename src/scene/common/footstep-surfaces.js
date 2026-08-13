@@ -52,6 +52,8 @@ const LEVEL_DEFAULT_SURFACES = new Map([
   [9, "grass"],
   [10, "grass"],
   [11, "asphalt"],
+  [12, "concrete"],
+  [13, "carpet"],
   [37, "water"],
 ]);
 

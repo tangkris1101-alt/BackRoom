@@ -1,20 +1,56 @@
+import * as THREE from "three";
 import breathingTiredUrl from "./assets/audio/breathing-tired.ogg?url";
 import levelFiveJazzUrl from "./assets/audio/level-five-jazz-improv.mp3?url";
 import { getFootstepProfile, normalizeFootstepSurface } from "./scene/common/footstep-surfaces.js";
 
+const AUDIO_VOLUME_KEYS = Object.freeze({
+  master: "backrooms:audio:master",
+  ambient: "backrooms:audio:ambient",
+  music: "backrooms:audio:music",
+});
+
+function loadVolume(key, fallback) {
+  try {
+    const stored = window.localStorage?.getItem(key);
+    if (stored === null || stored === undefined || stored === "") return fallback;
+    const value = Number(stored);
+    return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function createAmbientHum() {
   let context = null;
   let master = null;
+  let ambientBus = null;
+  let foleyBus = null;
+  let entityBus = null;
+  let musicBus = null;
+  let reverbInput = null;
+  let reverbConvolver = null;
+  let reverbGain = null;
   let flickerGain = null;
   let started = false;
   let lastStepAt = 0;
   let stepNoiseBuffer = null;
   let stepSide = -1;
+  let stepVariant = 0;
+  let lastLandingImpact = 0;
   let suspendedByPause = false;
   let breathAudio = null;
   let breathGain = null;
   let hotelJazzAudio = null;
   let hotelJazzGain = null;
+  let hotelJazzPanner = null;
+  let activeReverb = "";
+  const impulseResponses = new Map();
+  const fixtureVoices = [];
+  const volumes = {
+    master: loadVolume(AUDIO_VOLUME_KEYS.master, 0.78),
+    ambient: loadVolume(AUDIO_VOLUME_KEYS.ambient, 0.86),
+    music: loadVolume(AUDIO_VOLUME_KEYS.music, 0.68),
+  };
 
   function start() {
     if (started) return;
@@ -25,8 +61,33 @@ export function createAmbientHum() {
 
     context = new AudioContext();
     master = context.createGain();
-    master.gain.value = 0.022;
+    master.gain.value = 0.028 * volumes.master;
     master.connect(context.destination);
+
+    ambientBus = context.createGain();
+    foleyBus = context.createGain();
+    entityBus = context.createGain();
+    musicBus = context.createGain();
+    ambientBus.gain.value = volumes.ambient;
+    foleyBus.gain.value = 1;
+    entityBus.gain.value = 1;
+    musicBus.gain.value = volumes.music;
+    ambientBus.connect(master);
+    foleyBus.connect(master);
+    entityBus.connect(master);
+    musicBus.connect(master);
+
+    reverbInput = context.createGain();
+    reverbInput.gain.value = 0.34;
+    reverbConvolver = context.createConvolver();
+    reverbGain = context.createGain();
+    reverbGain.gain.value = 0.16;
+    reverbInput.connect(reverbConvolver);
+    reverbConvolver.connect(reverbGain);
+    reverbGain.connect(master);
+    ambientBus.connect(reverbInput);
+    foleyBus.connect(reverbInput);
+    entityBus.connect(reverbInput);
 
     const lowHum = context.createOscillator();
     lowHum.type = "sine";
@@ -39,7 +100,7 @@ export function createAmbientHum() {
     humGain.gain.value = 0.55;
     lowHum.connect(humGain);
     highHum.connect(humGain);
-    humGain.connect(master);
+    humGain.connect(ambientBus);
 
     const bufferSize = context.sampleRate * 2;
     const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
@@ -59,7 +120,7 @@ export function createAmbientHum() {
     flickerGain.gain.value = 0.09;
     noise.connect(filter);
     filter.connect(flickerGain);
-    flickerGain.connect(master);
+    flickerGain.connect(ambientBus);
 
     lowHum.start();
     highHum.start();
@@ -84,7 +145,7 @@ export function createAmbientHum() {
     breathGain.gain.value = 0;
     breathSource.connect(breathFilter);
     breathFilter.connect(breathGain);
-    breathGain.connect(master);
+    breathGain.connect(foleyBus);
     breathAudio.play().catch(() => {});
 
     hotelJazzAudio = new Audio(levelFiveJazzUrl);
@@ -98,9 +159,11 @@ export function createAmbientHum() {
     hotelJazzFilter.frequency.value = 1680;
     hotelJazzGain = context.createGain();
     hotelJazzGain.gain.value = 0;
+    hotelJazzPanner = context.createStereoPanner?.() ?? context.createGain();
     hotelJazzSource.connect(hotelJazzFilter);
-    hotelJazzFilter.connect(hotelJazzGain);
-    hotelJazzGain.connect(master);
+    hotelJazzFilter.connect(hotelJazzPanner);
+    hotelJazzPanner.connect(hotelJazzGain);
+    hotelJazzGain.connect(musicBus);
     hotelJazzAudio.play().catch(() => {});
   }
 
@@ -116,13 +179,15 @@ export function createAmbientHum() {
     }
   }
 
-  function playFootstep({ sprinting, surface }) {
+  function playFootstep({ sprinting, surface, intensity = 1 }) {
     if (!context || !master || !stepNoiseBuffer) return;
     tryUnlockContext();
     const now = context.currentTime;
     const profile = getFootstepProfile(surface);
-    const effort = sprinting ? 1.28 : 1;
-    const pitchVariation = 0.94 + Math.random() * 0.12;
+    const effort = (sprinting ? 1.28 : 1) * Math.max(0.55, Math.min(1.8, intensity));
+    const variants = [0.93, 1, 1.07];
+    const pitchVariation = variants[stepVariant % variants.length] * (0.985 + Math.random() * 0.03);
+    stepVariant += 1;
     stepSide *= -1;
 
     const output = context.createGain();
@@ -131,9 +196,9 @@ export function createAmbientHum() {
       const panner = context.createStereoPanner();
       panner.pan.value = stepSide * 0.12;
       output.connect(panner);
-      panner.connect(master);
+      panner.connect(foleyBus ?? master);
     } else {
-      output.connect(master);
+      output.connect(foleyBus ?? master);
     }
 
     const noise = context.createBufferSource();
@@ -219,6 +284,16 @@ export function createAmbientHum() {
       playFootstep({ sprinting, surface: normalizeFootstepSurface(movementState.footstepSurface) });
       lastStepAt = now;
     }
+
+    const landingImpact = Math.max(0, movementState.landingImpact ?? 0);
+    if (landingImpact > 0.18 && landingImpact > lastLandingImpact + 0.08) {
+      playFootstep({
+        sprinting: false,
+        surface: normalizeFootstepSurface(movementState.footstepSurface),
+        intensity: 0.9 + landingImpact * 0.72,
+      });
+    }
+    lastLandingImpact = landingImpact;
   }
 
   function updateLevelAudio(level) {
@@ -228,6 +303,130 @@ export function createAmbientHum() {
     hotelJazzGain.gain.setTargetAtTime(inHotel ? 0.66 : 0, now, inHotel ? 1.5 : 0.65);
     hotelJazzAudio.playbackRate = inHotel ? 0.92 : 1;
     if (inHotel) hotelJazzAudio.play().catch(() => {});
+  }
+
+  function createImpulseResponse(kind) {
+    if (!context) return null;
+    if (impulseResponses.has(kind)) return impulseResponses.get(kind);
+    const config = {
+      small: [0.42, 3.8],
+      medium: [0.82, 3.1],
+      large: [1.45, 2.7],
+      cavern: [2.1, 2.25],
+      open: [0.18, 5.2],
+    }[kind] ?? [0.82, 3.1];
+    const length = Math.max(1, Math.floor(context.sampleRate * config[0]));
+    const buffer = context.createBuffer(2, length, context.sampleRate);
+    for (let channelIndex = 0; channelIndex < 2; channelIndex += 1) {
+      const channel = buffer.getChannelData(channelIndex);
+      for (let index = 0; index < length; index += 1) {
+        const envelope = Math.pow(1 - index / length, config[1]);
+        channel[index] = (Math.random() * 2 - 1) * envelope;
+      }
+    }
+    impulseResponses.set(kind, buffer);
+    return buffer;
+  }
+
+  function resolveEmitterPosition(emitter, target) {
+    if (emitter?.object?.getWorldPosition) return emitter.object.getWorldPosition(target);
+    if (emitter?.position) return target.copy(emitter.position);
+    return target.set(0, 0, 0);
+  }
+
+  function getSpatialState(source, listenerPosition, listenerDirection, world, maxDistance = 30) {
+    const dx = source.x - listenerPosition.x;
+    const dz = source.z - listenerPosition.z;
+    const distance = Math.hypot(dx, dz);
+    const rightX = -(listenerDirection?.z ?? -1);
+    const rightZ = listenerDirection?.x ?? 0;
+    const pan = distance > 0.001 ? Math.max(-1, Math.min(1, (dx * rightX + dz * rightZ) / distance)) : 0;
+    let blocked = 0;
+    if (world?.isWalkable && distance > 3) {
+      const samples = Math.min(12, Math.max(3, Math.ceil(distance / 3)));
+      for (let index = 1; index < samples; index += 1) {
+        const ratio = index / samples;
+        if (!world.isWalkable(listenerPosition.x + dx * ratio, listenerPosition.z + dz * ratio, 0.05)) blocked += 1;
+      }
+    }
+    return {
+      distance,
+      pan,
+      occlusion: Math.min(1, blocked / 2),
+      gain: Math.max(0, 1 - distance / Math.max(1, maxDistance)),
+    };
+  }
+
+  function buildFixtureVoice() {
+    const oscillator = context.createOscillator();
+    oscillator.type = "triangle";
+    oscillator.frequency.value = 116 + fixtureVoices.length * 2.4;
+    const filter = context.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 2400;
+    const panner = context.createStereoPanner?.() ?? context.createGain();
+    const gain = context.createGain();
+    gain.gain.value = 0;
+    oscillator.connect(filter);
+    filter.connect(panner);
+    panner.connect(gain);
+    gain.connect(ambientBus ?? master);
+    oscillator.start();
+    return { oscillator, filter, panner, gain };
+  }
+
+  function updateWorldAudio(world, camera, listenerDirection) {
+    if (!context || !camera) return { zone: "", nearestEmitter: "", occlusion: 0 };
+    const zone = world?.audioZones?.find((entry) => entry.contains?.(camera.position) !== false) ?? null;
+    const reverb = zone?.reverb ?? world?.presentation?.reverb ?? "medium";
+    if (reverb !== activeReverb && reverbConvolver) {
+      reverbConvolver.buffer = createImpulseResponse(reverb);
+      activeReverb = reverb;
+      if (reverbGain) reverbGain.gain.setTargetAtTime(reverb === "open" ? 0.05 : 0.16, context.currentTime, 0.12);
+    }
+
+    const sourcePosition = new THREE.Vector3();
+    const fixtureEmitters = (world?.audioEmitters ?? [])
+      .filter((emitter) => emitter.type === "fixture-hum")
+      .map((emitter) => {
+        resolveEmitterPosition(emitter, sourcePosition);
+        return { emitter, position: sourcePosition.clone(), distance: sourcePosition.distanceTo(camera.position) };
+      })
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 3);
+    while (fixtureVoices.length < fixtureEmitters.length) fixtureVoices.push(buildFixtureVoice());
+    fixtureVoices.forEach((voice, index) => {
+      const entry = fixtureEmitters[index];
+      if (!entry) {
+        voice.gain.gain.setTargetAtTime(0, context.currentTime, 0.08);
+        return;
+      }
+      const spatial = getSpatialState(entry.position, camera.position, listenerDirection, world, entry.emitter.maxDistance);
+      if ("pan" in voice.panner) voice.panner.pan.setTargetAtTime(spatial.pan, context.currentTime, 0.05);
+      voice.filter.frequency.setTargetAtTime(THREE.MathUtils.lerp(620, 2600, 1 - spatial.occlusion), context.currentTime, 0.08);
+      voice.gain.gain.setTargetAtTime(spatial.gain * spatial.gain * (1 - spatial.occlusion * 0.52) * 0.13, context.currentTime, 0.08);
+    });
+
+    const musicEmitter = world?.audioEmitters?.find((emitter) => emitter.type === "music");
+    let musicSpatial = { gain: 0, pan: 0, occlusion: 0 };
+    if (musicEmitter) {
+      resolveEmitterPosition(musicEmitter, sourcePosition);
+      musicSpatial = getSpatialState(sourcePosition, camera.position, listenerDirection, world, musicEmitter.maxDistance ?? 70);
+    }
+    if (hotelJazzGain && hotelJazzAudio) {
+      const target = Number(world?.level) === 5 ? musicSpatial.gain * musicSpatial.gain * (1 - musicSpatial.occlusion * 0.65) * 0.72 : 0;
+      hotelJazzGain.gain.setTargetAtTime(target, context.currentTime, target > 0 ? 0.55 : 0.3);
+      if (hotelJazzPanner && "pan" in hotelJazzPanner) hotelJazzPanner.pan.setTargetAtTime(musicSpatial.pan, context.currentTime, 0.08);
+      if (Number(world?.level) === 5) hotelJazzAudio.play().catch(() => {});
+    }
+    return {
+      zone: zone?.id ?? `level-${world?.level ?? 0}`,
+      reverb,
+      nearestEmitter: fixtureEmitters[0]?.emitter?.id ?? musicEmitter?.id ?? "",
+      occlusion: fixtureEmitters[0]
+        ? getSpatialState(fixtureEmitters[0].position, camera.position, listenerDirection, world, fixtureEmitters[0].emitter.maxDistance).occlusion
+        : musicSpatial.occlusion,
+    };
   }
 
   function suspend() {
@@ -348,7 +547,13 @@ export function createAmbientHum() {
     const existing = entityVoices.get(slot);
     if (existing) return existing;
     const voice = slot === "hound" ? buildHoundVoice() : buildBacteriaVoice();
-    voice.baseGain.connect(master);
+    voice.occlusionFilter = context.createBiquadFilter();
+    voice.occlusionFilter.type = "lowpass";
+    voice.occlusionFilter.frequency.value = 5200;
+    voice.panner = context.createStereoPanner?.() ?? context.createGain();
+    voice.baseGain.connect(voice.occlusionFilter);
+    voice.occlusionFilter.connect(voice.panner);
+    voice.panner.connect(entityBus ?? master);
     entityVoices.set(slot, voice);
     return voice;
   }
@@ -376,6 +581,8 @@ export function createAmbientHum() {
         // ignore
       }
     }
+    voice.occlusionFilter?.disconnect?.();
+    voice.panner?.disconnect?.();
     try {
       voice.baseGain.disconnect();
     } catch {
@@ -383,7 +590,7 @@ export function createAmbientHum() {
     }
   }
 
-  function updateEntityAudio(entities) {
+  function updateEntityAudio(entities, camera, listenerDirection, world) {
     if (!context || !master) return;
     if (suspendedByPause || context.state === "closed") return;
 
@@ -391,7 +598,7 @@ export function createAmbientHum() {
     let nearestHound = null;
     let nearestSmiler = null;
     for (const entity of entities ?? []) {
-      if (!entity || !entity.active || entity.contact) continue;
+      if (!entity || !entity.active) continue;
       if (!Number.isFinite(entity.distance)) continue;
       if (entity.id === "bacteria") {
         if (!nearestBacteria || entity.distance < nearestBacteria.distance) {
@@ -407,12 +614,12 @@ export function createAmbientHum() {
     }
 
     const now = context.currentTime;
-    applySlotVolume("bacteria", nearestBacteria, now);
-    applySlotVolume("hound", nearestHound, now);
-    applySlotVolume("smiler", nearestSmiler, now);
+    applySlotVolume("bacteria", nearestBacteria, now, camera, listenerDirection, world);
+    applySlotVolume("hound", nearestHound, now, camera, listenerDirection, world);
+    applySlotVolume("smiler", nearestSmiler, now, camera, listenerDirection, world);
   }
 
-  function applySlotVolume(slot, nearest, now) {
+  function applySlotVolume(slot, nearest, now, camera, listenerDirection, world) {
     const config = ENTITY_AUDIO_CONFIG[slot];
     if (!config) return;
     if (!nearest) {
@@ -435,7 +642,14 @@ export function createAmbientHum() {
     if (ratio < 0) ratio = 0;
     if (ratio > 1) ratio = 1;
 
-    const target = ratio * ratio * voice.baseLevel;
+    const source = new THREE.Vector3(nearest.x ?? camera?.position?.x ?? 0, nearest.y ?? 1, nearest.z ?? camera?.position?.z ?? 0);
+    const spatial = camera
+      ? getSpatialState(source, camera.position, listenerDirection, world, config.maxAudible)
+      : { pan: 0, occlusion: 0 };
+    if (voice.panner && "pan" in voice.panner) voice.panner.pan.setTargetAtTime(spatial.pan, now, 0.05);
+    voice.occlusionFilter?.frequency?.setTargetAtTime(THREE.MathUtils.lerp(620, 5200, 1 - spatial.occlusion), now, 0.06);
+    const attackBoost = nearest.attackPhase === "windup" || nearest.attackPhase === "hit" ? 1.18 : 1;
+    const target = ratio * ratio * voice.baseLevel * (1 - spatial.occlusion * 0.48) * attackBoost;
 
     voice.baseGain.gain.setTargetAtTime(target, now, 0.08);
   }
@@ -446,15 +660,38 @@ export function createAmbientHum() {
     }
   }
 
+  function setVolumes(next = {}) {
+    for (const key of Object.keys(volumes)) {
+      if (!Number.isFinite(next[key])) continue;
+      volumes[key] = Math.max(0, Math.min(1, next[key]));
+      try {
+        window.localStorage?.setItem(AUDIO_VOLUME_KEYS[key], String(volumes[key]));
+      } catch {
+        // ignore storage failures
+      }
+    }
+    if (master && context) master.gain.setTargetAtTime(0.028 * volumes.master, context.currentTime, 0.05);
+    if (ambientBus && context) ambientBus.gain.setTargetAtTime(volumes.ambient, context.currentTime, 0.05);
+    if (musicBus && context) musicBus.gain.setTargetAtTime(volumes.music, context.currentTime, 0.05);
+    return { ...volumes };
+  }
+
+  function getVolumes() {
+    return { ...volumes };
+  }
+
   return {
     start,
     update,
     updateLevelAudio,
+    updateWorldAudio,
     suspend,
     resume,
     isSuspended,
     updateEntityAudio,
     stopAllEntityAudio,
+    setVolumes,
+    getVolumes,
   };
 }
 

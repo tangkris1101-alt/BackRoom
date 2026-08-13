@@ -29,6 +29,7 @@
 - ESC 暂停（冻结音频 + pointerlockchange 兜底）
 - 暂停界面**保存进度**按钮（单击立即写盘，绿色主题，1.4s 内显示「已保存」反馈，与 5s 自动保存 / beforeunload flush 互为补充）
 - 暂停界面**重置进度**按钮（两步确认：点击进入「再次按下以确认」武装态，3s 内再次按下清空全部存档并回到 L0；超时、恢复、ESC 自动取消）
+- **可选账户与云存档**：邮箱注册、验证、登录、找回密码、跨设备存档、版本冲突选择；不登录时继续使用原有游客本地存档
 - 4 页教学弹窗（首次进入）
 - 中英双语 UI 切换（`localStorage` 持久化）
 
@@ -65,8 +66,12 @@
 ### 开发
 ```bash
 npm install
-npm run dev          # Vite, http://127.0.0.1:5173
+npm run api:dev      # 账户 API（内存模式）, http://127.0.0.1:8787
+npm run dev          # 另一个终端启动 Vite, http://127.0.0.1:5173
+npm run test:accounts
 ```
+
+账户后端的架构、配置、数据迁移和上线前检查见 [`docs/account-system.md`](docs/account-system.md)。独立版 `backrooms.html` 继续支持游客本地存档，但不会连接账户 API。
 
 ### 构建
 ```bash

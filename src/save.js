@@ -1,19 +1,13 @@
-const STORAGE_KEY = "backrooms-save";
-const SAVE_VERSION = 2;
-const LEGACY_SAVE_VERSION = 1;
-const HUB_LEVEL = -1;
-const PLAYABLE_LEVELS = new Set([HUB_LEVEL, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 37]);
-// A normal save is only a few KB.  Do not let a corrupted or legacy payload
-// monopolize the first menu interaction while it is being parsed.
-const MAX_SAVE_CHARS = 1_000_000;
-const MAX_LEVEL_STATES = 32;
-const MAX_STATES_PER_LEVEL = 256;
+import {
+  MAX_SAVE_CHARS,
+  SAVE_VERSION,
+  createEntitySnapshot,
+  createPickupSnapshot,
+  parseAndSanitizeGameSave,
+} from "./save-schema.js";
+import { getScopedStorageKey } from "./save-scope.js";
 
-function normalizeLevelId(level, legacy = false) {
-  const normalized = Math.floor(level);
-  if (legacy && normalized === 8) return HUB_LEVEL;
-  return PLAYABLE_LEVELS.has(normalized) ? normalized : 0;
-}
+const STORAGE_KEY = "backrooms-save";
 
 function safeStorage() {
   try {
@@ -23,167 +17,18 @@ function safeStorage() {
   }
 }
 
-function safeParse(json) {
-  if (!json || json.length > MAX_SAVE_CHARS) return null;
-  try {
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function limitedEntries(value, limit = MAX_LEVEL_STATES) {
-  if (!value || typeof value !== "object") return [];
-  return Object.entries(value).slice(0, limit);
-}
-
-function limitedArray(value, limit = MAX_STATES_PER_LEVEL) {
-  return Array.isArray(value) ? value.slice(0, limit) : [];
-}
-
-function clampNumber(value, fallback) {
-  return Number.isFinite(value) ? value : fallback;
-}
-
-function sanitizePickupState(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  const position = raw.position;
-  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) return null;
-  return {
-    active: Boolean(raw.active),
-    respawnTimer: clampNumber(raw.respawnTimer, 0),
-    position: { x: position.x, y: 0, z: position.z },
-    rotation: clampNumber(raw.rotation, 0),
-  };
-}
-
-function sanitizeInteractionState(raw) {
-  if (!raw || typeof raw !== "object") return { count: 0 };
-  return { count: Math.max(0, Math.floor(raw.count ?? 0)) };
-}
-
-function sanitizeEntityState(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  const position = raw.position;
-  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) return null;
-  const type = typeof raw.type === "string" && /^[a-z0-9-]{1,48}$/.test(raw.type)
-    ? raw.type
-    : "unknown";
-  const savedId = typeof raw.id === "string" && raw.id ? raw.id : type;
-  return {
-    // Older Level 3 saves used a separate super-bacteria ID. It is now the
-    // same entity as bacteria, so normalize it while preserving its position.
-    id: savedId === "super-bacteria" ? "bacteria" : savedId,
-    type,
-    position: { x: position.x, z: position.z },
-    contact: Boolean(raw.contact),
-    alertTimer: clampNumber(raw.alertTimer, 0),
-    stunnedTimer: clampNumber(raw.stunnedTimer, 0),
-    patrolIndex: Math.max(0, Math.floor(clampNumber(raw.patrolIndex, 0))),
-    provokedTimer: Math.max(0, clampNumber(raw.provokedTimer, 0)),
-  };
-}
-
-function sanitizeWorldItem(raw) {
-  if (!raw || typeof raw !== "object" || typeof raw.id !== "string" || !raw.id) return null;
-  const position = raw.position;
-  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) return null;
-  return {
-    id: raw.id,
-    active: raw.active !== false,
-    position: {
-      x: position.x,
-      y: Number.isFinite(position.y) ? position.y : 0.24,
-      z: position.z,
-    },
-    rotation: clampNumber(raw.rotation, 0),
-    tiltX: clampNumber(raw.tiltX, 0),
-    tiltZ: clampNumber(raw.tiltZ, 0),
-    data: raw.data && typeof raw.data === "object"
-      ? {
-          battery: clampNumber(raw.data.battery, 0),
-          activeTimer: clampNumber(raw.data.activeTimer, 0),
-          cooldownTimer: clampNumber(raw.data.cooldownTimer, 0),
-        }
-      : null,
-  };
-}
-
-function sanitizeInventoryEntry(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  const id = raw.id;
-  if (typeof id !== "string" || !id) return null;
-  return {
-    id,
-    count: Math.max(1, Math.floor(raw.count ?? 1)),
-    type: typeof raw.type === "string" ? raw.type : id,
-  };
-}
-
-function sanitizePlayer(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  const position = raw.position;
-  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) return null;
-  const almondWaterTimer = clampNumber(raw.almondWaterTimer, 0);
-  const superAlmondWaterTimer = clampNumber(raw.superAlmondWaterTimer, 0);
-  const staminaMax = superAlmondWaterTimer > 0 ? 250 : almondWaterTimer > 0 ? 150 : 100;
-  return {
-    level: normalizeLevelId(raw.level ?? 0),
-    position: {
-      x: position.x,
-      y: Number.isFinite(position.y) ? position.y : 0,
-      z: position.z,
-    },
-    yaw: clampNumber(raw.yaw, 0),
-    pitch: clampNumber(raw.pitch, -0.025),
-    stamina: Math.max(0, Math.min(clampNumber(raw.stamina, staminaMax), staminaMax)),
-    staminaMax,
-    staminaBaseMax: 100,
-    staminaRecoveryDelay: clampNumber(raw.staminaRecoveryDelay, 0),
-    almondWaterTimer,
-    superAlmondWaterTimer,
-    health: clampNumber(raw.health, 100),
-    healthMax: clampNumber(raw.healthMax, 100),
-    isSprinting: Boolean(raw.isSprinting),
-    sprintExhausted: Boolean(raw.sprintExhausted),
-    isDrinking: Boolean(raw.isDrinking),
-    drinkTimer: clampNumber(raw.drinkTimer, 0),
-    drinkItemId: typeof raw.drinkItemId === "string" ? raw.drinkItemId : null,
-    drinkStaminaBonus: clampNumber(raw.drinkStaminaBonus, 0),
-    runTime: clampNumber(raw.runTime, 0),
-  };
-}
-
-function sanitizeFlashlight(raw) {
-  if (!raw || typeof raw !== "object") return { owned: false, on: false, battery: 0 };
-  return {
-    owned: Boolean(raw.owned),
-    on: Boolean(raw.on) && Boolean(raw.owned),
-    battery: clampNumber(raw.battery, 0),
-  };
-}
-
-function sanitizeDetector(raw) {
-  if (!raw || typeof raw !== "object") return { owned: false, activeTimer: 0, cooldownTimer: 0 };
-  return {
-    owned: Boolean(raw.owned),
-    activeTimer: clampNumber(raw.activeTimer, 0),
-    cooldownTimer: clampNumber(raw.cooldownTimer, 0),
-  };
+function storageKeyForAccount(accountId) {
+  return arguments.length === 0
+    ? getScopedStorageKey(STORAGE_KEY)
+    : getScopedStorageKey(STORAGE_KEY, accountId);
 }
 
 export function hasSavedGame() {
   const storage = safeStorage();
   if (!storage) return false;
   try {
-    const raw = storage.getItem(STORAGE_KEY);
-    if (raw && raw.length > MAX_SAVE_CHARS) return false;
-    const parsed = safeParse(raw);
-    return Boolean(
-      parsed &&
-      (parsed.version === SAVE_VERSION || parsed.version === LEGACY_SAVE_VERSION) &&
-      parsed.player,
-    );
+    const raw = storage.getItem(storageKeyForAccount());
+    return Boolean(raw && raw.length <= MAX_SAVE_CHARS && parseAndSanitizeGameSave(raw));
   } catch {
     return false;
   }
@@ -192,94 +37,11 @@ export function hasSavedGame() {
 export function loadSave() {
   const storage = safeStorage();
   if (!storage) return null;
-  let raw;
   try {
-    raw = storage.getItem(STORAGE_KEY);
+    return parseAndSanitizeGameSave(storage.getItem(storageKeyForAccount()));
   } catch {
     return null;
   }
-  if (raw && raw.length > MAX_SAVE_CHARS) return null;
-  const parsed = safeParse(raw);
-  if (!parsed || (parsed.version !== SAVE_VERSION && parsed.version !== LEGACY_SAVE_VERSION)) return null;
-  const legacy = parsed.version === LEGACY_SAVE_VERSION;
-  const player = sanitizePlayer({
-    ...parsed.player,
-    level: normalizeLevelId(parsed.player?.level ?? 0, legacy),
-  });
-  if (!player) return null;
-  const inventory = limitedArray(parsed.inventory).map(sanitizeInventoryEntry).filter(Boolean);
-  const equippedIndex = Math.max(-1, Math.min(inventory.length - 1, Math.floor(parsed.equippedIndex ?? -1)));
-  const flashlight = sanitizeFlashlight(parsed.flashlight);
-  const detector = sanitizeDetector(parsed.detector);
-  const pickups = {};
-  if (parsed.pickups && typeof parsed.pickups === "object") {
-    for (const [levelKey, levelPickups] of limitedEntries(parsed.pickups)) {
-      const levelNum = normalizeLevelId(Number(levelKey), legacy);
-      if (!Number.isFinite(levelNum)) continue;
-      const sanitized = {};
-      if (levelPickups && typeof levelPickups === "object") {
-        for (const [id, state] of limitedEntries(levelPickups, MAX_STATES_PER_LEVEL)) {
-          const s = sanitizePickupState(state);
-          if (s) sanitized[id] = s;
-        }
-      }
-      pickups[levelNum] = sanitized;
-    }
-  }
-  const interactions = {};
-  if (parsed.interactions && typeof parsed.interactions === "object") {
-    for (const [levelKey, levelInteractions] of limitedEntries(parsed.interactions)) {
-      const levelNum = normalizeLevelId(Number(levelKey), legacy);
-      if (!Number.isFinite(levelNum)) continue;
-      const sanitized = {};
-      if (levelInteractions && typeof levelInteractions === "object") {
-        for (const [spotId, state] of limitedEntries(levelInteractions, MAX_STATES_PER_LEVEL)) {
-          if (typeof spotId === "string" && spotId) {
-            sanitized[spotId] = sanitizeInteractionState(state);
-          }
-        }
-      }
-      interactions[levelNum] = sanitized;
-    }
-  }
-  const objectives = {};
-  if (parsed.objectives && typeof parsed.objectives === "object") {
-    for (const [levelKey, value] of limitedEntries(parsed.objectives)) {
-      const levelNum = normalizeLevelId(Number(levelKey), legacy);
-      if (!Number.isFinite(levelNum)) continue;
-      objectives[levelNum] = { reached: Boolean(value?.reached) };
-    }
-  }
-  const entities = {};
-  if (parsed.entities && typeof parsed.entities === "object") {
-    for (const [levelKey, list] of limitedEntries(parsed.entities)) {
-      const levelNum = normalizeLevelId(Number(levelKey), legacy);
-      if (!Number.isFinite(levelNum)) continue;
-      entities[levelNum] = limitedArray(list).map(sanitizeEntityState).filter(Boolean);
-    }
-  }
-  const worldItems = {};
-  if (parsed.worldItems && typeof parsed.worldItems === "object") {
-    for (const [levelKey, list] of limitedEntries(parsed.worldItems)) {
-      const levelNum = normalizeLevelId(Number(levelKey), legacy);
-      if (!Number.isFinite(levelNum)) continue;
-      worldItems[levelNum] = limitedArray(list).map(sanitizeWorldItem).filter(Boolean);
-    }
-  }
-  return {
-    version: SAVE_VERSION,
-    savedAt: clampNumber(parsed.savedAt, Date.now()),
-    player,
-    inventory,
-    equippedIndex,
-    flashlight,
-    detector,
-    pickups,
-    interactions,
-    objectives,
-    entities,
-    worldItems,
-  };
 }
 
 export function writeSave(updates) {
@@ -299,8 +61,22 @@ export function writeSave(updates) {
     : { ...updates };
   merged.version = SAVE_VERSION;
   merged.savedAt = Date.now();
+  const sanitized = parseAndSanitizeGameSave(merged);
+  if (!sanitized) return false;
   try {
-    storage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    storage.setItem(storageKeyForAccount(), JSON.stringify(sanitized));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function replaceSave(save) {
+  const storage = safeStorage();
+  const sanitized = parseAndSanitizeGameSave(save);
+  if (!storage || !sanitized) return false;
+  try {
+    storage.setItem(storageKeyForAccount(), JSON.stringify(sanitized));
     return true;
   } catch {
     return false;
@@ -311,35 +87,24 @@ export function clearSave() {
   const storage = safeStorage();
   if (!storage) return;
   try {
-    storage.removeItem(STORAGE_KEY);
+    storage.removeItem(storageKeyForAccount());
   } catch {
     // ignore
   }
 }
 
+export function loadGuestSave() {
+  const storage = safeStorage();
+  if (!storage) return null;
+  try {
+    return parseAndSanitizeGameSave(storage.getItem(storageKeyForAccount(null)));
+  } catch {
+    return null;
+  }
+}
+
 export function getInitialLevelFromSave(save) {
-  if (!save?.player) return null;
-  return save.player.level;
+  return save?.player?.level ?? null;
 }
 
-export function createPickupSnapshot({ active, respawnTimer, position, rotation }) {
-  return {
-    active: Boolean(active),
-    respawnTimer: clampNumber(respawnTimer, 0),
-    position: { x: position.x, y: 0, z: position.z },
-    rotation: clampNumber(rotation, 0),
-  };
-}
-
-export function createEntitySnapshot({ id, type, position, contact, alertTimer = 0, stunnedTimer = 0, patrolIndex = 0, provokedTimer = 0 }) {
-  return {
-    id,
-    type: typeof type === "string" && /^[a-z0-9-]{1,48}$/.test(type) ? type : "unknown",
-    position: { x: position.x, z: position.z },
-    contact: Boolean(contact),
-    alertTimer: clampNumber(alertTimer, 0),
-    stunnedTimer: clampNumber(stunnedTimer, 0),
-    patrolIndex: Math.max(0, Math.floor(clampNumber(patrolIndex, 0))),
-    provokedTimer: Math.max(0, clampNumber(provokedTimer, 0)),
-  };
-}
+export { createEntitySnapshot, createPickupSnapshot };

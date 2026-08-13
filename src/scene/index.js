@@ -1,4 +1,5 @@
 import { getBackroomsLevelInfo, HUB_LEVEL } from "./constants.js";
+import { applyWorldPresentation } from "./common/presentation.js";
 
 const LEVEL_SCENE_LOADERS = new Map([
   [0, [() => import("./level-zero/index.js"), "createLevelZeroScene"]],
@@ -27,7 +28,7 @@ export async function createBackroomsScene(level = 0, { initialState = null, ent
   const levelInfo = getBackroomsLevelInfo(level);
   const [importScene, factoryName] = getLevelSceneLoader(levelInfo.level);
   const sceneModule = await importScene();
-  return sceneModule[factoryName]({ initialState, entryContext });
+  return applyWorldPresentation(sceneModule[factoryName]({ initialState, entryContext }));
 }
 
 export function preloadLevelScene(level = 0) {

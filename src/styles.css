@@ -294,6 +294,31 @@ body {
   letter-spacing: 0.1em;
 }
 
+.audio-volume-settings {
+  gap: 0.42rem;
+}
+
+.audio-volume-control {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.8fr) minmax(7rem, 1.4fr) 3rem;
+  align-items: center;
+  gap: 0.55rem;
+  color: rgba(236, 244, 216, 0.78);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+
+.audio-volume-control input {
+  width: 100%;
+  accent-color: #b7e56f;
+}
+
+.audio-volume-control output {
+  color: #dfffae;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .frame-rate-options,
 .quality-options {
   display: grid;
@@ -3700,4 +3725,306 @@ body {
 .tutorial-nav__btn--primary:hover:not(:disabled) {
   background: rgba(140, 255, 160, 0.35);
   border-color: rgba(180, 255, 200, 0.85);
+}
+
+/* Optional account and cloud-save surface. The game remains fully usable when
+   this dialog is unavailable in the disk-opened standalone build. */
+.account-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 96;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  overflow-y: auto;
+  background: rgba(5, 7, 4, 0.8);
+  opacity: 0;
+  backdrop-filter: blur(12px);
+  transition: opacity 180ms ease;
+}
+
+.account-modal[hidden] {
+  display: none;
+}
+
+.account-modal.is-visible {
+  opacity: 1;
+}
+
+.account-modal__panel {
+  width: min(620px, 100%);
+  max-height: min(780px, calc(100vh - 40px));
+  overflow-y: auto;
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid rgba(215, 233, 154, 0.36);
+  border-radius: 10px;
+  background:
+    linear-gradient(145deg, rgba(31, 37, 18, 0.98), rgba(9, 13, 8, 0.98)),
+    #11170b;
+  color: #eff5ce;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58), inset 0 1px rgba(255, 255, 255, 0.06);
+  transform: translateY(10px) scale(0.99);
+  transition: transform 180ms ease;
+}
+
+.account-modal.is-visible .account-modal__panel {
+  transform: none;
+}
+
+.account-modal__header,
+.account-modal__signed-actions,
+.account-conflict__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.account-modal__header h2,
+.account-conflict h3 {
+  margin: 5px 0 0;
+  color: #f5ffd2;
+  font-size: clamp(22px, 5vw, 32px);
+  line-height: 1;
+}
+
+.account-modal__eyebrow,
+.account-modal__form label > span,
+.account-conflict__copies strong {
+  color: #b9d37d;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+}
+
+.account-modal__close {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(215, 233, 154, 0.32);
+  border-radius: 50%;
+  background: rgba(5, 7, 3, 0.7);
+  color: #eff5ce;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.account-modal__description {
+  margin: 18px 0;
+  color: rgba(239, 245, 206, 0.68);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.account-modal__message {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(190, 217, 122, 0.25);
+  border-radius: 6px;
+  background: rgba(190, 217, 122, 0.08);
+  color: #e9f6bb;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.account-modal__message[data-kind="error"] {
+  border-color: rgba(255, 112, 95, 0.38);
+  background: rgba(128, 32, 20, 0.22);
+  color: #ffd3c8;
+}
+
+.account-modal__message[data-kind="success"] {
+  border-color: rgba(128, 255, 161, 0.34);
+  background: rgba(43, 115, 55, 0.18);
+  color: #d8ffd1;
+}
+
+.account-modal__tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-bottom: 16px;
+}
+
+.account-modal button {
+  border: 1px solid rgba(215, 233, 154, 0.3);
+  border-radius: 6px;
+  background: rgba(29, 38, 17, 0.74);
+  color: #dfedb1;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.account-modal button:hover:not(:disabled),
+.account-modal button[aria-pressed="true"] {
+  border-color: rgba(199, 247, 113, 0.7);
+  background: rgba(79, 105, 37, 0.58);
+  color: #f5ffd3;
+}
+
+.account-modal button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.account-modal__tabs button {
+  min-height: 38px;
+  padding: 7px;
+}
+
+.account-modal__form {
+  display: grid;
+  gap: 12px;
+}
+
+.account-modal__form[hidden] {
+  display: none;
+}
+
+.account-modal__form label {
+  display: grid;
+  gap: 6px;
+}
+
+.account-modal__form input {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid rgba(215, 233, 154, 0.26);
+  border-radius: 6px;
+  outline: none;
+  background: rgba(1, 3, 1, 0.62);
+  color: #f5ffd3;
+  font: inherit;
+  font-size: 14px;
+}
+
+.account-modal__form input:focus {
+  border-color: #b7da70;
+  box-shadow: 0 0 0 3px rgba(183, 218, 112, 0.12);
+}
+
+.account-modal__primary,
+.account-modal__secondary,
+.account-conflict__actions button,
+.account-modal__signed-actions button {
+  min-height: 44px;
+  padding: 10px 14px;
+}
+
+.account-modal__primary {
+  border-color: rgba(197, 244, 104, 0.72) !important;
+  background: rgba(81, 119, 39, 0.66) !important;
+  color: #f7ffd6 !important;
+}
+
+.account-modal__identity {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid rgba(215, 233, 154, 0.22);
+  border-radius: 7px;
+  background: rgba(215, 233, 154, 0.06);
+}
+
+.account-modal__identity > span {
+  color: #f5ffd3;
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.account-modal__identity small {
+  color: rgba(239, 245, 206, 0.64);
+}
+
+.account-modal__identity output {
+  margin-top: 5px;
+  color: #bada79;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.account-modal__identity output[data-state="error"],
+.account-modal__identity output[data-state="conflict"] {
+  color: #ffb298;
+}
+
+.account-modal__signed-actions {
+  margin-top: 12px;
+  justify-content: flex-start;
+}
+
+.account-conflict {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(215, 233, 154, 0.18);
+}
+
+.account-conflict h3 {
+  font-size: 17px;
+}
+
+.account-conflict > p {
+  color: rgba(239, 245, 206, 0.65);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.account-conflict__copies {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.account-conflict__copies article {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.26);
+}
+
+.account-conflict__copies span {
+  overflow-wrap: anywhere;
+  color: rgba(239, 245, 206, 0.72);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.account-conflict__actions {
+  align-items: stretch;
+  margin-top: 10px;
+}
+
+.account-conflict__actions button {
+  flex: 1 1 0;
+}
+
+@media (max-width: 600px) {
+  .account-modal {
+    place-items: end center;
+    padding: 0;
+  }
+
+  .account-modal__panel {
+    width: 100%;
+    max-height: 92dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 14px 14px 0 0;
+  }
+
+  .account-conflict__copies,
+  .account-conflict__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .account-conflict__actions {
+    display: grid;
+  }
 }
