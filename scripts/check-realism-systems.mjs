@@ -91,6 +91,16 @@ assert.match(audioSource, /updateWorldAudio/);
 assert.match(audioSource, /backrooms:audio:master/);
 assert.match(audioSource, /stored === null/);
 assert.match(audioSource, /createConvolver/);
+const audioStartSource = audioSource.slice(
+  audioSource.indexOf("  function start()"),
+  audioSource.indexOf("  function ensureHotelJazzAudio()"),
+);
+assert.doesNotMatch(
+  audioStartSource,
+  /new Audio\(levelFiveJazzUrl\)/,
+  "Level 5 music must not download when another level starts",
+);
+assert.match(audioSource, /if \(inHotel\) ensureHotelJazzAudio\(\);/);
 assert.match(mainSource, /averageFrameMs/);
 assert.match(mainSource, /onePercentLowFps/);
 assert.match(mainSource, /renderingPipeline\.prewarm/);

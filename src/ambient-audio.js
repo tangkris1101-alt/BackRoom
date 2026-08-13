@@ -147,7 +147,15 @@ export function createAmbientHum() {
     breathFilter.connect(breathGain);
     breathGain.connect(foleyBus);
     breathAudio.play().catch(() => {});
+  }
 
+  function ensureHotelJazzAudio() {
+    if (!context || !musicBus) return false;
+    if (hotelJazzAudio && hotelJazzGain && hotelJazzPanner) return true;
+
+    // The Level 5 track is several megabytes. Creating and playing it during
+    // the first user gesture made every level compete with an irrelevant
+    // music download. Build the media graph only when Level 5 is active.
     hotelJazzAudio = new Audio(levelFiveJazzUrl);
     hotelJazzAudio.loop = true;
     hotelJazzAudio.preload = "auto";
@@ -164,7 +172,7 @@ export function createAmbientHum() {
     hotelJazzFilter.connect(hotelJazzPanner);
     hotelJazzPanner.connect(hotelJazzGain);
     hotelJazzGain.connect(musicBus);
-    hotelJazzAudio.play().catch(() => {});
+    return true;
   }
 
   // Chrome logs an autoplay warning for every resume() attempt made before a
@@ -297,9 +305,11 @@ export function createAmbientHum() {
   }
 
   function updateLevelAudio(level) {
-    if (!context || !hotelJazzGain || !hotelJazzAudio) return;
+    if (!context) return;
     const now = context.currentTime;
     const inHotel = Number(level) === 5;
+    if (inHotel) ensureHotelJazzAudio();
+    if (!hotelJazzGain || !hotelJazzAudio) return;
     hotelJazzGain.gain.setTargetAtTime(inHotel ? 0.66 : 0, now, inHotel ? 1.5 : 0.65);
     hotelJazzAudio.playbackRate = inHotel ? 0.92 : 1;
     if (inHotel) hotelJazzAudio.play().catch(() => {});
@@ -413,11 +423,13 @@ export function createAmbientHum() {
       resolveEmitterPosition(musicEmitter, sourcePosition);
       musicSpatial = getSpatialState(sourcePosition, camera.position, listenerDirection, world, musicEmitter.maxDistance ?? 70);
     }
+    const inHotel = Number(world?.level) === 5;
+    if (inHotel) ensureHotelJazzAudio();
     if (hotelJazzGain && hotelJazzAudio) {
-      const target = Number(world?.level) === 5 ? musicSpatial.gain * musicSpatial.gain * (1 - musicSpatial.occlusion * 0.65) * 0.72 : 0;
+      const target = inHotel ? musicSpatial.gain * musicSpatial.gain * (1 - musicSpatial.occlusion * 0.65) * 0.72 : 0;
       hotelJazzGain.gain.setTargetAtTime(target, context.currentTime, target > 0 ? 0.55 : 0.3);
       if (hotelJazzPanner && "pan" in hotelJazzPanner) hotelJazzPanner.pan.setTargetAtTime(musicSpatial.pan, context.currentTime, 0.08);
-      if (Number(world?.level) === 5) hotelJazzAudio.play().catch(() => {});
+      if (inHotel) hotelJazzAudio.play().catch(() => {});
     }
     return {
       zone: zone?.id ?? `level-${world?.level ?? 0}`,
