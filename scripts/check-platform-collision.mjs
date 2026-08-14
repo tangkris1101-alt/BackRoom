@@ -9,6 +9,17 @@ const table = { minX: -1.14, maxX: 1.14, minZ: -0.59, maxZ: 0.59, topY: 0.88 };
 
 assert.equal(colliderBlocksAtFeetHeight(table, 0), true, "table blocks its side from the floor");
 assert.equal(colliderBlocksAtFeetHeight(table, 0.9), false, "player can move over a table after clearing its top");
+const climbableTable = { ...table, sideClearance: 0.42 };
+assert.equal(
+  colliderBlocksAtFeetHeight(climbableTable, 0.44),
+  true,
+  "a climbable table still blocks walking into it from the floor",
+);
+assert.equal(
+  colliderBlocksAtFeetHeight(climbableTable, 0.46),
+  false,
+  "a climbable table releases its side before the jump apex",
+);
 assert.equal(
   getPlatformFloorHeight({ colliders: [table], x: 0, z: 0, feetY: 0.72 }),
   0.88,

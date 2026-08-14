@@ -1,11 +1,17 @@
 const DEFAULT_PLAYER_RADIUS = 0.36;
 const LANDING_TOLERANCE = 0.18;
-const SIDE_CLEARANCE = 0.04;
+// Use the same forgiveness at the table edge as for landing. Previously the
+// player could land from 0.18m below a platform top but remained blocked by
+// its side until 0.04m below it, which made a close jump feel like a pushback.
+const SIDE_CLEARANCE = LANDING_TOLERANCE;
 
 export function colliderBlocksAtFeetHeight(collider, feetY = 0) {
   if (collider?.active === false) return false;
   if (!Number.isFinite(collider?.topY)) return true;
-  return feetY < collider.topY - SIDE_CLEARANCE;
+  const sideClearance = Number.isFinite(collider?.sideClearance)
+    ? Math.max(0, collider.sideClearance)
+    : SIDE_CLEARANCE;
+  return feetY < collider.topY - sideClearance;
 }
 
 export function getPlatformFloorHeight({

@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import bakedArmBase64 from "../../assets/models/fps-arm-para-baked.bin.b64?raw";
+import bakedLeftArmBase64 from "../../assets/models/fps-arm-para-baked.bin.b64?raw";
+import bakedRightArmBase64 from "../../assets/models/fps-arm-para-right-baked.bin.b64?raw";
 import { SHOW_FIRST_PERSON_VIEW_MODEL } from "../constants.js";
 import { createWorldItemModel } from "./world-items.js";
 
@@ -9,7 +10,7 @@ const ARMS_POSITION = new THREE.Vector3(-0.024, -0.32, -0.36);
 const BAKED_HEADER_BYTES = 4;
 const FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
 
-let bakedArmGeometry = null;
+const bakedArmGeometries = new Map();
 let bakedArmMaterial = null;
 
 const motionEuler = new THREE.Euler(0, 0, 0, "YXZ");
@@ -43,9 +44,9 @@ function cloneFloatSection(buffer, offset, length) {
   return new Float32Array(buffer.slice(offset, offset + length * FLOAT_BYTES));
 }
 
-function decodeBakedArmGeometry() {
-  if (bakedArmGeometry) return bakedArmGeometry;
-  const buffer = base64ToArrayBuffer(bakedArmBase64);
+function decodeBakedArmGeometry(id, base64) {
+  if (bakedArmGeometries.has(id)) return bakedArmGeometries.get(id);
+  const buffer = base64ToArrayBuffer(base64);
   const view = new DataView(buffer);
   const vertexCount = view.getUint32(0, true);
   const componentCount = vertexCount * 3;
@@ -55,26 +56,29 @@ function decodeBakedArmGeometry() {
   const normals = cloneFloatSection(buffer, offset, componentCount);
   offset += componentCount * FLOAT_BYTES;
   const colors = cloneFloatSection(buffer, offset, componentCount);
+  offset += componentCount * FLOAT_BYTES;
+  const surfaceRoughness = cloneFloatSection(buffer, offset, vertexCount);
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute("surfaceRoughness", new THREE.BufferAttribute(surfaceRoughness, 1));
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
-  bakedArmGeometry = geometry;
+  bakedArmGeometries.set(id, geometry);
   return geometry;
 }
 
 function getBakedArmMaterial() {
   if (bakedArmMaterial) return bakedArmMaterial;
   bakedArmMaterial = new THREE.MeshStandardMaterial({
-    // The baked vertex colours were intended for the source suit preview,
-    // but make the first-person gloves look dirty under the flashlight.
-    // Use one material colour while retaining smooth normal-based shading.
-    color: 0x9a7418,
-    vertexColors: false,
-    roughness: 0.92,
+    // The bake encodes clean suit/glove colour separation plus controlled
+    // per-vertex variation. It reads as worn rubber under direct light
+    // without introducing the dirty patches from the source preview colours.
+    color: 0xffffff,
+    vertexColors: true,
+    roughness: 0.76,
     metalness: 0,
     emissive: 0x000000,
     emissiveIntensity: 0,
@@ -86,13 +90,33 @@ function getBakedArmMaterial() {
     toneMapped: true,
     side: THREE.FrontSide,
   });
+  bakedArmMaterial.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nattribute float surfaceRoughness;\nvarying float vSurfaceRoughness;",
+      )
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvSurfaceRoughness = surfaceRoughness;",
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nvarying float vSurfaceRoughness;",
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        "#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor * mix(0.82, 1.2, vSurfaceRoughness), 0.38, 0.96);",
+      );
+  };
+  bakedArmMaterial.customProgramCacheKey = () => "first-person-glove-surface-v2";
   return bakedArmMaterial;
 }
 
-function createArmMesh(name, mirrorSign) {
-  const mesh = new THREE.Mesh(decodeBakedArmGeometry(), getBakedArmMaterial());
+function createArmMesh(name, geometry) {
+  const mesh = new THREE.Mesh(geometry, getBakedArmMaterial());
   mesh.name = name;
-  mesh.scale.set(mirrorSign, 1, 1);
   mesh.frustumCulled = false;
   mesh.renderOrder = 20;
   mesh.castShadow = false;
@@ -109,8 +133,14 @@ function createBakedHazmatArms() {
   arms.rotation.set(0, 0, 0);
   arms.scale.setScalar(ARMS_SCALE);
 
-  const left = createArmMesh("first-person-left-hazmat-arm-mesh", 1);
-  const right = createArmMesh("first-person-right-hazmat-arm-mesh", -1);
+  const left = createArmMesh(
+    "first-person-left-hazmat-arm-mesh",
+    decodeBakedArmGeometry("left", bakedLeftArmBase64),
+  );
+  const right = createArmMesh(
+    "first-person-right-hazmat-arm-mesh",
+    decodeBakedArmGeometry("right", bakedRightArmBase64),
+  );
   arms.add(left, right);
   arms.userData.meshes = { left, right };
   return arms;
@@ -263,24 +293,34 @@ export function updateFirstPersonHazmatViewModel(viewModel, elapsed) {
 
   const arms = viewModel.userData.arms;
   if (!arms) return;
+  const holdingItem = Boolean(viewModel.userData.heldItemId);
   for (const side of ["left", "right"]) {
-    const sideSign = side === "left" ? -1 : 1;
-    const phase = stridePhase + (side === "left" ? 0 : Math.PI);
-    const stride = Math.sin(phase) * walkAmount * strideScale;
-    const returnSwing = Math.cos(phase) * walkAmount * strideScale;
+    const isLeft = side === "left";
+    const sideSign = isLeft ? -1 : 1;
+    // A walking cycle should alternate the hands, but real arms never trace
+    // perfectly mirrored sine waves. The unequal cadence, phase and idle
+    // drift keep the relaxed bake from turning into a mannequin pose.
+    const cadence = isLeft ? 0.94 : 1.06;
+    const phase = stridePhase * cadence + (isLeft ? 0.2 : Math.PI - 0.13);
+    const sideAmplitude = isLeft ? 0.78 : 1;
+    const heldDamping = holdingItem && !isLeft ? 0.36 : 1;
+    const stride = Math.sin(phase) * walkAmount * strideScale * sideAmplitude * heldDamping;
+    const returnSwing = Math.cos(phase) * walkAmount * strideScale * sideAmplitude * heldDamping;
+    const idleDrift = Math.sin(elapsed * (isLeft ? 1.19 : 1.47) + (isLeft ? 0.6 : 1.9));
+    const idleRoll = Math.sin(elapsed * (isLeft ? 0.83 : 1.04) + (isLeft ? 1.2 : 0.25));
     const mesh = arms.userData.meshes[side];
     const restPosition = mesh?.userData.viewModelRestPosition;
     const restQuaternion = mesh?.userData.viewModelRestQuaternion;
     if (!mesh || !restPosition || !restQuaternion) continue;
     mesh.position.set(
-      restPosition.x - sideSign * stride * 0.028,
-      restPosition.y + Math.sin(stridePhase * 2) * 0.008 * walkAmount * bodyScale - landingImpact * 0.016,
-      restPosition.z + returnSwing * 0.06 + (airborne ? 0.012 : 0),
+      restPosition.x - sideSign * stride * 0.028 + idleDrift * (isLeft ? 0.0015 : 0.0022),
+      restPosition.y + Math.sin(phase * 2) * 0.008 * walkAmount * bodyScale - landingImpact * 0.016 + idleDrift * 0.0015,
+      restPosition.z + returnSwing * 0.06 + (airborne ? 0.012 : 0) + (holdingItem && !isLeft ? -0.012 : 0),
     );
     motionEuler.set(
-      returnSwing * 0.055 + landingImpact * 0.018,
-      sideSign * stride * 0.04,
-      sideSign * stride * 0.065,
+      returnSwing * 0.055 + landingImpact * 0.018 + idleDrift * (isLeft ? 0.008 : 0.012),
+      sideSign * stride * 0.04 + idleRoll * 0.009,
+      sideSign * stride * 0.065 + idleRoll * (isLeft ? 0.008 : -0.011),
     );
     motionQuaternion.setFromEuler(motionEuler);
     mesh.quaternion.copy(restQuaternion).multiply(motionQuaternion);

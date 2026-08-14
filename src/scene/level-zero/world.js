@@ -41,6 +41,10 @@ export const DARK_ZONES = [
 
 const ACTIVE_FIXTURE_LIGHTS = 8;
 const LEVEL_ZERO_MIN_FIXTURE_DISTANCE = CELL_SIZE * 1.86;
+// L0's broad tables are intentional traversal props. Keep their collision on
+// the ground, but release the side early enough during a normal jump that the
+// player can clear the lip and land on the tabletop.
+const LEVEL_ZERO_TABLE_JUMP_EDGE_CLEARANCE = 0.42;
 export const LEVEL_ZERO_ROOM_TABLE_CELLS = Object.freeze([
   { col: 4, row: 3, rotation: 0 },
   { col: 14, row: 5, rotation: Math.PI / 2 },
@@ -95,10 +99,32 @@ export function addRoomTables(scene, cellCenter) {
       minZ: center.z - halfZ,
       maxZ: center.z + halfZ,
       topY: 0.88,
+      sideClearance: LEVEL_ZERO_TABLE_JUMP_EDGE_CLEARANCE,
     });
   });
 
   return colliders;
+}
+
+function createFixtureHaloTexture() {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  const gradient = context.createRadialGradient(size / 2, size / 2, 4, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, "rgba(255, 250, 221, 0.72)");
+  gradient.addColorStop(0.28, "rgba(255, 238, 177, 0.3)");
+  gradient.addColorStop(0.68, "rgba(236, 205, 125, 0.075)");
+  gradient.addColorStop(1, "rgba(214, 178, 92, 0)");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  return texture;
 }
 
 export function createLights(scene, fixturePositions) {
@@ -110,6 +136,7 @@ export function createLights(scene, fixturePositions) {
   const panelSize = 1.42;
   const panelGeometry = new THREE.BoxGeometry(1, 0.035, 1);
   const trimGeometry = new THREE.BoxGeometry(1, 0.03, 1);
+  const haloGeometry = new THREE.PlaneGeometry(1, 1);
   const trimMaterial = new THREE.MeshStandardMaterial({
     color: 0x9d9258,
     emissive: 0x4a4020,
@@ -117,27 +144,55 @@ export function createLights(scene, fixturePositions) {
     roughness: 0.88,
     metalness: 0.02,
   });
+  const panelMaterial = new THREE.MeshBasicMaterial({
+    color: 0xfff4d2,
+    toneMapped: false,
+  });
+  const haloMaterial = new THREE.MeshBasicMaterial({
+    map: createFixtureHaloTexture(),
+    color: 0xffffff,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.26,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+  const trims = new THREE.InstancedMesh(trimGeometry, trimMaterial, fixturePositions.length);
+  const panels = new THREE.InstancedMesh(panelGeometry, panelMaterial, fixturePositions.length);
+  const halos = new THREE.InstancedMesh(haloGeometry, haloMaterial, fixturePositions.length);
+  trims.name = "level-zero-fixture-trims";
+  panels.name = "level-zero-fixture-panels";
+  halos.name = "level-zero-fixture-halos";
 
-  fixturePositions.forEach((fixture) => {
-    const glowMaterial = new THREE.MeshStandardMaterial({
-      color: fixture.color,
-      emissive: fixture.color,
-      emissiveIntensity: fixture.baseIntensity,
-      roughness: 0.28,
-    });
-    const trim = new THREE.Mesh(trimGeometry, trimMaterial);
-    trim.position.set(fixture.x, CEILING_Y - 0.055, fixture.z);
-    trim.scale.set(panelSize + 0.24, 1, panelSize + 0.24);
-    scene.add(trim);
+  const matrix = new THREE.Matrix4();
+  const position = new THREE.Vector3();
+  const scale = new THREE.Vector3();
+  const identityQuaternion = new THREE.Quaternion();
+  const haloQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+  const haloColor = new THREE.Color();
 
-    const panel = new THREE.Mesh(panelGeometry, glowMaterial);
-    panel.position.set(fixture.x, CEILING_Y - 0.09, fixture.z);
-    panel.scale.set(panelSize, 1, panelSize);
-    scene.add(panel);
+  fixturePositions.forEach((fixture, index) => {
+    position.set(fixture.x, CEILING_Y - 0.055, fixture.z);
+    scale.set(panelSize + 0.24, 1, panelSize + 0.24);
+    matrix.compose(position, identityQuaternion, scale);
+    trims.setMatrixAt(index, matrix);
 
+    position.y = CEILING_Y - 0.09;
+    scale.set(panelSize, 1, panelSize);
+    matrix.compose(position, identityQuaternion, scale);
+    panels.setMatrixAt(index, matrix);
+
+    position.y = CEILING_Y - 0.125;
+    const haloSize = fixture.baseIntensity >= 1.7 ? 3.8 : fixture.baseIntensity < 1 ? 2.6 : 3.2;
+    scale.set(haloSize, haloSize, 1);
+    matrix.compose(position, haloQuaternion, scale);
+    halos.setMatrixAt(index, matrix);
+
+    halos.setColorAt(index, haloColor.setHex(fixture.color).multiplyScalar(0.42 + fixture.baseIntensity * 0.18));
     fixtures.push({
-      panel,
-      material: glowMaterial,
+      index,
       x: fixture.x,
       z: fixture.z,
       color: fixture.color,
@@ -149,6 +204,11 @@ export function createLights(scene, fixturePositions) {
       pulse: fixture.baseIntensity,
     });
   });
+  trims.instanceMatrix.needsUpdate = true;
+  panels.instanceMatrix.needsUpdate = true;
+  halos.instanceMatrix.needsUpdate = true;
+  halos.instanceColor?.setUsage(THREE.DynamicDrawUsage);
+  scene.add(trims, panels, halos);
 
   for (let index = 0; index < activeLightCount; index += 1) {
     const light = new THREE.PointLight(0xfff9df, 0, 10, 2.05);
@@ -170,9 +230,17 @@ export function createLights(scene, fixturePositions) {
       light.visible = fixture !== null;
       if (!fixture) return;
       light.color.setHex(fixture.color);
-      light.distance = fixture.range * 1.2;
+      light.distance = fixture.range * 1.12;
       light.position.set(fixture.x, CEILING_Y - 0.24, fixture.z);
     });
+  }
+
+  function updateFixtureVisuals() {
+    fixtures.forEach((fixture) => {
+      const haloBrightness = 0.14 + fixture.pulse * fixture.baseIntensity * 0.2;
+      halos.setColorAt(fixture.index, haloColor.setHex(fixture.color).multiplyScalar(haloBrightness));
+    });
+    if (halos.instanceColor) halos.instanceColor.needsUpdate = true;
   }
 
   function updatePointLights(delta, playerPosition) {
@@ -189,11 +257,11 @@ export function createLights(scene, fixturePositions) {
     activeLights.forEach((light) => {
       const fixture = light.userData.fixture;
       if (!fixture) return;
-      light.intensity = fixture.pulse * fixture.baseIntensity * 2.25;
+      light.intensity = fixture.pulse * fixture.baseIntensity * 2.2;
     });
   }
 
-  return { fixtures, updatePointLights };
+  return { fixtures, updateFixtureVisuals, updatePointLights };
 }
 
 export function getExitMount(position) {

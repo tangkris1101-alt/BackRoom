@@ -25,6 +25,8 @@ import {
   addExitHole,
   addMoodZones,
   addRoomTables,
+  BRIGHT_ZONES,
+  DARK_ZONES,
   collectWallTransforms,
   createFloorGeometryWithHole,
 } from "./world.js";
@@ -51,6 +53,35 @@ import {
   getFocusedItem,
 } from "../entities/index.js";
 
+function collectReachableLightCells(fixture) {
+  const origin = worldToCell(fixture.x, fixture.z);
+  const maxSteps = Math.max(1, Math.ceil((fixture.range / CELL_SIZE) * 1.15));
+  const maxDistance = fixture.range * 1.18 + CELL_SIZE * 0.5;
+  const queue = [{ col: origin.col, row: origin.row, steps: 0 }];
+  const visited = new Set();
+  const cells = [];
+
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const cell = queue[cursor];
+    const key = `${cell.col}:${cell.row}`;
+    if (visited.has(key) || !isOpenCell(cell.col, cell.row)) continue;
+    visited.add(key);
+
+    const center = cellCenter(cell.col, cell.row);
+    if (Math.hypot(center.x - fixture.x, center.z - fixture.z) > maxDistance) continue;
+    cells.push(cell);
+    if (cell.steps >= maxSteps) continue;
+
+    queue.push(
+      { col: cell.col - 1, row: cell.row, steps: cell.steps + 1 },
+      { col: cell.col + 1, row: cell.row, steps: cell.steps + 1 },
+      { col: cell.col, row: cell.row - 1, steps: cell.steps + 1 },
+      { col: cell.col, row: cell.row + 1, steps: cell.steps + 1 },
+    );
+  }
+  return cells;
+}
+
 function createFixtureLightField(fixturePositions) {
   const size = 512;
   const width = COLS * CELL_SIZE;
@@ -68,15 +99,50 @@ function createFixtureLightField(fixturePositions) {
   fixturePositions.forEach((fixture) => {
     const x = ((fixture.x - minX) / width) * size;
     const z = ((fixture.z - minZ) / height) * size;
-    const radius = Math.max(18, (fixture.range / width) * size * 1.45);
+    const radius = Math.max(16, (fixture.range / width) * size * 1.22);
     const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.78, 0.34, 1);
     const gradient = context.createRadialGradient(x, z, 0, x, z, radius);
-    gradient.addColorStop(0, `rgba(255, 242, 184, ${0.34 * strength})`);
-    gradient.addColorStop(0.38, `rgba(244, 220, 147, ${0.2 * strength})`);
-    gradient.addColorStop(0.76, `rgba(176, 145, 77, ${0.075 * strength})`);
+    gradient.addColorStop(0, `rgba(255, 246, 207, ${0.28 * strength})`);
+    gradient.addColorStop(0.42, `rgba(250, 229, 158, ${0.18 * strength})`);
+    gradient.addColorStop(0.82, `rgba(187, 151, 77, ${0.07 * strength})`);
     gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+    context.save();
+    context.beginPath();
+    const cellWidth = (CELL_SIZE / width) * size;
+    const cellHeight = (CELL_SIZE / height) * size;
+    collectReachableLightCells(fixture).forEach((cell) => {
+      context.rect(
+        cell.col * cellWidth - 0.75,
+        cell.row * cellHeight - 0.75,
+        cellWidth + 1.5,
+        cellHeight + 1.5,
+      );
+    });
+    context.clip();
     context.fillStyle = gradient;
     context.fillRect(x - radius, z - radius, radius * 2, radius * 2);
+    context.restore();
+  });
+
+  context.globalCompositeOperation = "source-over";
+  context.fillStyle = "rgba(0, 0, 0, 0.06)";
+  DARK_ZONES.forEach((zone) => {
+    context.fillRect(
+      (zone.col / COLS) * size,
+      (zone.row / ROWS) * size,
+      (zone.width / COLS) * size,
+      (zone.height / ROWS) * size,
+    );
+  });
+  context.fillStyle = "rgba(255, 238, 176, 0.02)";
+  BRIGHT_ZONES.forEach((zone) => {
+    context.fillRect(
+      (zone.col / COLS) * size,
+      (zone.row / ROWS) * size,
+      (zone.width / COLS) * size,
+      (zone.height / ROWS) * size,
+    );
   });
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -138,13 +204,13 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   // The background MUST match the fog colour, otherwise corridor ends, the
   // far-clip plane and plane edges render as black voids instead of dissolving
   // into the warm Backrooms haze.
-  const HAZE_COLOR = 0x6f6139;
+  const HAZE_COLOR = 0x6c603b;
   scene.background = new THREE.Color(HAZE_COLOR);
-  scene.fog = new THREE.FogExp2(HAZE_COLOR, 0.01);
+  scene.fog = new THREE.FogExp2(HAZE_COLOR, 0.0082);
   // Keep the distant maze readable between fluorescent fixtures. This is a
   // single, shadowless fill light, so it fixes the black-wall problem without
   // adding the cost of more dynamic lights or shadow maps.
-  scene.add(new THREE.HemisphereLight(0xffedb5, 0x4b3516, 1.0));
+  scene.add(new THREE.HemisphereLight(0xffe8ad, 0x6a552d, 0.92));
 
   const cameraFar = Math.hypot(COLS * CELL_SIZE, ROWS * CELL_SIZE) + CELL_SIZE * 2;
   const camera = new THREE.PerspectiveCamera(72, 1, 0.05, cameraFar);
@@ -242,7 +308,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     wallMaterials,
     eastWest,
   );
-  const { fixtures, updatePointLights } = createLights(scene, fixturePositions);
+  const { fixtures, updateFixtureVisuals, updatePointLights } = createLights(scene, fixturePositions);
   const updateLightState = createStableLightState("HUM", {
     dimBelow: 0.5,
     normalAbove: 0.66,
@@ -350,10 +416,10 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       const hum = 0.92 + Math.sin(elapsed * 1.45 + fixture.phase) * 0.035;
       const twitch = Math.sin(elapsed * fixture.speed + fixture.phase * 2.4) > 0.965 ? 0.72 : 1;
       const pulse = Math.max(0.58, hum * twitch - fixture.weak);
-      fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.56;
       fixture.pulse = pulse;
       lightTotal += pulse;
     });
+    updateFixtureVisuals();
     updatePointLights(delta, playerPosition);
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.9;
     const manilaBlackout = manilaRoom.update(elapsed);
