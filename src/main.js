@@ -221,6 +221,10 @@ const tutorialPrev = document.querySelector("#tutorial-prev");
 const tutorialNext = document.querySelector("#tutorial-next");
 const tutorialPages = document.querySelector(".tutorial-pages");
 const tutorialDots = document.querySelectorAll(".tutorial-pagination__dot");
+const openingOverlay = document.querySelector("#opening-overlay");
+const openingLocation = document.querySelector("#opening-location");
+const openingLines = [0, 1].map((index) => document.querySelector(`#opening-line-${index}`));
+const openingContinue = document.querySelector("#opening-continue");
 const TUTORIAL_SEEN_KEY = "backrooms-tutorial-seen";
 const TUTORIAL_TOTAL_PAGES = 4;
 const REACHED_KEY = "backrooms-levels-reached";
@@ -228,6 +232,8 @@ const COMPLETED_KEY = "backrooms-levels-completed";
 const PICKED_UP_KEY = "backrooms-picked-up-items";
 let tutorialPage = 0;
 let tutorialActive = false;
+let openingSequence = null;
+let openingPending = false;
 let changelogReturnFocus = null;
 
 const FPS_SAMPLE_INTERVAL = 0.75;
@@ -276,6 +282,23 @@ const EXIT_DOOR_INTERACT_RADIUS = 4.2;
 const EXIT_ELEVATOR_ENTER_RADIUS = 1.65;
 const ALMOND_WATER_HEAL_DURATION = 5;
 const SUPER_ALMOND_WATER_HEAL_DURATION = 5;
+// Three.js positive X camera rotation looks upward. Pi / 6 is a 30 degree
+// incline above the floor plane while the player is still lying down.
+const OPENING_INITIAL_PITCH = Math.PI / 6;
+const OPENING_STAND_UP_DURATION_S = 1.35;
+
+const OPENING_TEXT = {
+  "zh-CN": {
+    location: "LEVEL 0 · 未知地点",
+    lines: ["我这是在哪？", "头好痛……这里不该有这么多黄色的房间。"],
+    continue: "深呼吸，站起来",
+  },
+  en: {
+    location: "LEVEL 0 · UNKNOWN LOCATION",
+    lines: ["Where am I?", "My head… There should not be this many yellow rooms."],
+    continue: "Take a breath. Stand up.",
+  },
+};
 
 function normalizeFrameRateLimit(value) {
   if (value === "auto" || value === null || value === undefined) return 0;
@@ -1027,6 +1050,7 @@ function setLanguage(nextLanguage) {
   document.documentElement.lang = currentLanguage;
   canvas.dataset.language = currentLanguage;
   updateMainMenuText();
+  updateOpeningText();
   accountSystem?.render();
   updateHudLabels();
   if (controls) {
@@ -1870,7 +1894,7 @@ async function loadLevel(level, { updateUrl = false, entryContext = null } = {})
   return true;
 }
 
-async function bootstrapWorld(level, save) {
+async function bootstrapWorld(level, save, { opening = false } = {}) {
   applySaveToRuntime(save);
   const initialState = buildLevelInitialState(level, save);
   let nextWorld;
@@ -1928,7 +1952,18 @@ async function bootstrapWorld(level, save) {
   resize();
   renderInventoryBar();
   gameStarted = true;
-  scheduleTutorial();
+  if (opening && level === 0 && !save) {
+    // Do not start the opening timer until the loading overlay has completed
+    // its first visible scene pass. Otherwise slow scene construction can
+    // consume the dialogue while the player is still looking at the loader.
+    // The opening camera must nevertheless be in place before the first
+    // render, so the loader cannot reveal a single standing-view frame.
+    primeOpeningPresentation();
+    openingPending = true;
+    canvas.dataset.opening = "waiting";
+  } else {
+    scheduleTutorial();
+  }
   if (!animationFrameStarted) {
     animationFrameStarted = true;
     animate();
@@ -1953,10 +1988,15 @@ function leaveMainMenu() {
   }, 300);
 }
 
-function beginGameSession(level, save) {
+function beginGameSession(level, save, { opening = false } = {}) {
   leaveMainMenu();
+  loadingComplete = false;
+  frameCount = 0;
+  loadingOverlay?.classList.remove("is-hidden");
+  loadingOverlay?.removeAttribute("hidden");
+  if (loadingFill) loadingFill.style.transform = "scaleX(0)";
   showGameplayUi();
-  bootstrapWorld(level, save);
+  bootstrapWorld(level, save, { opening });
 }
 
 function setMainMenuStarting(starting) {
@@ -1998,7 +2038,9 @@ async function finishMainMenuStart() {
     return;
   }
 
-  beginGameSession(debugMode.queryEnabled ? getInitialLevel() : 0, null);
+  beginGameSession(debugMode.queryEnabled ? getInitialLevel() : 0, null, {
+    opening: !debugMode.queryEnabled,
+  });
 }
 
 function handleMainMenuStart() {
@@ -3013,13 +3055,134 @@ async function resetAllProgress() {
 function handlePointerLockChange() {
   if (document.pointerLockElement === canvas) return;
   isInPauseTransition = false;
-  if (isPaused || exitComplete || gameFailed || levelTransition) return;
+  if (openingPending || openingSequence || isPaused || exitComplete || gameFailed || levelTransition) return;
   if (pauseFromUnlock) {
     pauseFromUnlock = false;
     setPauseState(true, { fromUnlock: true });
     return;
   }
   setPauseState(true, { fromUnlock: true });
+}
+
+function updateOpeningText() {
+  const text = OPENING_TEXT[currentLanguage] ?? OPENING_TEXT.en;
+  if (openingLocation) openingLocation.textContent = text.location;
+  openingLines.forEach((line, index) => {
+    if (line) line.textContent = text.lines[index] ?? "";
+  });
+  if (openingContinue) openingContinue.textContent = text.continue;
+}
+
+function beginOpeningSequence() {
+  if (!world || !controls || !openingOverlay) {
+    openingPending = false;
+    scheduleTutorial();
+    return;
+  }
+  const floorHeight = world.getFloorHeight?.(world.spawn.x, world.spawn.z);
+  const floorY = Number.isFinite(floorHeight) ? floorHeight : 0;
+  openingPending = false;
+  openingSequence = {
+    elapsed: 0,
+    floorY,
+    standY: floorY + controls.eyeHeight,
+    ready: false,
+    standing: false,
+    standElapsed: 0,
+    dialogueIndex: 0,
+  };
+  controls.keys.clear();
+  controls.resetJoystick?.();
+  controls.verticalVelocity = 0;
+  controls.horizontalVelocity.set(0, 0);
+  controls.headBobY = 0;
+  primeOpeningPresentation();
+  updateOpeningText();
+  openingLines.forEach((line, index) => line?.classList.toggle("is-visible", index === 0));
+  openingContinue?.classList.remove("is-ready");
+  if (openingContinue) openingContinue.disabled = true;
+  openingOverlay.removeAttribute("hidden");
+  openingOverlay.classList.remove("is-standing");
+  canvas.dataset.opening = "true";
+}
+
+function setOpeningViewModelVisible(visible) {
+  const viewModel = world?.camera?.getObjectByName("first-person-baked-hazmat-arms");
+  if (viewModel) viewModel.visible = Boolean(visible);
+}
+
+function primeOpeningPresentation() {
+  if (!world || !controls) return;
+  const floorHeight = world.getFloorHeight?.(world.spawn.x, world.spawn.z);
+  const floorY = Number.isFinite(floorHeight) ? floorHeight : 0;
+  controls.pitch = OPENING_INITIAL_PITCH;
+  world.camera.position.y = floorY + 0.18;
+  setOpeningViewModelVisible(false);
+  controls.applyRotation();
+  controls.syncCameraState();
+}
+
+function updateOpeningSequence(delta) {
+  if (!openingSequence || !world || !controls) return;
+  openingSequence.elapsed += delta;
+  const lowEyeY = openingSequence.floorY + 0.18;
+  const riseProgress = openingSequence.standing
+    ? THREE.MathUtils.smoothstep(openingSequence.standElapsed / OPENING_STAND_UP_DURATION_S, 0, 1)
+    : 0;
+  world.camera.position.y = THREE.MathUtils.lerp(lowEyeY, openingSequence.standY, riseProgress);
+  controls.pitch = THREE.MathUtils.lerp(OPENING_INITIAL_PITCH, -0.025, riseProgress);
+  controls.applyRotation();
+  controls.syncCameraState();
+  if (openingSequence.standing) {
+    openingSequence.standElapsed += delta;
+    if (openingSequence.standElapsed >= OPENING_STAND_UP_DURATION_S) {
+      finishOpeningSequence();
+      return;
+    }
+  }
+}
+
+function advanceOpeningDialogue() {
+  if (!openingSequence || openingSequence.standing || openingSequence.ready) return;
+  if (openingSequence.dialogueIndex < openingLines.length - 1) {
+    openingSequence.dialogueIndex += 1;
+    openingLines.forEach((line, index) => {
+      line?.classList.toggle("is-visible", index === openingSequence.dialogueIndex);
+    });
+    return;
+  }
+  openingSequence.ready = true;
+  if (openingContinue) {
+    openingContinue.disabled = false;
+    openingContinue.classList.add("is-ready");
+    openingContinue.focus();
+  }
+}
+
+function beginStandingUp() {
+  if (!openingSequence?.ready || !world || !controls) return;
+  openingSequence.ready = false;
+  openingSequence.standing = true;
+  openingSequence.standElapsed = 0;
+  openingContinue?.classList.remove("is-ready");
+  if (openingContinue) openingContinue.disabled = true;
+  openingOverlay?.classList.add("is-standing");
+}
+
+function finishOpeningSequence() {
+  if (!openingSequence?.standing || !world || !controls) return;
+  world.camera.position.y = openingSequence.standY;
+  controls.groundY = openingSequence.standY;
+  controls.bodyY = openingSequence.standY;
+  controls.pitch = -0.025;
+  controls.applyRotation();
+  controls.syncCameraState();
+  setOpeningViewModelVisible(true);
+  openingSequence = null;
+  openingOverlay?.classList.remove("is-standing");
+  openingOverlay?.setAttribute("hidden", "");
+  delete canvas.dataset.opening;
+  scheduleTutorial();
 }
 
 function updateTutorialPage() {
@@ -3756,6 +3919,33 @@ function animate(timestamp) {
   const elapsed = clock.elapsedTime;
   tickLongPressProgress();
 
+  if (openingPending) {
+    // Keep the world inert while the standard loader establishes its first
+    // visible frame. The story itself only begins after its fade has ended.
+    updateLoadingOverlay();
+    renderingPipeline.update(delta, world.camera.position);
+    renderingPipeline.render();
+    frameCount += 1;
+    canvas.dataset.sceneReady = "true";
+    canvas.dataset.frameCount = String(frameCount);
+    if (loadingComplete && (!loadingOverlay || loadingOverlay.hasAttribute("hidden"))) {
+      beginOpeningSequence();
+    }
+    scheduleNextAnimation();
+    return;
+  }
+
+  if (openingSequence) {
+    updateOpeningSequence(delta);
+    renderingPipeline.update(delta, world.camera.position);
+    renderingPipeline.render();
+    frameCount += 1;
+    canvas.dataset.sceneReady = "true";
+    canvas.dataset.frameCount = String(frameCount);
+    scheduleNextAnimation();
+    return;
+  }
+
   if (!exitComplete && !gameFailed && !levelTransition) runTime += delta;
 
   updateLevelTransition(delta);
@@ -3925,6 +4115,13 @@ function onUseKeyDown(event) {
     if (event.code === "Escape") {
       event.preventDefault();
       setMainMenuSettingsOpen(false);
+    }
+    return;
+  }
+  if (openingPending || openingSequence) {
+    event.preventDefault();
+    if (event.code === "Space") {
+      advanceOpeningDialogue();
     }
     return;
   }
@@ -4234,7 +4431,7 @@ canvas?.addEventListener("pointerup", onCanvasTapPointerUp);
 canvas?.addEventListener("pointercancel", () => { tapActive = false; });
 window.addEventListener("blur", () => {
   if (ePressActive) endEPress();
-  if (isInPauseTransition) return;
+  if (openingPending || openingSequence || isInPauseTransition) return;
   setPauseState(true);
 });
 document.addEventListener("pointerlockchange", handlePointerLockChange);
@@ -4243,6 +4440,21 @@ tutorialSkip?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
   hideTutorial();
+});
+
+function handleOpeningContinue(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  beginStandingUp();
+}
+
+openingContinue?.addEventListener("pointerdown", handleOpeningContinue);
+openingContinue?.addEventListener("click", handleOpeningContinue);
+
+openingOverlay?.addEventListener("pointerdown", (event) => {
+  if (event.target === openingContinue) return;
+  event.preventDefault();
+  advanceOpeningDialogue();
 });
 
 tutorialOverlay?.addEventListener("pointerdown", (event) => {
@@ -4445,7 +4657,7 @@ function handleSavePromptContinue(save) {
 function handleSavePromptRestart(save) {
   hideSavePrompt();
   clearSave();
-  beginGameSession(0, null);
+  beginGameSession(0, null, { opening: true });
 }
 
 function handleSavePromptJumpToLevel(targetLevel, save) {

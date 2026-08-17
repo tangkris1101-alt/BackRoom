@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
 const SHADOW_CASTER_PATTERN = /entity|lifeform|hound|smiler|faceling|item|pickup|door|table|chair|desk|sofa|cabinet|crate|bed|lamp|fixture|rail|stair|pipe/i;
@@ -54,12 +55,26 @@ function createIndoorShadowRig(world, profile) {
   });
   if (!candidates.length) return null;
 
-  const key = new THREE.SpotLight(0xffe8bd, 0, 22, Math.PI * 0.46, 0.72, 2);
+  // Levels can soften the key light via presentation.shadow (penumbra, blur
+  // radius, intensity, cone angle). Levels without the override keep the
+  // original crisp look.
+  const shadowConfig = world.presentation?.shadow ?? {};
+  const intensityScale = shadowConfig.intensityScale ?? 0.34;
+  const intensityCap = shadowConfig.intensityCap ?? 1.35;
+  const key = new THREE.SpotLight(
+    0xffe8bd,
+    0,
+    22,
+    Math.PI * (shadowConfig.angle ?? 0.46),
+    shadowConfig.penumbra ?? 0.72,
+    2,
+  );
   key.name = "realism-indoor-shadow-key";
   key.castShadow = true;
   key.shadow.mapSize.set(profile.indoorShadowMapSize, profile.indoorShadowMapSize);
   key.shadow.bias = -0.00025;
   key.shadow.normalBias = 0.035;
+  key.shadow.radius = shadowConfig.radius ?? 1;
   key.shadow.camera.near = 0.15;
   key.shadow.camera.far = 24;
   key.target.name = "realism-indoor-shadow-target";
@@ -87,7 +102,7 @@ function createIndoorShadowRig(world, profile) {
       activeSource.getWorldPosition(worldPosition);
       key.position.copy(worldPosition);
       key.color.copy(activeSource.color);
-      key.intensity = Math.min(1.35, Math.max(0.22, activeSource.intensity * 0.34));
+      key.intensity = Math.min(intensityCap, Math.max(0.22, activeSource.intensity * intensityScale));
       key.distance = Math.min(22, Math.max(8, activeSource.distance || 14));
       key.target.position.set(worldPosition.x, Math.max(0, worldPosition.y - 3.4), worldPosition.z);
       key.target.updateMatrixWorld();
@@ -131,12 +146,14 @@ export function createRenderingPipeline(renderer, canvas, profile) {
   let world = null;
   let composer = null;
   let gtaoPass = null;
+  let bloomPass = null;
   let shadowRig = null;
   let width = window.innerWidth;
   let height = window.innerHeight;
   let pixelRatio = Math.min(window.devicePixelRatio, profile.maxPixelRatio);
   let gtaoEnabled = profile.gtao;
   let shadowScale = 1;
+  let baseExposure = 1;
   let lowFpsTime = 0;
   let recoveryTime = 0;
 
@@ -150,8 +167,10 @@ export function createRenderingPipeline(renderer, canvas, profile) {
 
   function disposeComposer() {
     gtaoPass?.dispose?.();
+    bloomPass?.dispose?.();
     composer?.dispose?.();
     gtaoPass = null;
+    bloomPass = null;
     composer = null;
   }
 
@@ -168,6 +187,18 @@ export function createRenderingPipeline(renderer, canvas, profile) {
     gtaoPass.pdRings = 1;
     gtaoPass.enabled = gtaoEnabled;
     composer.addPass(gtaoPass);
+    // Optional per-level highlight bloom (e.g. Level 0 fluorescent fixtures).
+    // High threshold keeps it to a soft glow around light panels only.
+    const bloomConfig = world.presentation?.post?.bloom ?? null;
+    if (bloomConfig) {
+      bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(width, height),
+        bloomConfig.strength,
+        bloomConfig.radius,
+        bloomConfig.threshold,
+      );
+      composer.addPass(bloomPass);
+    }
     composer.addPass(new OutputPass());
     gtaoPass.setSize(Math.ceil(width * pixelRatio * 0.5), Math.ceil(height * pixelRatio * 0.5));
   }
@@ -185,7 +216,8 @@ export function createRenderingPipeline(renderer, canvas, profile) {
     profile,
     setWorld(nextWorld) {
       world = nextWorld;
-      renderer.toneMappingExposure = world?.presentation?.exposure ?? 1;
+      baseExposure = world?.presentation?.exposure ?? 1;
+      renderer.toneMappingExposure = baseExposure;
       configureMeshQuality(world.scene, profile, renderer.capabilities.getMaxAnisotropy());
       shadowRig = null;
       if (profile.shadows) {
@@ -209,6 +241,18 @@ export function createRenderingPipeline(renderer, canvas, profile) {
     },
     update(delta, playerPosition) {
       shadowRig?.update?.(delta, playerPosition);
+      // Subtle exposure breathing: levels that expose `exposureBias` (-1..1)
+      // and a `post.exposureDrift` amplitude get a smoothed exposure wobble
+      // around their base exposure. Other levels stay pinned at baseExposure.
+      const drift = world?.presentation?.post?.exposureDrift ?? 0;
+      if (drift > 0) {
+        const bias = THREE.MathUtils.clamp(world.exposureBias ?? 0, -1, 1);
+        const target = baseExposure * (1 + bias * drift);
+        const smoothing = 1 - Math.exp(-3 * delta);
+        renderer.toneMappingExposure += (target - renderer.toneMappingExposure) * smoothing;
+      } else if (renderer.toneMappingExposure !== baseExposure) {
+        renderer.toneMappingExposure = baseExposure;
+      }
     },
     render() {
       renderer.info.reset();
@@ -243,6 +287,10 @@ export function createRenderingPipeline(renderer, canvas, profile) {
         if (gtaoPass) gtaoPass.enabled = false;
         lowFpsTime = 0;
         changed = true;
+      } else if (lowFpsTime >= 3 && bloomPass?.enabled) {
+        bloomPass.enabled = false;
+        lowFpsTime = 0;
+        changed = true;
       } else if (lowFpsTime >= 3 && shadowScale > 0.5) {
         shadowScale = 0.5;
         applyShadowScale();
@@ -254,6 +302,10 @@ export function createRenderingPipeline(renderer, canvas, profile) {
         applyShadowScale();
         recoveryTime = 0;
         changed = true;
+      } else if (recoveryTime >= 8 && bloomPass && !bloomPass.enabled) {
+        bloomPass.enabled = true;
+        recoveryTime = 0;
+        changed = true;
       } else if (recoveryTime >= 8 && !gtaoEnabled) {
         gtaoEnabled = true;
         if (gtaoPass) gtaoPass.enabled = true;
@@ -262,7 +314,7 @@ export function createRenderingPipeline(renderer, canvas, profile) {
       }
       this.syncDebugState();
       return {
-        canReducePixelRatio: !gtaoEnabled && shadowScale <= 0.5 && !changed,
+        canReducePixelRatio: !gtaoEnabled && !bloomPass?.enabled && shadowScale <= 0.5 && !changed,
         changed,
       };
     },
@@ -270,6 +322,7 @@ export function createRenderingPipeline(renderer, canvas, profile) {
       const info = renderer.info;
       canvas.dataset.graphicsProfile = profile.id;
       canvas.dataset.gtao = String(Boolean(gtaoEnabled && gtaoPass?.enabled));
+      canvas.dataset.bloom = String(Boolean(bloomPass?.enabled));
       canvas.dataset.shadows = String(Boolean(profile.shadows && shadowRig));
       canvas.dataset.shadowMode = shadowRig?.mode ?? "none";
       canvas.dataset.shadowScale = shadowScale.toFixed(2);

@@ -153,7 +153,7 @@ export function createLights(scene, fixturePositions) {
     color: 0xffffff,
     vertexColors: true,
     transparent: true,
-    opacity: 0.26,
+    opacity: 0.3,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     side: THREE.DoubleSide,
@@ -185,7 +185,7 @@ export function createLights(scene, fixturePositions) {
     panels.setMatrixAt(index, matrix);
 
     position.y = CEILING_Y - 0.125;
-    const haloSize = fixture.baseIntensity >= 1.7 ? 3.8 : fixture.baseIntensity < 1 ? 2.6 : 3.2;
+    const haloSize = fixture.baseIntensity >= 1.7 ? 4.2 : fixture.baseIntensity < 1 ? 3 : 3.6;
     scale.set(haloSize, haloSize, 1);
     matrix.compose(position, haloQuaternion, scale);
     halos.setMatrixAt(index, matrix);
@@ -211,7 +211,7 @@ export function createLights(scene, fixturePositions) {
   scene.add(trims, panels, halos);
 
   for (let index = 0; index < activeLightCount; index += 1) {
-    const light = new THREE.PointLight(0xfff9df, 0, 10, 2.05);
+    const light = new THREE.PointLight(0xfff9df, 0, 10, 2);
     light.visible = false;
     scene.add(light);
     activeLights.push(light);
@@ -230,7 +230,7 @@ export function createLights(scene, fixturePositions) {
       light.visible = fixture !== null;
       if (!fixture) return;
       light.color.setHex(fixture.color);
-      light.distance = fixture.range * 1.12;
+      light.distance = fixture.range * 1.35;
       light.position.set(fixture.x, CEILING_Y - 0.24, fixture.z);
     });
   }
@@ -257,7 +257,7 @@ export function createLights(scene, fixturePositions) {
     activeLights.forEach((light) => {
       const fixture = light.userData.fixture;
       if (!fixture) return;
-      light.intensity = fixture.pulse * fixture.baseIntensity * 2.2;
+      light.intensity = fixture.pulse * fixture.baseIntensity * 1.85;
     });
   }
 

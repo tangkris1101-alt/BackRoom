@@ -4,15 +4,16 @@ import { HUB_LEVEL } from "../constants.js";
 const DEFAULT_PRESENTATION = Object.freeze({
   exposure: 1,
   shadowMode: "indoor",
+  shadow: null,
   surface: "concrete",
   environment: "indoor",
   reverb: "medium",
-  post: Object.freeze({ aoIntensity: 0.58, vignette: 0.14, grain: 0.035 }),
+  post: Object.freeze({ aoIntensity: 0.58, vignette: 0.14, grain: 0.035, bloom: null, exposureDrift: 0 }),
 });
 
 const LEVEL_PRESENTATIONS = new Map([
   [HUB_LEVEL, { exposure: 0.86, shadowMode: "indoor", surface: "asphalt", environment: "tunnel", reverb: "large", post: { aoIntensity: 0.68, vignette: 0.2, grain: 0.04 } }],
-  [0, { exposure: 0.98, shadowMode: "indoor", surface: "carpet", environment: "carpeted-indoor", reverb: "medium", post: { aoIntensity: 0.52, vignette: 0.1, grain: 0.045 } }],
+  [0, { exposure: 0.98, shadowMode: "indoor", shadow: { penumbra: 0.9, radius: 4.5, intensityScale: 0.3, intensityCap: 1.15, angle: 0.5 }, surface: "carpet", environment: "carpeted-indoor", reverb: "medium", post: { aoIntensity: 0.55, vignette: 0.1, grain: 0.045, bloom: { threshold: 0.85, strength: 0.18, radius: 0.4 }, exposureDrift: 0.035 } }],
   [1, { exposure: 0.94, shadowMode: "indoor", surface: "concrete", environment: "industrial", reverb: "large", post: { aoIntensity: 0.62, vignette: 0.18, grain: 0.04 } }],
   [2, { exposure: 0.82, shadowMode: "indoor", surface: "metal", environment: "industrial", reverb: "large", post: { aoIntensity: 0.72, vignette: 0.22, grain: 0.045 } }],
   [3, { exposure: 0.8, shadowMode: "indoor", surface: "concrete", environment: "industrial", reverb: "large", post: { aoIntensity: 0.72, vignette: 0.24, grain: 0.05 } }],

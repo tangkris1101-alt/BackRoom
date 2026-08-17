@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { colliderBlocksAtFeetHeight, getPlatformFloorHeight, resolvePlatformOverlap } from "../common/platform-collision.js";
 import {
   CELL_SIZE,
@@ -15,7 +16,9 @@ import { addInstancedBoxes, createStableLightState } from "../common/lighting.js
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import {
   createLevelZeroWallpaperTexture,
+  createLevelZeroWallpaperDetailMaps,
   createLevelZeroCarpetTexture,
+  createLevelZeroCarpetDetailMaps,
   createLevelZeroCeilingTexture,
 } from "./textures.js";
 import { createManilaRoom } from "./manila-room.js";
@@ -103,8 +106,9 @@ function createFixtureLightField(fixturePositions) {
     const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.78, 0.34, 1);
     const gradient = context.createRadialGradient(x, z, 0, x, z, radius);
     gradient.addColorStop(0, `rgba(255, 246, 207, ${0.28 * strength})`);
-    gradient.addColorStop(0.42, `rgba(250, 229, 158, ${0.18 * strength})`);
-    gradient.addColorStop(0.82, `rgba(187, 151, 77, ${0.07 * strength})`);
+    gradient.addColorStop(0.25, `rgba(252, 236, 180, ${0.225 * strength})`);
+    gradient.addColorStop(0.55, `rgba(240, 210, 130, ${0.13 * strength})`);
+    gradient.addColorStop(0.85, `rgba(187, 151, 77, ${0.05 * strength})`);
     gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
 
     context.save();
@@ -123,6 +127,17 @@ function createFixtureLightField(fixturePositions) {
     context.fillStyle = gradient;
     context.fillRect(x - radius, z - radius, radius * 2, radius * 2);
     context.restore();
+
+    // Indirect bounce wash: a wider, dimmer, warmer halo with no cell clip, so
+    // light appears to spill off the carpet/wallpaper onto neighbouring
+    // surfaces and softens the transition into unlit distance.
+    const bounceRadius = radius * 1.7;
+    const bounce = context.createRadialGradient(x, z, 0, x, z, bounceRadius);
+    bounce.addColorStop(0, `rgba(255, 214, 150, ${0.075 * strength})`);
+    bounce.addColorStop(0.5, `rgba(214, 168, 96, ${0.04 * strength})`);
+    bounce.addColorStop(1, "rgba(140, 96, 40, 0)");
+    context.fillStyle = bounce;
+    context.fillRect(x - bounceRadius, z - bounceRadius, bounceRadius * 2, bounceRadius * 2);
   });
 
   context.globalCompositeOperation = "source-over";
@@ -162,6 +177,7 @@ function applyFixtureLightField(material, lightField, intensity) {
       value: new THREE.Vector4(lightField.minX, lightField.minZ, lightField.width, lightField.height),
     };
     shader.uniforms.levelZeroLightIntensity = { value: intensity };
+    shader.uniforms.levelZeroCeilingY = { value: CEILING_Y };
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
@@ -183,7 +199,8 @@ function applyFixtureLightField(material, lightField, intensity) {
         varying vec3 levelZeroWorldPosition;
         uniform sampler2D levelZeroLightField;
         uniform vec4 levelZeroLightBounds;
-        uniform float levelZeroLightIntensity;`,
+        uniform float levelZeroLightIntensity;
+        uniform float levelZeroCeilingY;`,
       )
       .replace(
         "#include <opaque_fragment>",
@@ -192,7 +209,8 @@ function applyFixtureLightField(material, lightField, intensity) {
           1.0 - (levelZeroWorldPosition.z - levelZeroLightBounds.y) / levelZeroLightBounds.w
         );
         vec3 levelZeroBakedLight = texture2D(levelZeroLightField, levelZeroLightUv).rgb;
-        outgoingLight += levelZeroBakedLight * diffuseColor.rgb * levelZeroLightIntensity;
+        float levelZeroBounceBoost = 1.0 + max(0.0, 1.0 - levelZeroWorldPosition.y / levelZeroCeilingY) * 0.12;
+        outgoingLight += levelZeroBakedLight * diffuseColor.rgb * levelZeroLightIntensity * levelZeroBounceBoost;
         #include <opaque_fragment>`,
       );
   };
@@ -230,19 +248,21 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   const wallpaperTexture = createLevelZeroWallpaperTexture();
   const ceilingTexture = createLevelZeroCeilingTexture();
 
-  const floorMaterial = createGameMaterial({
+  const floorMaterial = createGameMaterial(({ lowQuality }) => ({
     map: carpetTexture,
     color: 0xf6e9c6,
     emissive: 0x8a7449,
     emissiveIntensity: 0,
     roughness: 0.98,
-  });
+    ...(lowQuality ? {} : { ...createLevelZeroCarpetDetailMaps(), bumpScale: 0.08 }),
+  }));
   const wallMaterial = createGameMaterial({
     map: wallpaperTexture,
     color: 0xfffce3,
     emissive: 0x655b34,
     emissiveIntensity: 0.045,
     roughness: 0.92,
+    ...(isLowQuality() ? {} : { ...createLevelZeroWallpaperDetailMaps(), bumpScale: 0.02 }),
     metalness: 0,
   });
   const ceilingMaterial = createGameMaterial({
@@ -261,7 +281,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   });
   applyFixtureLightFieldIfNeeded(floorMaterial, applyFixtureLightField, fixtureLightField, 1.28);
   applyFixtureLightFieldIfNeeded(wallMaterial, applyFixtureLightField, fixtureLightField, 0.94);
-  applyFixtureLightFieldIfNeeded(ceilingMaterial, applyFixtureLightField, fixtureLightField, 0.72);
+  applyFixtureLightFieldIfNeeded(ceilingMaterial, applyFixtureLightField, fixtureLightField, 0.8);
   applyFixtureLightFieldIfNeeded(wallCapMaterial, applyFixtureLightField, fixtureLightField, 0.78);
   const wallMaterials = [
     wallMaterial,
@@ -296,15 +316,19 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   ceiling.position.set(MAP_CENTER.x, CEILING_Y, MAP_CENTER.z);
   scene.add(ceiling);
 
+  // Slight 2.8cm edge chamfer: wall/floor and wall/ceiling junctions and
+  // pilaster corners catch light instead of reading as sharp CG right angles.
+  const WALL_EDGE_RADIUS = 0.028;
+
   addInstancedBoxes(
     scene,
-    new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS),
+    new RoundedBoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS, 2, WALL_EDGE_RADIUS),
     wallMaterials,
     northSouth,
   );
   addInstancedBoxes(
     scene,
-    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE),
+    new RoundedBoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE, 2, WALL_EDGE_RADIUS),
     wallMaterials,
     eastWest,
   );
@@ -410,6 +434,10 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     return resolvePlatformOverlap({ colliders: propColliders, x, z, radius, feetY, maxCorrection });
   }
 
+  // Smoothed by the rendering pipeline into a subtle exposure breathing
+  // (presentation.post.exposureDrift controls the amplitude).
+  let exposureBias = 0;
+
   function update(delta, elapsed, playerPosition) {
     let lightTotal = 0;
     fixtures.forEach((fixture) => {
@@ -422,6 +450,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     updateFixtureVisuals();
     updatePointLights(delta, playerPosition);
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.9;
+    exposureBias = THREE.MathUtils.clamp((flicker - 0.9) * 6, -1, 1);
     const manilaBlackout = manilaRoom.update(elapsed);
 
     const exitDistance = Math.hypot(
@@ -471,8 +500,14 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     get viewModelName() {
       return getViewModelName(viewModel);
     },
+    get exposureBias() {
+      return exposureBias;
+    },
     nextLevel: 1,
     exitMode: "fall",
+    // Nudges GTAO contact darkening at wall/floor and wall/ceiling junctions
+    // a touch past this level's presentation preset of 0.55 (presentation.js).
+    presentation: { post: { aoIntensity: 0.66 } },
     scene,
     camera,
     disposableTextures: fixtureLightField?.texture ? [fixtureLightField.texture] : [],

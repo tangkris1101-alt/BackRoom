@@ -26,8 +26,10 @@ const armOutputs = {
   },
 };
 const poseTime = 2.025;
-const sleeveColor = new THREE.Color(0.56, 0.36, 0.035);
-const gloveColor = new THREE.Color(0.9, 0.55, 0.06);
+const sleeveColor = new THREE.Color(0.19, 0.15, 0.1);
+const skinColor = new THREE.Color(0.52, 0.2, 0.12);
+const fingertipColor = new THREE.Color(0.46, 0.055, 0.035);
+const nailColor = new THREE.Color(0.78, 0.43, 0.33);
 const motionEuler = new THREE.Euler(0, 0, 0, "YXZ");
 const motionQuaternion = new THREE.Quaternion();
 const blendedColor = new THREE.Color();
@@ -159,6 +161,20 @@ function getFingerCreaseWeight(mesh, vertex, suffix) {
   return THREE.MathUtils.clamp(weights[0] * weights[1] * 5.4, 0, 1);
 }
 
+function getDistalFingerWeight(mesh, vertex, suffix) {
+  const skinIndex = mesh.geometry.getAttribute("skinIndex");
+  const skinWeight = mesh.geometry.getAttribute("skinWeight");
+  let weight = 0;
+  for (let influence = 0; influence < 4; influence += 1) {
+    const boneIndex = skinIndex.getComponent(vertex, influence);
+    const boneName = mesh.skeleton.bones[boneIndex]?.name ?? "";
+    if (new RegExp(`^(?:f_(?:index|middle|ring|pinky)03|thumb03)${suffix}$`, "i").test(boneName)) {
+      weight += skinWeight.getComponent(vertex, influence);
+    }
+  }
+  return THREE.MathUtils.clamp(weight, 0, 1);
+}
+
 function bakeArmGeometry(model, suffix) {
   const mesh = model.getObjectByProperty("isSkinnedMesh", true);
   if (!mesh) throw new Error("No skinned mesh found in FPS arms source model.");
@@ -180,15 +196,20 @@ function bakeArmGeometry(model, suffix) {
   const positions = new Float32Array(keptVertices.length * 3);
   const colors = new Float32Array(keptVertices.length * 3);
   const surfaceRoughness = new Float32Array(keptVertices.length);
+  const skinSurface = new Float32Array(keptVertices.length);
+  const nailSurface = new Float32Array(keptVertices.length);
   const roughnessByPosition = new Map();
+  const skinByPosition = new Map();
+  const nailByPosition = new Map();
   const position = new THREE.Vector3();
   keptVertices.forEach((sourceVertex, targetVertex) => {
     position.fromBufferAttribute(positionAttribute, sourceVertex);
     mesh.applyBoneTransform(sourceVertex, position).applyMatrix4(mesh.matrixWorld);
     position.toArray(positions, targetVertex * 3);
 
-    const gloveMix = THREE.MathUtils.smoothstep(getGloveWeight(mesh, sourceVertex), 0.12, 0.76);
+    const skinMix = THREE.MathUtils.smoothstep(getGloveWeight(mesh, sourceVertex), 0.12, 0.76);
     const crease = getFingerCreaseWeight(mesh, sourceVertex, suffix);
+    const distal = getDistalFingerWeight(mesh, sourceVertex, suffix);
     // This must be derived from position, not vertex index: indexed source
     // exports often repeat vertices along triangle seams, and per-index colour
     // noise would prevent mergeVertices from restoring smooth hand normals.
@@ -200,19 +221,41 @@ function bakeArmGeometry(model, suffix) {
       0,
       1,
     );
-    blendedColor.copy(sleeveColor).lerp(gloveColor, gloveMix);
-    blendedColor.offsetHSL(0, 0, (materialVariation - 0.5) * 0.035 * gloveMix - crease * 0.045);
+    const skinMicrodetail = (
+      Math.sin(position.x * 34.7 + position.z * 23.1) +
+      Math.sin(position.y * 29.3 - position.x * 17.9)
+    ) * 0.5;
+    const bloodFlow = THREE.MathUtils.clamp(distal * (0.35 + materialVariation * 0.65), 0, 1);
+    const nailBed = THREE.MathUtils.smoothstep(0.52, 0.92, distal) * skinMix;
+    blendedColor.copy(sleeveColor).lerp(skinColor, skinMix);
+    blendedColor.lerp(fingertipColor, bloodFlow * 0.22);
+    blendedColor.lerp(nailColor, nailBed * 0.42);
+    blendedColor.offsetHSL(
+      0.008 * bloodFlow,
+      0,
+      ((materialVariation - 0.5) * 0.055 + skinMicrodetail * 0.018) * skinMix - crease * 0.075,
+    );
     blendedColor.toArray(colors, targetVertex * 3);
     surfaceRoughness[targetVertex] = THREE.MathUtils.lerp(
-      0.52,
-      THREE.MathUtils.clamp(0.53 + crease * 0.42 + (materialVariation - 0.5) * 0.14, 0, 1),
-      gloveMix,
+      0.68,
+      THREE.MathUtils.clamp(0.57 + crease * 0.38 + (materialVariation - 0.5) * 0.19 - nailBed * 0.2, 0, 1),
+      skinMix,
     );
+    skinSurface[targetVertex] = skinMix;
+    nailSurface[targetVertex] = nailBed;
     const positionKey = position.toArray().map((component) => component.toFixed(5)).join(",");
     const previous = roughnessByPosition.get(positionKey) ?? { total: 0, count: 0 };
     previous.total += surfaceRoughness[targetVertex];
     previous.count += 1;
     roughnessByPosition.set(positionKey, previous);
+    const previousSkin = skinByPosition.get(positionKey) ?? { total: 0, count: 0 };
+    previousSkin.total += skinSurface[targetVertex];
+    previousSkin.count += 1;
+    skinByPosition.set(positionKey, previousSkin);
+    const previousNail = nailByPosition.get(positionKey) ?? { total: 0, count: 0 };
+    previousNail.total += nailSurface[targetVertex];
+    previousNail.count += 1;
+    nailByPosition.set(positionKey, previousNail);
   });
 
   const geometry = new THREE.BufferGeometry();
@@ -227,7 +270,10 @@ function bakeArmGeometry(model, suffix) {
   smoothGeometry.computeVertexNormals();
   const expanded = smoothGeometry.toNonIndexed();
   const expandedRoughness = new Float32Array(expanded.getAttribute("position").count);
+  const expandedSkin = new Float32Array(expanded.getAttribute("position").count);
+  const expandedNails = new Float32Array(expanded.getAttribute("position").count);
   const expandedPositions = expanded.getAttribute("position");
+  const expandedNormals = expanded.getAttribute("normal");
   for (let index = 0; index < expandedRoughness.length; index += 1) {
     const positionKey = [expandedPositions.getX(index), expandedPositions.getY(index), expandedPositions.getZ(index)]
       .map((component) => component.toFixed(5))
@@ -236,8 +282,18 @@ function bakeArmGeometry(model, suffix) {
     expandedRoughness[index] = roughness
       ? roughness.total / roughness.count
       : 0.58;
+    const skin = skinByPosition.get(positionKey);
+    const nail = nailByPosition.get(positionKey);
+    expandedSkin[index] = skin ? skin.total / skin.count : 0;
+    // Restrict the pale nail bed to the outward-facing part of each distal
+    // phalanx. The source mesh has no separate nail material, so this keeps
+    // the detail subtle instead of painting the entire fingertip pink.
+    const outwardSurface = THREE.MathUtils.smoothstep(0.08, 0.58, Math.abs(expandedNormals.getX(index)));
+    expandedNails[index] = nail ? (nail.total / nail.count) * outwardSurface : 0;
   }
   expanded.setAttribute("surfaceRoughness", new THREE.BufferAttribute(expandedRoughness, 1));
+  expanded.setAttribute("skinSurface", new THREE.BufferAttribute(expandedSkin, 1));
+  expanded.setAttribute("nailSurface", new THREE.BufferAttribute(expandedNails, 1));
   return expanded;
 }
 
@@ -248,7 +304,9 @@ function createBinaryGeometry(geometry) {
   const surfaceRoughness = geometry.getAttribute("surfaceRoughness");
   const vertexCount = position.count;
   const componentCount = vertexCount * 3;
-  const buffer = new ArrayBuffer(4 + (componentCount * 3 + vertexCount) * Float32Array.BYTES_PER_ELEMENT);
+  const skinSurface = geometry.getAttribute("skinSurface");
+  const nailSurface = geometry.getAttribute("nailSurface");
+  const buffer = new ArrayBuffer(4 + (componentCount * 3 + vertexCount * 3) * Float32Array.BYTES_PER_ELEMENT);
   new DataView(buffer).setUint32(0, vertexCount, true);
   let offset = 4;
   new Float32Array(buffer, offset, componentCount).set(position.array);
@@ -258,6 +316,10 @@ function createBinaryGeometry(geometry) {
   new Float32Array(buffer, offset, componentCount).set(color.array);
   offset += componentCount * Float32Array.BYTES_PER_ELEMENT;
   new Float32Array(buffer, offset, vertexCount).set(surfaceRoughness.array);
+  offset += vertexCount * Float32Array.BYTES_PER_ELEMENT;
+  new Float32Array(buffer, offset, vertexCount).set(skinSurface.array);
+  offset += vertexCount * Float32Array.BYTES_PER_ELEMENT;
+  new Float32Array(buffer, offset, vertexCount).set(nailSurface.array);
   return buffer;
 }
 

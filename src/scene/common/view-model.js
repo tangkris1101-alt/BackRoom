@@ -58,12 +58,18 @@ function decodeBakedArmGeometry(id, base64) {
   const colors = cloneFloatSection(buffer, offset, componentCount);
   offset += componentCount * FLOAT_BYTES;
   const surfaceRoughness = cloneFloatSection(buffer, offset, vertexCount);
+  offset += vertexCount * FLOAT_BYTES;
+  const skinSurface = cloneFloatSection(buffer, offset, vertexCount);
+  offset += vertexCount * FLOAT_BYTES;
+  const nailSurface = cloneFloatSection(buffer, offset, vertexCount);
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   geometry.setAttribute("surfaceRoughness", new THREE.BufferAttribute(surfaceRoughness, 1));
+  geometry.setAttribute("skinSurface", new THREE.BufferAttribute(skinSurface, 1));
+  geometry.setAttribute("nailSurface", new THREE.BufferAttribute(nailSurface, 1));
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   bakedArmGeometries.set(id, geometry);
@@ -73,12 +79,12 @@ function decodeBakedArmGeometry(id, base64) {
 function getBakedArmMaterial() {
   if (bakedArmMaterial) return bakedArmMaterial;
   bakedArmMaterial = new THREE.MeshStandardMaterial({
-    // The bake encodes clean suit/glove colour separation plus controlled
-    // per-vertex variation. It reads as worn rubber under direct light
-    // without introducing the dirty patches from the source preview colours.
+    // The bake separates fabric from skin, including restrained fingertip
+    // circulation and pale nail beds. Keep the base matte so it does not
+    // inherit the plastic or rubber look of the former hazmat gloves.
     color: 0xffffff,
     vertexColors: true,
-    roughness: 0.76,
+    roughness: 0.82,
     metalness: 0,
     emissive: 0x000000,
     emissiveIntensity: 0,
@@ -94,23 +100,27 @@ function getBakedArmMaterial() {
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute float surfaceRoughness;\nvarying float vSurfaceRoughness;",
+        "#include <common>\nattribute float surfaceRoughness;\nattribute float skinSurface;\nattribute float nailSurface;\nvarying float vSurfaceRoughness;\nvarying float vSkinSurface;\nvarying float vNailSurface;",
       )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\nvSurfaceRoughness = surfaceRoughness;",
+        "#include <begin_vertex>\nvSurfaceRoughness = surfaceRoughness;\nvSkinSurface = skinSurface;\nvNailSurface = nailSurface;",
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nvarying float vSurfaceRoughness;",
+        "#include <common>\nvarying float vSurfaceRoughness;\nvarying float vSkinSurface;\nvarying float vNailSurface;",
       )
       .replace(
         "#include <roughnessmap_fragment>",
-        "#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor * mix(0.82, 1.2, vSurfaceRoughness), 0.38, 0.96);",
+        "#include <roughnessmap_fragment>\nfloat creaseShadow = smoothstep(0.7, 0.98, vSurfaceRoughness) * vSkinSurface;\ndiffuseColor.rgb *= 1.0 - creaseShadow * 0.16;\ndiffuseColor.rgb += vec3(0.055, 0.012, 0.007) * vNailSurface;\nroughnessFactor = clamp(roughnessFactor * mix(0.72, 1.15, vSurfaceRoughness) * mix(1.0, 0.72, vNailSurface), 0.42, 0.98);",
+      )
+      .replace(
+        "#include <output_fragment>",
+        "float skinRim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 2.2);\nfloat skinTranslucency = vSkinSurface * (0.018 + skinRim * 0.065);\noutgoingLight += vec3(0.34, 0.06, 0.035) * skinTranslucency;\n#include <output_fragment>",
       );
   };
-  bakedArmMaterial.customProgramCacheKey = () => "first-person-glove-surface-v2";
+  bakedArmMaterial.customProgramCacheKey = () => "first-person-human-skin-surface-v3";
   return bakedArmMaterial;
 }
 
@@ -152,7 +162,9 @@ export function attachFirstPersonViewModel(camera) {
   viewModel.name = "first-person-baked-hazmat-arms";
   viewModel.userData.modelName = VIEW_MODEL_NAME;
   viewModel.userData.loaded = false;
-  const fillLight = new THREE.HemisphereLight(0xe8f0df, 0x304039, 0);
+  // A small camera-space bounce keeps the hands readable in dark scenes, but
+  // directional and local scene lights remain the dominant illumination.
+  const fillLight = new THREE.HemisphereLight(0xe8f0df, 0x304039, 0.12);
   fillLight.name = "first-person-view-model-fill";
   viewModel.add(fillLight);
   viewModel.userData.fillLight = fillLight;
