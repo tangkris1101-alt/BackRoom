@@ -18,6 +18,7 @@ const motionQuaternion = new THREE.Quaternion();
 const HELD_ITEM_NAME = "first-person-held-item";
 const FLASHLIGHT_LENS_AXIS = new THREE.Vector3(1, 0, 0);
 const HELD_FLASHLIGHT_DIRECTION = new THREE.Vector3(-0.08, -0.14, -1).normalize();
+const VIEW_MODEL_LIGHT_LAYER = 1;
 
 export function createLimbSegment(start, end, radiusTop, radiusBottom, material) {
   const startVector = new THREE.Vector3(...start);
@@ -168,6 +169,14 @@ export function attachFirstPersonViewModel(camera) {
   fillLight.name = "first-person-view-model-fill";
   viewModel.add(fillLight);
   viewModel.userData.fillLight = fillLight;
+  // A nearby key light gives the arms a readable minimum exposure in levels
+  // that deliberately have no ambient scene light. It starts disabled and is
+  // enabled only by the owning level, so it cannot brighten the world.
+  const keyLight = new THREE.PointLight(0xffe7d8, 0, 1.35, 2);
+  keyLight.name = "first-person-view-model-key";
+  keyLight.position.set(0, 0.08, 0.16);
+  viewModel.add(keyLight);
+  viewModel.userData.keyLight = keyLight;
   camera.add(viewModel);
 
   try {
@@ -188,6 +197,24 @@ export function setFirstPersonViewModelLighting(viewModel, { intensity = 0, skyC
   fillLight.groundColor.set(groundColor);
   const blend = 0.12;
   fillLight.intensity = THREE.MathUtils.lerp(fillLight.intensity, intensity, blend);
+}
+
+export function setFirstPersonViewModelKeyLight(viewModel, { intensity = 0, color = 0xffe7d8 } = {}) {
+  const keyLight = viewModel?.userData?.keyLight;
+  if (!keyLight) return;
+  // Keep this camera-space light off the world layer. The meshes move to the
+  // dedicated layer only in levels that opt in, retaining normal scene-light
+  // response elsewhere.
+  const camera = viewModel.parent;
+  const fillLight = viewModel.userData.fillLight;
+  camera?.layers.enable(VIEW_MODEL_LIGHT_LAYER);
+  fillLight?.layers.set(VIEW_MODEL_LIGHT_LAYER);
+  keyLight.layers.set(VIEW_MODEL_LIGHT_LAYER);
+  viewModel.userData.arms?.traverse((child) => {
+    if (child.isMesh) child.layers.set(VIEW_MODEL_LIGHT_LAYER);
+  });
+  keyLight.color.set(color);
+  keyLight.intensity = THREE.MathUtils.lerp(keyLight.intensity, intensity, 0.12);
 }
 
 function setHeldItemMaterialState(root) {

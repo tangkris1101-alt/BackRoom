@@ -13,7 +13,7 @@ import {
 } from "../constants.js";
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { createGameMaterial, applyFixtureLightFieldIfNeeded, isLowQuality } from "../common/materials.js";
-import { attachFirstPersonViewModel, getViewModelName, setFirstPersonViewModelLighting, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
+import { attachFirstPersonViewModel, getViewModelName, setFirstPersonViewModelKeyLight, setFirstPersonViewModelLighting, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import {
   LEVEL_ONE_COLS,
   LEVEL_ONE_ROWS,
@@ -33,6 +33,7 @@ import {
   createLevelOneFloorTexture,
   createLevelOneFloorPbrMaps,
   createLevelOneWallTexture,
+  createLevelOneWallPbrMaps,
   createLevelOneCeilingTexture,
   createLevelOneCorridorFloorTexture,
   createLevelOneCorridorWallTexture,
@@ -266,12 +267,22 @@ export function createLevelOneScene({ initialState = null } = {}) {
     normalScale: new THREE.Vector2(0.42, 0.42),
     aoMapIntensity: 0.58,
   }));
-  const wallMaterial = createGameMaterial({
-    color: 0xd5d7d2,
+  const wallMaterial = createGameMaterial(({ lowQuality: useLowQuality }) => ({
+    ...createLevelOneWallPbrMaps({ includeDetailMaps: !useLowQuality }),
+    color: 0xffffff,
     emissive: 0x000000,
     emissiveIntensity: 0,
-    roughness: 0.94,
-  });
+    roughness: 0.91,
+    normalScale: new THREE.Vector2(0.22, 0.22),
+  }));
+  const corridorWallMaterial = createGameMaterial(({ lowQuality: useLowQuality }) => ({
+    ...createLevelOneWallPbrMaps({ corridor: true, includeDetailMaps: !useLowQuality }),
+    color: 0xffffff,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
+    roughness: 0.87,
+    normalScale: new THREE.Vector2(0.17, 0.17),
+  }));
   const ceilingMaterial = createGameMaterial({
     color: 0xcfd1cc,
     emissive: 0x000000,
@@ -292,8 +303,17 @@ export function createLevelOneScene({ initialState = null } = {}) {
     wallMaterial,
     wallMaterial,
   ];
+  const corridorWallMaterials = [
+    corridorWallMaterial,
+    corridorWallMaterial,
+    wallCapMaterial,
+    wallCapMaterial,
+    corridorWallMaterial,
+    corridorWallMaterial,
+  ];
   applyLevelOneLightFieldSafe(floorMaterial, lightField, 3.05);
   applyLevelOneLightFieldSafe(wallMaterial, lightField, 2.35);
+  applyLevelOneLightFieldSafe(corridorWallMaterial, lightField, 2.2);
   applyLevelOneLightFieldSafe(ceilingMaterial, lightField, 2.1);
   applyLevelOneLightFieldSafe(wallCapMaterial, lightField, 2.15);
 
@@ -328,13 +348,13 @@ export function createLevelOneScene({ initialState = null } = {}) {
   addInstancedBoxes(
     scene,
     new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS),
-    wallMaterials,
+    corridorWallMaterials,
     corridorNorthSouth,
   );
   addInstancedBoxes(
     scene,
     new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE),
-    wallMaterials,
+    corridorWallMaterials,
     corridorEastWest,
   );
   addLevelOneDoorwayWall(scene, elevatorMount, wallMaterials);
@@ -519,6 +539,13 @@ export function createLevelOneScene({ initialState = null } = {}) {
       intensity: (0.075 + localExposure * 0.3) * (0.74 + flicker * 0.26),
       skyColor: 0xe6efdf,
       groundColor: 0x31463c,
+    });
+    // Level 1 intentionally avoids a global ambient light. Its baked light
+    // field makes the warehouse readable but cannot illuminate camera-child
+    // hands, so give only the view model a soft, fixture-driven key light.
+    setFirstPersonViewModelKeyLight(viewModel, {
+      intensity: (3.2 + localExposure * 1.2) * (0.78 + flicker * 0.22),
+      color: 0xe7f1df,
     });
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
     const almondWaterState = almondWater.update(delta, elapsed, playerPosition);
