@@ -7,12 +7,16 @@ import {
   createSilenceLiquidModel,
 } from "../items/index.js";
 import { createItemHighlight, setItemHighlight } from "../items/shared.js";
+import { createSeededRandom } from "./texture-utils.js";
 
 const PICKUP_RADIUS = 3;
 const INSPECT_DISTANCE = 7;
 const LEVEL_KEY_SPAWN_CHANCE = 0.17;
 const HUB_BONUS_LEVEL_KEY_ROLLS = 2;
 const KEY_MODEL_SCALE = 0.1875;
+// Note dust is drawn from a seeded stream keyed by the paper colour, so the
+// same note looks identical on every load instead of reshuffling its specks.
+const NOTE_FACE_SEED = 0x6e6f7465;
 
 export const LEVEL_KEY_TARGETS = Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 37]);
 export const LEVEL_KEY_IDS = Object.freeze(LEVEL_KEY_TARGETS.map((level) => `level-key-${level}`));
@@ -188,8 +192,9 @@ function createNoteFaceMaterial(color) {
   context.lineWidth = 10;
   context.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
   context.fillStyle = "rgba(80, 62, 36, 0.26)";
+  const random = createSeededRandom(NOTE_FACE_SEED + color);
   for (let i = 0; i < 90; i += 1) {
-    context.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 1.4, 1.4);
+    context.fillRect(random() * canvas.width, random() * canvas.height, 1.4, 1.4);
   }
 
   context.strokeStyle = "rgba(91, 72, 45, 0.22)";

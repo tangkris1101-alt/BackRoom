@@ -286,6 +286,9 @@ const SUPER_ALMOND_WATER_HEAL_DURATION = 5;
 // Three.js positive X camera rotation looks upward. Pi / 6 is a 30 degree
 // incline above the floor plane while the player is still lying down.
 const OPENING_INITIAL_PITCH = Math.PI / 6;
+// Shared zero pose for the frames that sample before the stand-up begins, so
+// the per-frame path allocates no pose object of its own.
+const OPENING_REST_POSE = Object.freeze({ height: 0, pitch: 0 });
 
 const OPENING_TEXT = {
   "zh-CN": {
@@ -579,8 +582,8 @@ const ambientHum = createAmbientHum();
 // arms are the only part of a level that arrives over the network; loading them
 // late pushes their shader compilation into the first seconds of play.
 preloadFirstPersonViewModel().catch(() => {
-  // The rejection is cached, so the level-load path reuses it rather than
-  // retrying: a failed fetch leaves the arms hidden for the session.
+  // The failure is not cached, so the level-load path retries the fetch and can
+  // still show the arms once the network recovers.
 });
 
 // Every level entry path funnels through here so no level can reach the player
@@ -597,6 +600,12 @@ async function prewarmScene() {
 
 function showLoadingOverlay() {
   loadingComplete = false;
+  // A fade-out queued by the previous load would hide this overlay one frame
+  // after it appears, exposing exactly the prewarm stutter it covers.
+  if (loadingOverlayHideTimer) {
+    window.clearTimeout(loadingOverlayHideTimer);
+    loadingOverlayHideTimer = 0;
+  }
   loadingOverlay?.classList.remove("is-hidden");
   loadingOverlay?.removeAttribute("hidden");
   if (loadingFill) loadingFill.style.transform = "scaleX(0)";
@@ -658,6 +667,7 @@ let sampleElapsed = 0;
 let displayedFps = 0;
 const frameTimeSamples = [];
 let loadingComplete = false;
+let loadingOverlayHideTimer = 0;
 let exitComplete = false;
 let gameFailed = false;
 let levelTransition = null;
@@ -2505,7 +2515,11 @@ function updateLoadingOverlay() {
   if (progress >= 1 && canvas.dataset.sceneReady === "true") {
     loadingComplete = true;
     loadingOverlay?.classList.add("is-hidden");
-    window.setTimeout(() => loadingOverlay?.setAttribute("hidden", ""), OVERLAY_FADE_MS);
+    if (loadingOverlayHideTimer) window.clearTimeout(loadingOverlayHideTimer);
+    loadingOverlayHideTimer = window.setTimeout(() => {
+      loadingOverlay?.setAttribute("hidden", "");
+      loadingOverlayHideTimer = 0;
+    }, OVERLAY_FADE_MS);
   }
 }
 
@@ -3175,7 +3189,7 @@ function updateOpeningSequence(delta) {
   const lowEyeY = openingSequence.floorY + 0.18;
   const pose = openingSequence.standing
     ? sampleOpeningStandPose(openingSequence.standElapsed)
-    : { height: 0, pitch: 0 };
+    : OPENING_REST_POSE;
   world.camera.position.y = THREE.MathUtils.lerp(lowEyeY, openingSequence.standY, pose.height);
   controls.pitch = THREE.MathUtils.lerp(OPENING_INITIAL_PITCH, -0.025, pose.pitch);
   controls.applyRotation();

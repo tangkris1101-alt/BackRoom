@@ -136,6 +136,10 @@ export function primeFirstPersonViewModelPoses() {
 
 function loadRelaxedArmGeometries() {
   if (!relaxedArmLoad) {
+    // A rejection must never stay cached: the next level entry has to run a
+    // fresh fetch instead of replaying the failure with the arms hidden for the
+    // rest of the session. Callers handle the rejection, so rethrowing here
+    // cannot surface as an unhandled one.
     relaxedArmLoad = Promise.all([relaxedLeftArmUrl, relaxedRightArmUrl].map(async (url) => {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`unable to load relaxed arm: ${response.status}`);
@@ -143,7 +147,10 @@ function loadRelaxedArmGeometries() {
     })).then(([left, right]) => ({
       left: decodeBakedArmGeometry("empty-left", left),
       right: decodeBakedArmGeometry("empty-right", right),
-    }));
+    })).catch((error) => {
+      relaxedArmLoad = null;
+      throw error;
+    });
   }
   return relaxedArmLoad;
 }

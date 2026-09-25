@@ -11,24 +11,35 @@ const BACK = -0.94;
 const BACK_WALL_DEPTH = 0.14;
 const DOOR_FRONT_OFFSET = 0.055;
 const DOOR_DEPTH = 0.074;
+// Distance from the wall plane to the centre of the sliding leaves. The wall
+// mount and the cabin origin both derive from this single value.
+const CABIN_DOOR_OFFSET = FRONT + DOOR_FRONT_OFFSET + DOOR_DEPTH / 2;
 const FOCUS_ANGLE_COS = Math.cos(0.58);
 const focusForward = new THREE.Vector3();
 const focusOffset = new THREE.Vector3();
+// inspect() calls this every frame, so the two candidate points are scratch
+// coordinates reused across calls. They never leave this function.
+const focusPoints = [
+  { target: "door", height: 1.35, x: 0, z: 0 },
+  { target: "call", height: 1.31, x: 0, z: 0 },
+];
 
 export function getLevelZeroElevatorFocus(camera, doorCenter, callPosition) {
   if (!camera) return null;
   camera.getWorldDirection(focusForward);
+  focusPoints[0].x = doorCenter?.x;
+  focusPoints[0].z = doorCenter?.z;
+  focusPoints[1].x = callPosition?.x;
+  focusPoints[1].z = callPosition?.z;
   let best = null;
-  for (const [target, point] of [
-    ["door", { ...doorCenter, y: 1.35 }],
-    ["call", { ...callPosition, y: 1.31 }],
-  ]) {
-    focusOffset.set(point.x - camera.position.x, point.y - camera.position.y, point.z - camera.position.z);
+  for (let index = 0; index < focusPoints.length; index += 1) {
+    const point = focusPoints[index];
+    focusOffset.set(point.x - camera.position.x, point.height - camera.position.y, point.z - camera.position.z);
     const distance = focusOffset.length();
     if (distance > 8 || distance < 0.001) continue;
     const alignment = focusForward.dot(focusOffset) / distance;
     if (alignment < FOCUS_ANGLE_COS || (best && alignment <= best.alignment)) continue;
-    best = { target, distance, alignment };
+    best = { target: point.target, distance, alignment };
   }
   return best;
 }
@@ -38,7 +49,7 @@ export function getLevelZeroElevatorWallMount(cellPosition) {
   // into the concealed shaft cell behind it, while its call box faces west.
   const wallPlaneX = cellPosition.x + CELL_SIZE / 2;
   return {
-    x: wallPlaneX + FRONT + DOOR_FRONT_OFFSET + DOOR_DEPTH / 2,
+    x: wallPlaneX + CABIN_DOOR_OFFSET,
     z: cellPosition.z,
   };
 }
@@ -237,8 +248,6 @@ function toLocalWithRotation(position, rotation, worldX, worldZ) {
     z: Math.sin(rotation) * dx + Math.cos(rotation) * dz,
   };
 }
-
-const CABIN_DOOR_OFFSET = FRONT + DOOR_FRONT_OFFSET + DOOR_DEPTH / 2;
 
 // Origin of the cabin group for a given door plane, so the sliding leaves sit
 // flush with the wall and the cabin recesses into the concealed shaft.
