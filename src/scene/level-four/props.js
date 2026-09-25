@@ -108,7 +108,18 @@ export function addLevelFourOfficeDetails(scene, interactionInitial = {}) {
     group.add(chair);
 
     scene.add(group);
-    addCollider(center.x - 0.45, center.z - 0.44, 1.3, 0.8);
+    // The old single box reached 0.58m west of the model while missing the rear
+    // half of both boards, which let the player walk through the west partition
+    // and into an invisible wall on its far side. Track the three visible
+    // masses instead. The back board and the west board are 1.24m tall - above
+    // the jump apex - so they publish no topY and stay impassable.
+    colliders.push(
+      { minX: center.x - 1.175, maxX: center.x + 1.175, minZ: center.z - 0.965, maxZ: center.z - 0.875 },
+      { minX: center.x - 1.165, maxX: center.x - 1.075, minZ: center.z - 0.93, maxZ: center.z + 0.93 },
+      // Desk and chair share one footprint so the 0.76m work surface can be
+      // jumped onto and crossed instead of being an unclimbable wall.
+      { minX: center.x - 0.435, maxX: center.x + 0.915, minZ: center.z - 0.77, maxZ: center.z + 0.54, topY: 0.76 },
+    );
     if (index === 2 || index === 8) {
       interactions.push(
         createInteractionSpot({
@@ -138,9 +149,13 @@ export function addLevelFourOfficeDetails(scene, interactionInitial = {}) {
     scene.add(mesh);
   });
 
+  // Machines have to stand on walkable cells: the cell centre drives the body,
+  // its collider and the interaction point, so a solid cell buries the model
+  // inside the wall and leaves the 3m prompt with no standable spot to fire
+  // from. (4, 6) / (29, 6) measured 2.4m / 6.4m to the nearest standable point.
   const vendingPositions = [
-    { col: 4, row: 6, id: "level-four-vending", color: 0x24424a },
-    { col: 29, row: 6, id: "level-four-water-cooler", color: 0xb7d6e2 },
+    { col: 4, row: 5, id: "level-four-vending", color: 0x24424a },
+    { col: 29, row: 4, id: "level-four-water-cooler", color: 0xb7d6e2 },
   ];
   vendingPositions.forEach((spot) => {
     const center = levelOneCellCenter(spot.col, spot.row);
@@ -172,9 +187,12 @@ export function addLevelFourOfficeDetails(scene, interactionInitial = {}) {
     );
   });
 
+  // Same rule as the machines above: keep these on walkable cells, otherwise
+  // the body is buried in the wall and the collider guards a cell nobody can
+  // walk into. (16, 3) sat inside the block with the block's only opening south.
   [
     { col: 11, row: 21, color: 0xb7d6e2 },
-    { col: 16, row: 3, color: 0x24424a },
+    { col: 16, row: 4, color: 0x24424a },
     { col: 25, row: 5, color: 0x55736a },
   ].forEach((spot) => {
     const center = levelOneCellCenter(spot.col, spot.row);

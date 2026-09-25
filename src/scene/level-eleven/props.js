@@ -122,15 +122,20 @@ function addStreetDetails(scene, coarse) {
   const lights = [];
   lampCells.slice(0, coarse ? 6 : lampCells.length).forEach(([col, row], index) => {
     const center = levelElevenCellCenter(col, row);
+    const poleX = center.x + 1.45;
+    const poleZ = center.z + 1.3;
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 4.2, 8), metal);
-    pole.position.set(center.x + 1.45, 2.1, center.z + 1.3);
+    pole.position.set(poleX, 2.1, poleZ);
     scene.add(pole);
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), lampGlass);
-    bulb.position.set(center.x + 1.45, 4.1, center.z + 1.3);
+    bulb.position.set(poleX, 4.1, poleZ);
     scene.add(bulb);
     const light = new THREE.PointLight(0xffdda2, 0.72, 13, 2.1);
     light.position.copy(bulb.position);
     scene.add(light);
+    // The columns stand on the driving lanes and run from the ground to 4.2m,
+    // so they block every reachable feet height and need no topY.
+    colliders.push({ minX: poleX - 0.1, maxX: poleX + 0.1, minZ: poleZ - 0.1, maxZ: poleZ + 0.1 });
     lights.push({ light, bulb, phase: index * 1.71 });
   });
   const carMaterial = createGameMaterial({ color: 0x55616a, roughness: 0.5, metalness: 0.42 });
@@ -162,6 +167,10 @@ function addStreetDetails(scene, coarse) {
   ramp.position.set(rampCenter.x, 2.2, rampCenter.z);
   ramp.rotation.x = -0.24;
   scene.add(ramp);
+  // Pitched -0.24 about X, the 4.5m-wide deck runs from z -6.71 down to z
+  // -21.29. Below z -14.94 its underside sits under 1.8m, so only that half is
+  // solid; the high half stays open and can still be walked underneath.
+  colliders.push({ minX: rampCenter.x - 2.25, maxX: rampCenter.x + 2.25, minZ: -21.29, maxZ: -14.94 });
   return { colliders, lights };
 }
 

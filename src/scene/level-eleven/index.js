@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { createGameMaterial, isLowQuality } from "../common/materials.js";
 import { createStableLightState } from "../common/lighting.js";
-import { createGridWalkability, createStandardPickupSet } from "../common/grid-world.js";
+import { createGridCollision, createStandardPickupSet } from "../common/grid-world.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createExitNetwork } from "../common/exit-network.js";
 import { createHoundEntity, getFocusedEntity } from "../entities/index.js";
@@ -81,7 +81,7 @@ export function createLevelElevenScene({ initialState = null } = {}) {
   scene.add(sun);
   const details = addLevelElevenDetails(scene, { coarse });
   const expansionEntrances = addLevelElevenExpansionEntrances(scene);
-  const isWalkable = createGridWalkability({ worldToCell: levelElevenWorldToCell, isOpen: isLevelElevenOpenCell, colliders: details.colliders });
+  const { isWalkable, getFloorHeight, resolvePosition } = createGridCollision({ worldToCell: levelElevenWorldToCell, isOpen: isLevelElevenOpenCell, colliders: details.colliders });
   const isHoundCellOpen = createEntityNavCellFilter({
     isCellOpen: isLevelElevenOpenCell,
     cellCenter: levelElevenCellCenter,
@@ -93,7 +93,12 @@ export function createLevelElevenScene({ initialState = null } = {}) {
     { id: "level-eleven-matrix-window", targetLevel: 12, targetLabel: "LEVEL 12", label: "CENSORED WINDOW", kind: "threshold", position: matrixWindowEntry, entryPosition: matrixWindowEntry, enterRadius: 2.25 },
     { id: "level-eleven-apartment-thirteen", targetLevel: 13, targetLabel: "LEVEL 13", label: "APARTMENTS", kind: "door", position: { x: apartmentEntry.x, z: apartmentEntry.z + CELL_SIZE / 2 - 0.18 }, entryPosition: apartmentEntry, rotation: Math.PI, singleDoor: true, canClose: false },
   ];
-  const exitNetwork = createExitNetwork(scene, camera, routes, initialState?.interactions ?? {});
+  // The pickup set below is placed with `blockedAabbs: details.colliders`, so
+  // the door colliders are collected separately and merged only after every item
+  // exists: that keeps the candidate cells (and therefore saved item positions)
+  // exactly as they were before doors became solid.
+  const exitColliders = [];
+  const exitNetwork = createExitNetwork(scene, camera, routes, initialState?.interactions ?? {}, { colliders: exitColliders });
   const pickupSet = createStandardPickupSet(scene, {
     cols: LEVEL_ELEVEN_COLS,
     rows: LEVEL_ELEVEN_ROWS,
@@ -105,6 +110,9 @@ export function createLevelElevenScene({ initialState = null } = {}) {
     includeFiresalt: true,
     firesaltSpawnChance: 1,
   });
+  // Every pickup is placed, so the door colliders can join the list that
+  // createGridCollision exposes as isWalkable / getFloorHeight / resolvePosition.
+  details.colliders.push(...exitColliders);
   const savedEntities = snapEntityStates(initialState?.entities ?? [], isWalkable);
   const savedHoundState = snapEntityStateToNavCell(
     savedEntities.find((entity) => entity.id === "hound-level-eleven") ?? null,
@@ -180,6 +188,8 @@ export function createLevelElevenScene({ initialState = null } = {}) {
     nextLevel: null,
     exitMode: "network",
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     colliderCount: details.colliders.length,
     flashlightEffectiveness: 0.92,
     get viewModelName() { return getViewModelName(viewModel); },

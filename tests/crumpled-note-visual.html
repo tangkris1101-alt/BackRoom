@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>crumpled-note visual check</title>
+  <style>body { margin: 0; background: #202024; }</style>
+</head>
+<body>
+  <script type="module">
+    import * as THREE from "three";
+    import { createWorldItemModel, createWorldItemManager } from "../src/scene/common/world-items.js";
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xc9a24b);
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
+    camera.position.set(0.25, 0.55, 0.55);
+    camera.lookAt(0, 0, 0);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    sun.position.set(2, 4, 3);
+    scene.add(sun);
+
+    // 地面，用于检查丢弃后是否嵌入
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(10, 10),
+      new THREE.MeshStandardMaterial({ color: 0xc9a24b, roughness: 0.95 }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
+
+    // 直接生成的便签（贴合地面偏移）
+    const manager = createWorldItemManager(scene, []);
+    manager.drop("crumpled-note", new THREE.Vector3(-1.2, 1.6, 0.4), 0);
+    manager.drop("empty-can", new THREE.Vector3(-1.2, 1.6, -0.6), 0);
+
+    // 近景便签，检查字迹
+    const note = createWorldItemModel("crumpled-note");
+    note.position.set(0, 0.01, 0);
+    note.rotation.set(0.05, -0.4, -0.035);
+    scene.add(note);
+
+    window.__scene = scene;
+    renderer.render(scene, camera);
+  </script>
+</body>
+</html>

@@ -6,6 +6,7 @@ import {
 } from "../constants.js";
 import { createFixturePointLight } from "../common/lighting.js";
 import { createWideSignTexture } from "../common/textures.js";
+import { createLevelTwoMetalTexture } from "./textures.js";
 import { isInAnyZone } from "../common/layout.js";
 import {
   LEVEL_TWO_COLS,
@@ -33,7 +34,6 @@ import {
   isLevelTwoDiagonalCell,
   levelTwoCellCenter,
   countLevelTwoOpenNeighbors,
-  getLevelTwoTargetMount,
   getLevelTwoMachineRect,
   levelTwoDiagonalCenterWorld,
 } from "./layout.js";
@@ -337,17 +337,20 @@ export function addLevelTwoPipes(scene) {
 }
 
 export function addLevelTwoMachinery(scene, machineryColliders) {
+  const wornMetal = createLevelTwoMetalTexture();
   const bodyMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2b2820,
-    emissive: 0x0a0806,
-    emissiveIntensity: 0.12,
+    map: wornMetal,
+    color: 0xb7aa95,
+    emissive: 0x282017,
+    emissiveIntensity: 0.16,
     roughness: 0.82,
     metalness: 0.28,
   });
   const rustMaterial = new THREE.MeshStandardMaterial({
-    color: 0x5a3621,
-    emissive: 0x160804,
-    emissiveIntensity: 0.1,
+    map: wornMetal,
+    color: 0xaf7651,
+    emissive: 0x32170d,
+    emissiveIntensity: 0.16,
     roughness: 0.88,
     metalness: 0.2,
   });
@@ -457,53 +460,6 @@ export function addLevelTwoSteam(scene) {
   });
 
   return puffs;
-}
-
-export function addLevelTwoServiceDoor(scene, position) {
-  const mount = getLevelTwoTargetMount(position);
-  const doorMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2b2520,
-    emissive: 0x120804,
-    emissiveIntensity: 0.18,
-    roughness: 0.72,
-    metalness: 0.34,
-  });
-  const signMaterial = new THREE.MeshStandardMaterial({
-    map: createWideSignTexture("PIPE EXIT", "#241108", "#ffbc73"),
-    color: 0xffffff,
-    emissive: 0x7a2d0b,
-    emissiveIntensity: 0.55,
-    roughness: 0.5,
-    side: THREE.DoubleSide,
-  });
-
-  const door = new THREE.Mesh(new THREE.PlaneGeometry(2.35, 2.35), doorMaterial);
-  door.position.set(mount.x, 1.28, mount.z);
-  door.rotation.y = mount.rotation;
-  scene.add(door);
-
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.22, 0.62), signMaterial);
-  sign.position.set(mount.x, 2.62, mount.z);
-  sign.rotation.y = mount.rotation;
-  scene.add(sign);
-
-  const floorMarker = new THREE.Mesh(
-    new THREE.RingGeometry(CELL_SIZE * 0.32, CELL_SIZE * 0.52, 32),
-    new THREE.MeshBasicMaterial({
-      color: 0xff8b3d,
-      transparent: true,
-      opacity: 0.13,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  );
-  floorMarker.rotation.x = -Math.PI / 2;
-  floorMarker.position.set(position.x, 0.035, position.z);
-  scene.add(floorMarker);
-
-  const glow = new THREE.PointLight(0xff8b3d, 0.52, 6.8, 2.2);
-  glow.position.set(position.x, 1.6, position.z);
-  scene.add(glow);
 }
 
 export function addLevelTwoFloorHeat(scene) {
@@ -663,15 +619,38 @@ export function addLevelTwoIndustrialDetails(scene) {
       }
     }
   }
+  // A valve cell is solid, so its wheel has to hang on the one face that opens
+  // onto the corridor - every other face is buried in the surrounding wall.
+  // Cells (9,5) (15,5) (21,5) (34,21) (38,21) open south (+z); (30,14) opens
+  // west (-x), so it alone turns a quarter turn along the corridor.
+  const valveFaces = [
+    { dc: 0, dr: -1, normalX: 0, normalZ: -1, rotation: 0 },
+    { dc: 0, dr: 1, normalX: 0, normalZ: 1, rotation: 0 },
+    { dc: -1, dr: 0, normalX: -1, normalZ: 0, rotation: Math.PI / 2 },
+    { dc: 1, dr: 0, normalX: 1, normalZ: 0, rotation: Math.PI / 2 },
+  ];
   valveCells.forEach(({ col, row }) => {
     const center = levelTwoCellCenter(col, row);
+    const face =
+      valveFaces.find((option) => isLevelTwoOpenCell(col + option.dc, row + option.dr)) ?? valveFaces[1];
+    // The cell edge is the wall plane, so push the wheel 0.08m past it into the
+    // corridor (torus tube radius 0.026 keeps it clear of the wall).
+    const wheelX = center.x + face.normalX * (S / 2 + 0.08);
+    const wheelZ = center.z + face.normalZ * (S / 2 + 0.08);
     const valve = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.026, 8, 24), valveMaterial);
-    valve.position.set(center.x, 1.44, center.z + S / 2 + 0.08);
-    valve.rotation.y = 0;
+    valve.position.set(wheelX, 1.44, wheelZ);
+    valve.rotation.y = face.rotation;
     scene.add(valve);
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 12), valveMaterial);
-    hub.position.set(center.x, 1.44, center.z + S / 2 + 0.1);
-    hub.rotation.x = Math.PI / 2;
+    hub.position.set(
+      center.x + face.normalX * (S / 2 + 0.1),
+      1.44,
+      center.z + face.normalZ * (S / 2 + 0.1),
+    );
+    // The cylinder's axis is +Y by default: lay it along the face normal (Z for
+    // the north/south faces, X for the east/west ones).
+    if (face.normalZ !== 0) hub.rotation.x = Math.PI / 2;
+    else hub.rotation.z = Math.PI / 2;
     scene.add(hub);
   });
 
@@ -745,6 +724,7 @@ export function addLevelTwoUtilityProps(scene) {
   const colliders = [];
 
   // Barrels scattered along tunnels
+  const barrelGeometry = new THREE.CylinderGeometry(0.3, 0.32, 0.82, 18);
   const barrels = [
     { col: 6, row: 6, x: -1.5, z: 0.3 },
     { col: 19, row: 6, x: -1.5, z: 0.2 },
@@ -758,7 +738,7 @@ export function addLevelTwoUtilityProps(scene) {
   barrels.forEach((barrel, index) => {
     const center = levelTwoCellCenter(barrel.col, barrel.row);
     const mesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.3, 0.32, 0.82, 18),
+      barrelGeometry,
       index % 2 === 0 ? barrelMaterial : darkMaterial,
     );
     mesh.position.set(center.x + barrel.x, 0.41, center.z + barrel.z);
@@ -771,9 +751,25 @@ export function addLevelTwoUtilityProps(scene) {
       band.rotation.x = Math.PI / 2;
       scene.add(band);
     }
+
+    // The drum is only 0.82 m tall, so it is a low step: blocking the side
+    // stops as soon as the player's feet clear its top. Footprint comes from
+    // the wider bottom radius (the bands stay inside it).
+    const barrelRadius = Math.max(
+      barrelGeometry.parameters.radiusTop,
+      barrelGeometry.parameters.radiusBottom,
+    );
+    colliders.push({
+      minX: mesh.position.x - barrelRadius,
+      maxX: mesh.position.x + barrelRadius,
+      minZ: mesh.position.z - barrelRadius,
+      maxZ: mesh.position.z + barrelRadius,
+      topY: mesh.position.y + barrelGeometry.parameters.height / 2,
+    });
   });
 
   // Hazard barriers at branch junctions
+  const barrierGeometry = new THREE.BoxGeometry(1.55, 0.68, 0.16);
   const barriers = [
     { col: 12, row: 5, x: 0.6, z: -0.55, rot: -0.6 },
     { col: 25, row: 7, x: -0.6, z: 0.5, rot: 0.55 },
@@ -782,15 +778,26 @@ export function addLevelTwoUtilityProps(scene) {
   ];
   barriers.forEach((barrier) => {
     const center = levelTwoCellCenter(barrier.col, barrier.row);
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.68, 0.16), hazardMaterial);
+    const mesh = new THREE.Mesh(barrierGeometry, hazardMaterial);
     mesh.position.set(center.x + barrier.x, 0.38, center.z + barrier.z);
     mesh.rotation.y = barrier.rot;
     scene.add(mesh);
+
+    // Three of the four barriers stand in 2 x 2 m diagonal-cell triangles, so
+    // the collider has to hug the rotated model: a padded rectangle closed the
+    // turn. The 0.72 m top keeps it a chest-high obstacle the player can only
+    // clear while airborne.
+    const { width, height, depth } = barrierGeometry.parameters;
+    const cos = Math.abs(Math.cos(barrier.rot));
+    const sin = Math.abs(Math.sin(barrier.rot));
+    const halfX = (cos * width + sin * depth) / 2;
+    const halfZ = (sin * width + cos * depth) / 2;
     colliders.push({
-      minX: mesh.position.x - 0.88,
-      maxX: mesh.position.x + 0.88,
-      minZ: mesh.position.z - 0.52,
-      maxZ: mesh.position.z + 0.52,
+      minX: mesh.position.x - halfX,
+      maxX: mesh.position.x + halfX,
+      minZ: mesh.position.z - halfZ,
+      maxZ: mesh.position.z + halfZ,
+      topY: mesh.position.y + height / 2,
     });
   });
 

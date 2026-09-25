@@ -37,7 +37,7 @@ export function createAlmondWaterLabelTexture(variant = "normal") {
   context.font = "700 11px Arial, sans-serif";
   context.fillStyle = isSuper ? "#8e5d05" : "#5f6542";
   context.fillText(isSuper ? "RARE GOLDEN SUPPLY" : "LEVEL 0 SUPPLY", isSuper ? 91 : 106, 164);
-  context.fillText(isSuper ? "250 CAP / RECOVERY x2" : "+50 STAMINA BOOST", isSuper ? 74 : 83, 181);
+  context.fillText(isSuper ? "500 CAP / RECOVERY x2" : "+100 STAMINA BOOST", isSuper ? 74 : 83, 181);
 
   context.fillStyle = isSuper ? "#ffd33f" : "#dccb83";
   context.beginPath();

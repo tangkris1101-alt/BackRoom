@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Level 1 箱子货柜模型验收</title>
+  <style>
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111; color:#fff; font:14px system-ui,sans-serif; }
+    canvas { display:block; width:100%; height:100%; }
+    .controls { position:fixed; left:20px; top:20px; display:flex; gap:8px; align-items:center; padding:10px 12px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
+    button { background:#e8dfb5; color:#182016; border:0; border-radius:4px; padding:8px 13px; cursor:pointer; font-weight:600; }
+    #status { min-width:320px; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button id="crate">箱子特写</button>
+    <button id="crate-braced">斜撑箱</button>
+    <button id="shelf">货架特写</button>
+    <button id="meg">M.E.G. 储物区</button>
+    <button id="supply">补给区全景</button>
+    <button id="capture">纯画面截图</button>
+    <span id="status">正在加载 Level 1…</span>
+  </div>
+  <script type="module">
+    import * as THREE from "three";
+    import { createLevelOneScene } from "/src/scene/level-one/index.js";
+    import { levelOneCellCenter } from "/src/scene/level-one/layout.js";
+
+    const status = document.getElementById("status");
+    document.getElementById("capture").addEventListener("click", () => {
+      document.querySelector(".controls").style.display = "none";
+    });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    document.body.append(renderer.domElement);
+
+    const world = createLevelOneScene({});
+    // 箱子 (12,8)-0.72/-0.5、斜撑箱 (14,8)+0.45/+0.45、货架 (26,18)、(12,9)。
+    const crateA = levelOneCellCenter(12, 8);
+    const crateB = levelOneCellCenter(14, 8);
+    const shelfA = levelOneCellCenter(12, 9);
+    const shelfB = levelOneCellCenter(26, 18);
+    const supply = levelOneCellCenter(27, 18);
+
+    const views = {
+      crate: {
+        pos: [crateA.x - 0.72 + 1.35, 1.22, crateA.z - 0.5 + 1.5],
+        look: [crateA.x - 0.72, 0.52, crateA.z - 0.5],
+        label: "箱子特写 · 木板/边框/鞋钉/模板印字",
+      },
+      "crate-braced": {
+        pos: [crateB.x + 0.45 - 1.45, 1.15, crateB.z + 0.45 + 1.25],
+        look: [crateB.x + 0.45, 0.5, crateB.z + 0.45],
+        label: "斜撑箱 · 深色木料 + 对角撑",
+      },
+      shelf: {
+        pos: [shelfB.x - 2.45, 1.5, shelfB.z + 0.4],
+        look: [shelfB.x + 0.1, 0.92, shelfB.z],
+        label: "货架特写 · 立柱/横梁/隔板/背板/斜撑/标签",
+      },
+      meg: {
+        pos: [levelOneCellCenter(12, 6).x + 1.2, 1.62, levelOneCellCenter(12, 6).z + 0.4],
+        look: [levelOneCellCenter(13, 8.4).x, 0.8, levelOneCellCenter(13, 8.4).z],
+        label: "M.E.G. 储物区 · 货架与木箱",
+      },
+      supply: {
+        pos: [shelfB.x - 3.3, 1.7, shelfB.z + 3.4],
+        look: [shelfB.x + 3.2, 0.95, shelfB.z - 0.8],
+        label: "补给区全景 · 两排货架 + 托盘木箱",
+      },
+    };
+    function applyView(name) {
+      const view = views[name];
+      world.camera.position.set(...view.pos);
+      world.camera.lookAt(...view.look);
+      world.camera.updateMatrixWorld();
+      const walkable = [
+        `箱心=${world.isWalkable(crateA.x - 0.72, crateA.z - 0.5)}`,
+        `箱侧1.3m=${world.isWalkable(crateA.x - 0.72 + 1.3, crateA.z - 0.5)}`,
+        `柜心=${world.isWalkable(shelfB.x, shelfB.z)}`,
+        `柜前1.4m=${world.isWalkable(shelfB.x - 1.4, shelfB.z)}`,
+      ].join(" ");
+      const crateTop = world.getFloorHeight(crateA.x - 0.72, crateA.z - 0.5, 1.0);
+      status.textContent = `${view.label} | ${walkable} 箱顶高度=${crateTop.toFixed(2)}`;
+    }
+    for (const name of ["crate", "crate-braced", "shelf", "meg", "supply"]) {
+      document.getElementById(name).addEventListener("click", () => applyView(name));
+    }
+    applyView("crate");
+
+    let previousFrame = performance.now();
+    let elapsed = 0;
+    function frame(now) {
+      const dt = Math.min(0.05, (now - previousFrame) / 1000);
+      previousFrame = now;
+      elapsed += dt;
+      const camera = world.camera.position;
+      world.update(dt, elapsed, { x: camera.x, y: camera.y, z: camera.z });
+      renderer.render(world.scene, world.camera);
+      requestAnimationFrame(frame);
+    }
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight);
+      world.camera.aspect = innerWidth / innerHeight;
+      world.camera.updateProjectionMatrix();
+    }
+    addEventListener("resize", resize);
+    resize();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Level 1 电梯到达验收</title>
+  <style>
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111; color:#fff; font:14px system-ui,sans-serif; }
+    canvas { display:block; width:100%; height:100%; }
+    .controls { position:fixed; left:20px; top:20px; display:flex; gap:8px; align-items:center; padding:10px 12px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
+    button { background:#d6e4dc; color:#182016; border:0; border-radius:4px; padding:8px 13px; cursor:pointer; font-weight:600; }
+    #status { min-width:320px; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button id="cab">轿厢内（出生点）</button>
+    <button id="walkout">走出轿厢（自动关门）</button>
+    <button id="lookback">门口回看</button>
+    <button id="capture">纯画面截图</button>
+    <span id="status">正在加载 Level 1…</span>
+  </div>
+  <script type="module">
+    import * as THREE from "three";
+    import { createLevelOneScene } from "/src/scene/level-one/index.js";
+
+    const status = document.getElementById("status");
+    document.getElementById("capture").addEventListener("click", () => {
+      document.querySelector(".controls").style.display = "none";
+    });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    document.body.append(renderer.domElement);
+
+    // 模拟从 Level 0 乘电梯抵达。
+    const world = createLevelOneScene({ entryContext: { type: "route", sourceLevel: 0 } });
+    const spawn = world.spawn;
+    const player = { x: spawn.x, y: 1.62, z: spawn.z };
+    let mode = "cab";
+    let walkoutT = -1;
+
+    const doorState = () => world.getSnapshot().interactions["level-one-arrival-elevator"]?.count;
+    const walkableInfo = () => {
+      const inCab = world.isWalkable(spawn.x, spawn.z);
+      const besideCab = world.isWalkable(spawn.x + 1.6, spawn.z);
+      const lobby = world.isWalkable(spawn.x, spawn.z + 3.2);
+      return `轿厢内可走=${inCab} 井道空隙可走=${besideCab} 大厅可走=${lobby}`;
+    };
+
+    function applyCamera() {
+      world.camera.rotation.order = "YXZ";
+      if (mode === "lookback") {
+        world.camera.position.set(spawn.x + 0.4, 1.62, spawn.z + 4.6);
+        world.camera.rotation.set(0, 0, 0);
+      } else {
+        world.camera.position.set(player.x, 1.62, player.z);
+        world.camera.rotation.set(0, Math.PI, 0);
+      }
+      world.camera.updateMatrixWorld();
+    }
+
+    document.getElementById("cab").addEventListener("click", () => {
+      mode = "cab";
+      walkoutT = -1;
+      player.x = spawn.x;
+      player.z = spawn.z;
+    });
+    document.getElementById("walkout").addEventListener("click", () => {
+      mode = "walkout";
+      walkoutT = 0;
+    });
+    document.getElementById("lookback").addEventListener("click", () => {
+      mode = "lookback";
+      player.x = spawn.x;
+      player.z = spawn.z + 4.6;
+    });
+
+    let previousFrame = performance.now();
+    let elapsed = 0;
+    function frame(now) {
+      const dt = Math.min(0.05, (now - previousFrame) / 1000);
+      previousFrame = now;
+      elapsed += dt;
+      if (mode === "walkout" && walkoutT >= 0) {
+        walkoutT += dt;
+        const t = Math.min(1, walkoutT / 2.2);
+        player.z = spawn.z + t * 4.2;
+        if (t >= 1) walkoutT = -1;
+      }
+      applyCamera();
+      world.update(dt, elapsed, player);
+      status.textContent = `门状态=${doorState() ? "开" : "关"} 玩家z=${player.z.toFixed(2)} | ${walkableInfo()}`;
+      renderer.render(world.scene, world.camera);
+      requestAnimationFrame(frame);
+    }
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight);
+      world.camera.aspect = innerWidth / innerHeight;
+      world.camera.updateProjectionMatrix();
+    }
+    addEventListener("resize", resize);
+    resize();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

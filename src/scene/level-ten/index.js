@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { createGameMaterial, isLowQuality } from "../common/materials.js";
 import { createStableLightState } from "../common/lighting.js";
-import { createGridWalkability, createStandardPickupSet } from "../common/grid-world.js";
+import { createGridCollision, createStandardPickupSet } from "../common/grid-world.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createExitNetwork } from "../common/exit-network.js";
 import { enableAoUv } from "../common/texture-utils.js";
@@ -55,7 +55,7 @@ export function createLevelTenScene({ initialState = null } = {}) {
   daylight.position.set(-52, 66, 24);
   scene.add(daylight);
   const details = addLevelTenDetails(scene, { coarse });
-  const isWalkable = createGridWalkability({ worldToCell: levelTenWorldToCell, isOpen: isLevelTenOpenCell, colliders: details.colliders });
+  const { isWalkable, getFloorHeight, resolvePosition } = createGridCollision({ worldToCell: levelTenWorldToCell, isOpen: isLevelTenOpenCell, colliders: details.colliders });
   const routes = [{
     id: "level-ten-road-to-eleven",
     targetLevel: 11,
@@ -125,6 +125,8 @@ export function createLevelTenScene({ initialState = null } = {}) {
     nextLevel: null,
     exitMode: "network",
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     colliderCount: details.colliders.length,
     flashlightEffectiveness: 0.72,
     get viewModelName() { return getViewModelName(viewModel); },

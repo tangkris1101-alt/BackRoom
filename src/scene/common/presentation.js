@@ -25,7 +25,7 @@ const LEVEL_PRESENTATIONS = new Map([
   [9, { exposure: 0.68, shadowMode: "outdoor", surface: "grass", environment: "night-outdoor", reverb: "open", post: { aoIntensity: 0.5, vignette: 0.28, grain: 0.05 } }],
   [10, { exposure: 1, shadowMode: "outdoor", surface: "grass", environment: "day-outdoor", reverb: "open", post: { aoIntensity: 0.46, vignette: 0.1, grain: 0.02 } }],
   [11, { exposure: 0.94, shadowMode: "outdoor", surface: "asphalt", environment: "city-outdoor", reverb: "open", post: { aoIntensity: 0.54, vignette: 0.12, grain: 0.025 } }],
-  [12, { exposure: 1.04, shadowMode: "indoor", surface: "concrete", environment: "matrix", reverb: "large", post: { aoIntensity: 0.5, vignette: 0.1, grain: 0.025 } }],
+  [12, { exposure: 0.92, shadowMode: "indoor", surface: "concrete", environment: "matrix", reverb: "large", post: { aoIntensity: 0.62, vignette: 0.1, grain: 0.025 } }],
   [13, { exposure: 0.72, shadowMode: "indoor", surface: "carpet", environment: "apartments", reverb: "medium", post: { aoIntensity: 0.76, vignette: 0.28, grain: 0.05 } }],
   [37, { exposure: 1.02, shadowMode: "wet", surface: "water", environment: "pool", reverb: "large", post: { aoIntensity: 0.52, vignette: 0.12, grain: 0.025 } }],
 ]);

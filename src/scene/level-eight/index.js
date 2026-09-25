@@ -4,7 +4,7 @@ import { CELL_SIZE, CEILING_Y, WALL_HEIGHT } from "../constants.js";
 import { addInstancedBoxes, createStableLightState } from "../common/lighting.js";
 import {
   collectGridWallTransforms,
-  createGridWalkability,
+  createGridCollision,
   createStandardPickupSet,
   eastWestWallGeometry,
   northSouthWallGeometry,
@@ -25,18 +25,32 @@ import {
 import { createLevelEightCeilingTexture, createLevelEightPbrMaps } from "./textures.js";
 import { enableAoUv } from "../common/texture-utils.js";
 
-function addCaveDetails(scene) {
+function addCaveDetails(scene, colliders) {
   const rock = createGameMaterial({ color: 0x303733, roughness: 0.98, metalness: 0.02 });
   const wetRock = createGameMaterial({ color: 0x263532, emissive: 0x06231d, emissiveIntensity: 0.24, roughness: 0.72 });
   const mineral = createGameMaterial({ color: 0x8c5124, emissive: 0xff4b16, emissiveIntensity: 0.45, roughness: 0.42 });
   const spikeGeometry = new THREE.ConeGeometry(0.32, 1.45, 7);
+  // Ground spikes are 7-sided cones standing on the floor: 0.32m base radius,
+  // 1.45m tall around their y 0.72 centre, so the base is the footprint and the
+  // tip (1.445m) is the highest point of the collider. Each one is pushed from
+  // the same loop that places the instance, so the two can never drift apart.
+  const SPIKE_BASE_RADIUS = 0.32;
+  const SPIKE_TOP_Y = 0.72 + 1.45 / 2;
   const transforms = [];
   for (let row = 2; row < LEVEL_EIGHT_ROWS - 2; row += 2) {
     for (let col = 2; col < LEVEL_EIGHT_COLS - 2; col += 2) {
       if (!isLevelEightOpenCell(col, row)) continue;
       if ((col * 17 + row * 29) % 7 > 1) continue;
       const center = levelEightCellCenter(col, row);
-      transforms.push(new THREE.Vector3(center.x + ((col % 3) - 1) * 0.7, 0.72, center.z + ((row % 3) - 1) * 0.62));
+      const position = new THREE.Vector3(center.x + ((col % 3) - 1) * 0.7, 0.72, center.z + ((row % 3) - 1) * 0.62);
+      colliders.push({
+        minX: position.x - SPIKE_BASE_RADIUS,
+        maxX: position.x + SPIKE_BASE_RADIUS,
+        minZ: position.z - SPIKE_BASE_RADIUS,
+        maxZ: position.z + SPIKE_BASE_RADIUS,
+        topY: SPIKE_TOP_Y,
+      });
+      transforms.push(position);
     }
   }
   if (transforms.length) addInstancedBoxes(scene, spikeGeometry, rock, transforms);
@@ -64,6 +78,17 @@ function addCaveDetails(scene) {
     vein.position.set(center.x, 0.38, center.z);
     vein.rotation.y = cell.col * 0.17;
     scene.add(vein);
+    // The 0.38m dodecahedron scaled 1.8/0.72/0.55 is a flat slab once the
+    // rotation.y is applied, so the collider takes the model's own rotated
+    // world bounds instead of an axis-aligned guess.
+    const bounds = new THREE.Box3().setFromObject(vein);
+    colliders.push({
+      minX: bounds.min.x,
+      maxX: bounds.max.x,
+      minZ: bounds.min.z,
+      maxZ: bounds.max.z,
+      topY: bounds.max.y,
+    });
   }
 
   const roadMaterial = new THREE.MeshBasicMaterial({ color: 0xe3b85f, transparent: true, opacity: 0.72 });
@@ -102,7 +127,10 @@ export function createLevelEightScene({ initialState = null } = {}) {
   const walls = collectGridWallTransforms({ cols: LEVEL_EIGHT_COLS, rows: LEVEL_EIGHT_ROWS, isOpen: isLevelEightOpenCell, cellCenter: levelEightCellCenter });
   addInstancedBoxes(scene, northSouthWallGeometry, wallMaterial, walls.northSouth);
   addInstancedBoxes(scene, eastWestWallGeometry, wallMaterial, walls.eastWest);
-  addCaveDetails(scene);
+  // Cave props are colliders too, so the array has to exist before they are
+  // built: the spikes push their own footprint from the placement loop below.
+  const colliders = [];
+  addCaveDetails(scene, colliders);
   scene.add(new THREE.HemisphereLight(0x71928a, 0x020504, 0.62));
   const guideCells = [{ col: 5, row: 34 }, { col: 19, row: 31 }, { col: 25, row: 18 }, { col: 40, row: 16 }, { col: 45, row: 6 }];
   guideCells.forEach((cell, index) => {
@@ -116,19 +144,30 @@ export function createLevelEightScene({ initialState = null } = {}) {
   camera.add(cameraFill);
   const updateLightState = createStableLightState("CAVE", { dimBelow: 0.35, normalAbove: 0.56, dimDelay: 0.7, normalDelay: 1.1 });
 
-  const colliders = [];
-  const isWalkable = createGridWalkability({ worldToCell: levelEightWorldToCell, isOpen: isLevelEightOpenCell, colliders });
+  const { isWalkable, getFloorHeight, resolvePosition } = createGridCollision({
+    worldToCell: levelEightWorldToCell,
+    isOpen: isLevelEightOpenCell,
+    colliders,
+  });
   const interactionInitial = initialState?.interactions ?? {};
   const routes = [
     { id: "level-eight-road-end", targetLevel: 9, targetLabel: "LEVEL 9", label: "9TH ROAD", kind: "door", position: targetPosition, rotation: 0 },
     { id: "level-eight-vent-level-two", targetLevel: 2, targetLabel: "LEVEL 2", label: "VENT", kind: "door", position: levelEightCellCenter(7, 22), rotation: Math.PI / 2 },
     { id: "level-eight-pool-level-seven", targetLevel: 7, targetLabel: "LEVEL 7", label: "DISTILLED POOL", kind: "stair", position: levelEightCellCenter(41, 27), rotation: Math.PI },
   ];
-  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
+  // The pickup set below is placed with `blockedAabbs: colliders`, so the door
+  // colliders are collected separately and merged only after every item exists:
+  // that keeps the candidate cells (and therefore saved item positions) exactly
+  // as they were before doors became solid.
+  const exitColliders = [];
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial, { colliders: exitColliders });
   const pickupSet = createStandardPickupSet(scene, {
     cols: LEVEL_EIGHT_COLS, rows: LEVEL_EIGHT_ROWS, isCellOpen: isLevelEightOpenCell, getCellCenter: levelEightCellCenter,
     avoidPositions: [spawnCell, targetPosition], blockedAabbs: colliders, initialState: initialState?.pickups ?? {}, includeFiresalt: true, firesaltSpawnChance: 0.86,
   });
+  // The pickup set is placed, so the door colliders can join the list that
+  // createGridCollision exposes as isWalkable / getFloorHeight / resolvePosition.
+  colliders.push(...exitColliders);
   const savedEntities = snapEntityStates(initialState?.entities ?? [], isWalkable);
   const smilerSpawns = [levelEightCellCenter(38, 27), levelEightCellCenter(29, 17)];
   const smilerCount = window.matchMedia?.("(pointer: coarse), (max-width: 800px)").matches ? 1 : 2;
@@ -158,7 +197,8 @@ export function createLevelEightScene({ initialState = null } = {}) {
   }
   return {
     level: 8, levelLabel: "LEVEL 8", levelName: "CAVE SYSTEMS", scene, camera, spawn, targetPosition,
-    nextLevel: null, exitMode: "network", isWalkable, flashlightEffectiveness: 1.35,
+    colliderCount: colliders.length,
+    nextLevel: null, exitMode: "network", isWalkable, getFloorHeight, resolvePosition, flashlightEffectiveness: 1.35,
     get viewModelName() { return getViewModelName(viewModel); },
     decorativeItemSpawns: [{ id: "concrete-chip", position: { ...levelEightCellCenter(20, 31), y: 0.18 }, rotation: 0.4, tiltX: 0.1 }],
     update,

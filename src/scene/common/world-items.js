@@ -39,8 +39,8 @@ export const DECORATIVE_ITEM_DEFS = {
     color: 0xd8cfaa,
     shape: "note",
     i18n: {
-      "zh-CN": { name: "皱折便签", effect: "墨迹已经无法辨认", action: "F / 按钮拾取" },
-      en: { name: "CRUMPLED NOTE", effect: "THE INK IS NO LONGER LEGIBLE", action: "F / BUTTON PICK UP" },
+      "zh-CN": { name: "皱折便签", effect: "上面潦草地写着几句警告", action: "F / 按钮拾取" },
+      en: { name: "CRUMPLED NOTE", effect: "A HASTILY SCRAWLED WARNING", action: "F / BUTTON PICK UP" },
     },
   },
   "level-one-file": {
@@ -169,6 +169,29 @@ function createNoteFaceMaterial(color) {
   context.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
   context.fillRect(0, 0, canvas.width, canvas.height);
 
+  const stain = (x, y, radius, alpha) => {
+    const gradient = context.createRadialGradient(x, y, radius * 0.15, x, y, radius);
+    gradient.addColorStop(0, `rgba(112, 86, 48, ${alpha})`);
+    gradient.addColorStop(1, "rgba(112, 86, 48, 0)");
+    context.fillStyle = gradient;
+    context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  };
+  stain(58, 188, 52, 0.2);
+  stain(282, 34, 44, 0.16);
+  stain(298, 190, 60, 0.14);
+  context.strokeStyle = "rgba(96, 70, 38, 0.18)";
+  context.lineWidth = 5;
+  context.beginPath();
+  context.arc(250, 162, 26, 0, Math.PI * 2);
+  context.stroke();
+  context.strokeStyle = "rgba(104, 80, 44, 0.22)";
+  context.lineWidth = 10;
+  context.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+  context.fillStyle = "rgba(80, 62, 36, 0.26)";
+  for (let i = 0; i < 90; i += 1) {
+    context.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 1.4, 1.4);
+  }
+
   context.strokeStyle = "rgba(91, 72, 45, 0.22)";
   context.lineWidth = 2;
   context.beginPath();
@@ -180,28 +203,39 @@ function createNoteFaceMaterial(color) {
   context.quadraticCurveTo(246, 194, 302, 177);
   context.stroke();
 
-  context.strokeStyle = "rgba(37, 42, 68, 0.8)";
-  context.lineWidth = 4;
-  context.lineCap = "round";
+  context.fillStyle = "rgba(37, 42, 68, 0.82)";
+  context.font = "italic 600 20px \"Segoe Print\", \"Comic Sans MS\", cursive";
+  context.textAlign = "left";
+  context.textBaseline = "middle";
+  context.save();
+  context.translate(160, 118);
+  context.rotate(-0.03);
+  context.fillText("if you're reading this,", -138, -48);
+  context.fillText("don't stop. keep moving.", -138, -12);
+  context.fillText("the hum is not the lights.", -138, 24);
+  context.font = "italic 600 18px \"Segoe Print\", \"Comic Sans MS\", cursive";
+  context.fillText("- R.", 62, 58);
+  context.restore();
+
+  context.globalCompositeOperation = "destination-out";
   context.beginPath();
-  context.moveTo(54, 91);
-  context.quadraticCurveTo(77, 77, 101, 89);
-  context.quadraticCurveTo(119, 98, 140, 85);
-  context.moveTo(51, 117);
-  context.quadraticCurveTo(76, 104, 102, 116);
-  context.quadraticCurveTo(120, 124, 147, 108);
-  context.moveTo(182, 133);
-  context.quadraticCurveTo(205, 112, 225, 129);
-  context.quadraticCurveTo(242, 143, 266, 123);
-  context.stroke();
-  context.fillStyle = "rgba(37, 42, 68, 0.72)";
-  context.font = "italic 22px serif";
-  context.fillText("...keep moving", 164, 82);
+  context.moveTo(0, 224);
+  context.lineTo(0, 178);
+  context.lineTo(9, 186);
+  context.lineTo(17, 176);
+  context.lineTo(26, 188);
+  context.lineTo(34, 181);
+  context.lineTo(46, 196);
+  context.lineTo(41, 208);
+  context.lineTo(52, 224);
+  context.closePath();
+  context.fill();
+  context.globalCompositeOperation = "source-over";
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 2;
-  return new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9, metalness: 0 });
+  return new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9, metalness: 0, alphaTest: 0.5 });
 }
 
 function createLevelFileFaceMaterial() {
@@ -269,13 +303,13 @@ export function createWorldItemModel(id) {
     }
     group.scale.setScalar(KEY_MODEL_SCALE);
   } else if (definition.shape === "note") {
-    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.025, 0.34), material));
+    group.add(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.008, 0.34), material));
     const inkedFace = new THREE.Mesh(
       new THREE.PlaneGeometry(0.455, 0.315),
       createNoteFaceMaterial(definition.color),
     );
     inkedFace.rotation.x = -Math.PI / 2;
-    inkedFace.position.y = 0.014;
+    inkedFace.position.y = 0.0055;
     group.add(inkedFace);
   } else if (definition.shape === "file") {
     group.add(new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.035, 0.44), material));
@@ -370,8 +404,14 @@ export function createWorldItemManager(scene, defaultSpawns = [], initialState =
 
   function getFloorOffset(shape) {
     if (shape === "token") return 0.028;
-    if (shape === "note" || shape === "badge") return 0.022;
+    if (shape === "note") return 0.01;
+    if (shape === "badge") return 0.022;
     if (shape === "file") return 0.028;
+    if (shape === "key" || shape === "level-key") return 0.02;
+    if (shape === "can") return 0.2;
+    if (shape === "spool") return 0.26;
+    if (shape === "shell") return 0.13;
+    if (shape === "chip") return 0.2155;
     return 0;
   }
 
@@ -385,6 +425,7 @@ export function createWorldItemManager(scene, defaultSpawns = [], initialState =
   function addItem(raw) {
     if (!raw?.id || !raw.position) return null;
     const model = createWorldItemModel(raw.id);
+    model.name = `world-pickup-item-${raw.id}`;
     const definition = getItemDefinition(raw.id);
     const grounded = raw.grounded === true || definition.shape === "token";
     const y = grounded ? (raw.groundOffset ?? getFloorOffset(definition.shape)) : (raw.position.y ?? 0.24);
@@ -480,13 +521,18 @@ export function createWorldItemManager(scene, defaultSpawns = [], initialState =
   function drop(id, position, yaw = 0, data = null) {
     const forwardX = -Math.sin(yaw);
     const forwardZ = -Math.cos(yaw);
+    const groundable = Boolean(DECORATIVE_ITEM_DEFS[id]) || isLevelKeyId(id);
+    const shape = getItemDefinition(id).shape;
+    const flat = shape === "note" || shape === "badge" || shape === "file" ||
+      shape === "key" || shape === "level-key" || shape === "token";
     return addItem({
       id,
       active: true,
+      grounded: groundable,
       position: { x: position.x + forwardX * 1.15, y: 0, z: position.z + forwardZ * 1.15 },
       rotation: yaw + Math.PI * 0.5,
-      tiltX: 0.12,
-      tiltZ: -0.08,
+      tiltX: flat ? 0.035 : 0,
+      tiltZ: flat ? -0.025 : 0,
       data,
     });
   }

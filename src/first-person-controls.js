@@ -1,21 +1,25 @@
 import * as THREE from "three";
-import { SILENCE_LIQUID_DURATION } from "./scene/constants.js";
+import {
+  ALMOND_WATER_STAMINA_BONUS,
+  BASE_STAMINA_MAX,
+  SILENCE_LIQUID_DURATION,
+  SUPER_ALMOND_WATER_STAMINA_MAX,
+} from "./scene/constants.js";
 
 const PLAYER_RADIUS = 0.36;
 export const GRAVITY = 11.5;
 // 5.15 reaches roughly 1.15m, enough for the game\'s 0.9–1.1m tables while
 // keeping the jump below wall and shelf height.
 export const JUMP_VELOCITY = 5.15;
-const MAX_STAMINA = 100;
+const MAX_STAMINA = BASE_STAMINA_MAX;
 const STAMINA_DRAIN_RATE = 10;
 const STAMINA_RECOVERY_RATE = 20;
 const STAMINA_RECOVERY_DELAY = 0.55;
 const MIN_SPRINT_STAMINA = 0;
 const SPRINT_EXHAUSTED_RESUME_RATIO = 0.2;
-const ALMOND_WATER_STAMINA_BONUS = 50;
 const ALMOND_WATER_EFFECT_DURATION = 45;
 const ALMOND_WATER_MAX_STAMINA = MAX_STAMINA + ALMOND_WATER_STAMINA_BONUS;
-const SUPER_ALMOND_WATER_MAX_STAMINA = 250;
+const SUPER_ALMOND_WATER_MAX_STAMINA = SUPER_ALMOND_WATER_STAMINA_MAX;
 const SUPER_ALMOND_WATER_EFFECT_DURATION = 25;
 const SUPER_ALMOND_WATER_RECOVERY_MULTIPLIER = 2;
 const SUPER_ALMOND_WATER_SPEED_MULTIPLIER = 1.5;
@@ -35,6 +39,7 @@ export const AIR_CONTROL = 0.35;
 // animation directly to the much shorter collision step length.
 export const WALK_STEP_DISTANCE = 1.35;
 export const SPRINT_STEP_DISTANCE = 1.75;
+const NEUTRAL_GAIT_VARIATION = Object.freeze({ vertical: 1, roll: 1, phase: 0 });
 
 export function moveToward(current, target, maxDelta) {
   if (Math.abs(target - current) <= maxDelta) return target;
@@ -43,6 +48,10 @@ export function moveToward(current, target, maxDelta) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function randomBetween(min, max) {
+  return min + Math.random() * (max - min);
 }
 
 function clampPitch(pitch) {
@@ -109,6 +118,9 @@ export class FirstPersonControls {
     this.drinkStaminaBonus = ALMOND_WATER_STAMINA_BONUS;
     this.drinkCancelled = false;
     this.walkCycle = 0;
+    this.gaitStepIndex = -1;
+    this.gaitVariation = { ...NEUTRAL_GAIT_VARIATION };
+    this.gaitVariationTarget = { ...NEUTRAL_GAIT_VARIATION };
     this.walkBobStrength = 0;
     this.headBobY = 0;
     this.rollOffset = 0;
@@ -183,6 +195,9 @@ export class FirstPersonControls {
     this.landingImpact = 0;
     this.horizontalVelocity.set(0, 0);
     this.walkCycle = 0;
+    this.gaitStepIndex = -1;
+    this.gaitVariation = { ...NEUTRAL_GAIT_VARIATION };
+    this.gaitVariationTarget = { ...NEUTRAL_GAIT_VARIATION };
     this.walkBobStrength = 0;
     this.camera.position.set(this.spawn.x, this.bodyY, this.spawn.z);
     this.verticalVelocity = 0;
@@ -790,10 +805,51 @@ export class FirstPersonControls {
       this.walkCycle += (horizontalDistance / gaitStepDistance) * Math.PI;
     }
 
-    const verticalAmplitude = this.isSprinting ? 0.044 : 0.026;
-    const rollAmplitude = this.isSprinting ? 0.017 : 0.009;
-    this.headBobY = Math.sin(this.walkCycle * 2) * verticalAmplitude * this.walkBobStrength;
-    this.rollOffset = Math.sin(this.walkCycle) * rollAmplitude * this.walkBobStrength;
+    const stepIndex = Math.floor(this.walkCycle / Math.PI);
+    if (moving && stepIndex !== this.gaitStepIndex) {
+      this.gaitStepIndex = stepIndex;
+      // Reroll once per footfall, then ease into it so variation reads as weight
+      // shift rather than frame-to-frame jitter.
+      this.gaitVariationTarget = {
+        vertical: randomBetween(0.88, 1.14),
+        roll: randomBetween(0.82, 1.18),
+        phase: randomBetween(-0.06, 0.06),
+      };
+    }
+    const variationTarget = moving
+      ? this.gaitVariationTarget
+      : NEUTRAL_GAIT_VARIATION;
+    const variationResponse = moving ? 5.5 : 3.5;
+    this.gaitVariation.vertical = THREE.MathUtils.damp(
+      this.gaitVariation.vertical,
+      variationTarget.vertical,
+      variationResponse,
+      delta,
+    );
+    this.gaitVariation.roll = THREE.MathUtils.damp(
+      this.gaitVariation.roll,
+      variationTarget.roll,
+      variationResponse,
+      delta,
+    );
+    this.gaitVariation.phase = THREE.MathUtils.damp(
+      this.gaitVariation.phase,
+      variationTarget.phase,
+      variationResponse,
+      delta,
+    );
+
+    const verticalAmplitude = this.isSprinting ? 0.048 : 0.031;
+    const rollAmplitude = this.isSprinting ? 0.018 : 0.0105;
+    const gaitPhase = this.walkCycle + this.gaitVariation.phase;
+    this.headBobY = Math.sin(gaitPhase * 2)
+      * verticalAmplitude
+      * this.gaitVariation.vertical
+      * this.walkBobStrength;
+    this.rollOffset = Math.sin(gaitPhase)
+      * rollAmplitude
+      * this.gaitVariation.roll
+      * this.walkBobStrength;
     const speedDelta = this.movementSpeed - this.previousMovementSpeed;
     const targetPitch = clamp(-speedDelta * 0.0035, -0.018, 0.018);
     this.movementPitchOffset = THREE.MathUtils.damp(this.movementPitchOffset, targetPitch, 8, delta);

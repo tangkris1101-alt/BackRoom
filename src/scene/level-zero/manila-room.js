@@ -1,12 +1,70 @@
 import * as THREE from "three";
 import { CELL_SIZE, CEILING_Y, WALL_HEIGHT } from "../constants.js";
 import { createManilaWallpaperTexture } from "./textures.js";
+import { buildDetailedTable, buildPaperSheet, createTableAssetKit } from "./table-model.js";
 
-function addBox(scene, geometry, material, position) {
+function addBox(parent, geometry, material, position) {
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.copy(position);
-  scene.add(mesh);
+  parent.add(mesh);
   return mesh;
+}
+
+const CHAIR_SEAT_TOP_Y = 0.625;
+const CHAIR_BACK_TOP_Y = 1.295;
+const CHAIR_HALF_WIDTH = 0.39;
+const CHAIR_SEAT_HALF_DEPTH = 0.36;
+// The backrest slab spans chairZ + 0.265 .. chairZ + 0.355; the seat collider
+// stops at its front face so the two AABBs meet without overlapping.
+const CHAIR_BACK_FRONT_OFFSET = 0.265;
+const CHAIR_BACK_DEPTH = 0.09;
+
+/**
+ * Furniture layout and collision footprint of the M.E.G. documentation room.
+ * Kept free of THREE so the node content checks rebuild the same AABBs.
+ */
+export function getManilaRoomFurniture(center) {
+  const tableX = center.x + 0.3;
+  const tableZ = center.z - 0.55;
+  const chairX = center.x - 1.25;
+  const chairZ = center.z + 0.78;
+  const chairMinX = chairX - CHAIR_HALF_WIDTH;
+  const chairMaxX = chairX + CHAIR_HALF_WIDTH;
+  const chairBackFrontZ = chairZ + CHAIR_BACK_FRONT_OFFSET;
+
+  return {
+    tableX,
+    tableZ,
+    chairX,
+    chairZ,
+    documentationPosition: { x: tableX + 0.48, y: 1.125, z: tableZ + 0.12 },
+    colliders: [
+      {
+        minX: tableX - 1.275,
+        maxX: tableX + 1.275,
+        minZ: tableZ - 0.66,
+        maxZ: tableZ + 0.66,
+        topY: 1.11,
+      },
+      // The chair is split by height: the 0.625m seat releases its side midway
+      // through a jump, while the 1.295m backrest keeps blocking, so the chair
+      // reads as a solid object instead of an invisible wall.
+      {
+        minX: chairMinX,
+        maxX: chairMaxX,
+        minZ: chairZ - CHAIR_SEAT_HALF_DEPTH,
+        maxZ: chairBackFrontZ,
+        topY: CHAIR_SEAT_TOP_Y,
+      },
+      {
+        minX: chairMinX,
+        maxX: chairMaxX,
+        minZ: chairBackFrontZ,
+        maxZ: chairBackFrontZ + CHAIR_BACK_DEPTH,
+        topY: CHAIR_BACK_TOP_Y,
+      },
+    ],
+  };
 }
 
 function createMegFolderTexture() {
@@ -32,48 +90,60 @@ function createMegFolderTexture() {
 }
 
 function addTableAndDocumentation(scene, center) {
-  const wood = new THREE.MeshStandardMaterial({ color: 0x473728, roughness: 0.88 });
-  const metal = new THREE.MeshStandardMaterial({ color: 0x363832, roughness: 0.72, metalness: 0.35 });
-  const paper = new THREE.MeshStandardMaterial({ color: 0xe4d9bd, roughness: 0.96 });
+  const kit = createTableAssetKit({ woodColor: 0x473728, metalColor: 0x363832, paperTint: 0xe4d9bd });
+  const wood = kit.materials.woodTop;
+  const metal = kit.materials.metal;
   const folderTexture = createMegFolderTexture();
   const folder = new THREE.MeshStandardMaterial({ map: folderTexture, roughness: 0.88 });
-  const tableX = center.x + 0.3;
-  const tableZ = center.z - 0.55;
-  addBox(scene, new THREE.BoxGeometry(2.55, 0.13, 1.32), wood, new THREE.Vector3(tableX, 1.04, tableZ));
-  for (const x of [-1.02, 1.02]) {
-    for (const z of [-0.48, 0.48]) {
-      addBox(scene, new THREE.BoxGeometry(0.09, 0.96, 0.09), metal, new THREE.Vector3(tableX + x, 0.53, tableZ + z));
-    }
-  }
+  const furniture = getManilaRoomFurniture(center);
+  const { tableX, tableZ, chairX, chairZ } = furniture;
+  const table = buildDetailedTable(kit, {
+    width: 2.55,
+    depth: 1.32,
+    topThickness: 0.13,
+    topCenterY: 1.04,
+    legX: 1.02,
+    legZ: 0.48,
+  });
+  table.position.set(tableX, 0, tableZ);
+  scene.add(table);
 
-  const documentOne = addBox(scene, new THREE.BoxGeometry(0.7, 0.018, 0.48), paper, new THREE.Vector3(tableX - 0.42, 1.12, tableZ - 0.12));
+  const documentOne = buildPaperSheet(kit, { width: 0.66, depth: 0.46, seed: 77 });
+  documentOne.position.set(tableX - 0.42, 1.1065, tableZ - 0.12);
   documentOne.rotation.y = -0.18;
-  const documentTwo = addBox(scene, new THREE.BoxGeometry(0.58, 0.024, 0.42), folder, new THREE.Vector3(tableX + 0.48, 1.125, tableZ + 0.12));
+  scene.add(documentOne);
+  const documentTwo = addBox(
+    scene,
+    new THREE.BoxGeometry(0.58, 0.024, 0.42),
+    folder,
+    new THREE.Vector3(
+      furniture.documentationPosition.x,
+      furniture.documentationPosition.y,
+      furniture.documentationPosition.z,
+    ),
+  );
   documentTwo.rotation.y = 0.12;
 
-  const chairX = center.x - 1.25;
-  const chairZ = center.z + 0.78;
-  addBox(scene, new THREE.BoxGeometry(0.78, 0.11, 0.72), wood, new THREE.Vector3(chairX, 0.57, chairZ));
-  addBox(scene, new THREE.BoxGeometry(0.78, 0.75, 0.09), wood, new THREE.Vector3(chairX, 0.92, chairZ + 0.31));
+  const chair = new THREE.Group();
+  chair.name = "level-zero-manila-chair";
+  chair.position.set(chairX, 0, chairZ);
+  addBox(chair, new THREE.BoxGeometry(0.78, 0.11, 0.72), wood, new THREE.Vector3(0, 0.57, 0));
+  addBox(
+    chair,
+    new THREE.BoxGeometry(0.78, 0.75, CHAIR_BACK_DEPTH),
+    wood,
+    new THREE.Vector3(0, 0.92, CHAIR_BACK_FRONT_OFFSET + CHAIR_BACK_DEPTH / 2),
+  );
   for (const x of [-0.28, 0.28]) {
     for (const z of [-0.24, 0.24]) {
-      addBox(scene, new THREE.BoxGeometry(0.07, 0.52, 0.07), metal, new THREE.Vector3(chairX + x, 0.29, chairZ + z));
+      addBox(chair, new THREE.BoxGeometry(0.07, 0.52, 0.07), metal, new THREE.Vector3(x, 0.29, z));
     }
   }
+  scene.add(chair);
 
   return {
-    colliders: [{
-      minX: tableX - 1.275,
-      maxX: tableX + 1.275,
-      minZ: tableZ - 0.66,
-      maxZ: tableZ + 0.66,
-      topY: 1.11,
-    }],
-    documentationPosition: {
-      x: documentTwo.position.x,
-      y: documentTwo.position.y,
-      z: documentTwo.position.z,
-    },
+    colliders: furniture.colliders,
+    documentationPosition: furniture.documentationPosition,
   };
 }
 

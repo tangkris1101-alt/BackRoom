@@ -49,6 +49,7 @@ const [css, javascript] = await Promise.all([
 
 const mimeTypes = {
   ".avif": "image/avif",
+  ".bin": "application/octet-stream",
   ".gif": "image/gif",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",

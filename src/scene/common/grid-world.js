@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS, circleIntersectsAabb } from "../constants.js";
+import { colliderBlocksAtFeetHeight, getPlatformFloorHeight, resolvePlatformOverlap } from "./platform-collision.js";
 import {
   createAlmondWaterPickup,
   createCompassPickup,
@@ -27,16 +28,32 @@ export function collectGridWallTransforms({ cols, rows, isOpen, cellCenter }) {
   return { northSouth, eastWest };
 }
 
-export function createGridWalkability({ worldToCell, isOpen, colliders = [] }) {
-  return (x, z, radius = 0.36) => {
+// Prop colliders carrying a `topY` are platforms rather than walls: they stop
+// blocking once the player's feet clear their top, so a knee-high drum can be
+// hopped over and a low table landed on instead of acting as an invisible
+// full-height barrier. `getFloorHeight`/`resolvePosition` publish the matching
+// standable tops and the bounded push-out for props the player lands inside.
+export function createGridCollision({ worldToCell, isOpen, colliders = [] }) {
+  const isWalkable = (x, z, radius = 0.36, feetY = 0) => {
     const corner = radius * 0.72;
     const samples = [[0, 0], [radius, 0], [-radius, 0], [0, radius], [0, -radius], [corner, corner], [-corner, corner], [corner, -corner], [-corner, -corner]];
     if (!samples.every(([dx, dz]) => {
       const cell = worldToCell(x + dx, z + dz);
       return isOpen(cell.col, cell.row);
     })) return false;
-    return !colliders.some((bounds) => circleIntersectsAabb(x, z, radius, bounds));
+    return !colliders.some((bounds) => colliderBlocksAtFeetHeight(bounds, feetY) && circleIntersectsAabb(x, z, radius, bounds));
   };
+
+  return {
+    isWalkable,
+    getFloorHeight: (x, z, feetY) => getPlatformFloorHeight({ colliders, x, z, feetY }),
+    resolvePosition: (x, z, radius, feetY, maxCorrection) =>
+      resolvePlatformOverlap({ colliders, x, z, radius, feetY, maxCorrection }),
+  };
+}
+
+export function createGridWalkability({ worldToCell, isOpen, colliders = [] }) {
+  return createGridCollision({ worldToCell, isOpen, colliders }).isWalkable;
 }
 
 export function createStandardPickupSet(scene, {

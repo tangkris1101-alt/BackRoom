@@ -4,6 +4,34 @@ import { createWideSignTexture } from "./textures.js";
 const INTERACT_RADIUS = 3.2;
 const INSPECT_DISTANCE = 8;
 const ENTER_RADIUS = 1.25;
+// Door footprints, measured from the meshes built below. The frame - a 2.7 x
+// 0.18 beam over two 0.18 x 0.22 posts centred on +/-1.28 - spans 2.74 wide by
+// 0.22 deep and reaches 2.56 high, so its AABB carries no `topY`: it is a wall
+// in both states, not a platform. The single leaf is a 2.28 x 2.35 x 0.12 panel
+// hinged at local x = -1.14, half a doorway wide on each side of the hinge.
+const DOOR_FRAME_HALF_WIDTH = 1.37;
+const DOOR_FRAME_HALF_DEPTH = 0.11;
+const DOOR_SWING_ANGLE = -Math.PI * 0.58;
+
+// Axis-aligned world box of a rotated rectangle centred on (x, z).
+function rotatedFootprintAabb(x, z, rotation, halfWidth, halfDepth) {
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const halfX = Math.abs(halfWidth * cos) + Math.abs(halfDepth * sin);
+  const halfZ = Math.abs(halfWidth * sin) + Math.abs(halfDepth * cos);
+  return { minX: x - halfX, maxX: x + halfX, minZ: z - halfZ, maxZ: z + halfZ };
+}
+
+// A leaf is rigid, so both of its end poses are measured once: the shut doorway
+// and the swung leaf are precomputed here and afterwards only toggled by
+// `active`, instead of rebuilding an AABB from the animated pose every frame.
+function measureSwingAabb(model, swingAngle) {
+  const hinge = model.singleHinge;
+  hinge.rotation.y = swingAngle;
+  model.group.updateWorldMatrix(false, true);
+  const bounds = new THREE.Box3().setFromObject(model.singlePanel);
+  return { minX: bounds.min.x, maxX: bounds.max.x, minZ: bounds.min.z, maxZ: bounds.max.z };
+}
 
 function createRouteText(route) {
   const target = route.targetLabel ?? `LEVEL ${route.targetLevel}`;
@@ -523,7 +551,7 @@ function createRouteModel(scene, route) {
   return { group, portal, leftPanel, rightPanel, singlePanel, singleHinge, lockAssembly };
 }
 
-export function createExitNetwork(scene, camera, routeDefinitions, initialState = {}) {
+export function createExitNetwork(scene, camera, routeDefinitions, initialState = {}, { colliders = null } = {}) {
   const routes = routeDefinitions.map((definition) => {
     const isThreshold = definition.kind === "threshold";
     const route = {
@@ -537,6 +565,45 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
       i18n: createRouteText(definition),
     };
     route.model = isThreshold ? {} : createRouteModel(scene, route);
+    // Doors with a leaf are solid in both states, so they publish one collider
+    // per pose into the owning level's collider list:
+    //   * `doorCollider` - the shut doorway (outer frame footprint), which seals
+    //     the whole opening while the leaf is closed;
+    //   * `swingCollider` - a single leaf's footprint after it swings into the
+    //     corridor (-104.4 degrees about its hinge), which is the part players
+    //     used to walk straight through once the door was open. Double-leaf
+    //     doors slide back into the wall instead, so they only need the frame.
+    // `updateModel` keeps exactly one of the two active.
+    //
+    // Thresholds are skipped: they have no leaf at all and their `opened` state
+    // is permanent. Stairwell routes (`stairModel`) are open architectural
+    // passages built by createStairwellModel and carry no leaf either.
+    if (colliders && !isThreshold && route.stairModel !== true) {
+      // A save can restore the route already open, so the two colliders start on
+      // the same flags `updateModel` would set on its first frame; otherwise the
+      // doorway would stay solid for one frame after a level load.
+      const startsOpen = route.openProgress > 0.5;
+      route.doorCollider = {
+        ...rotatedFootprintAabb(
+          route.position.x,
+          route.position.z,
+          route.rotation ?? 0,
+          DOOR_FRAME_HALF_WIDTH,
+          DOOR_FRAME_HALF_DEPTH,
+        ),
+        active: !startsOpen,
+      };
+      colliders.push(route.doorCollider);
+      if (route.model.singlePanel) {
+        const swingAngle = route.doorSwingAngle ?? DOOR_SWING_ANGLE;
+        route.swingCollider = { ...measureSwingAabb(route.model, swingAngle), active: startsOpen };
+        colliders.push(route.swingCollider);
+        // Leave the hinge on the pose the first `updateModel` would set, so a
+        // route restored as already open does not snap on its first frame.
+        route.model.singleHinge.rotation.y = route.openProgress * swingAngle;
+        route.model.group.updateWorldMatrix(false, true);
+      }
+    }
     return route;
   });
   scene.userData.exitRoutes = routes.map((route) => ({
@@ -551,6 +618,14 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
     const target = route.opened ? 1 : 0;
     route.openProgress += (target - route.openProgress) * Math.min(1, delta * 4.8);
     if (route.model.lockAssembly) route.model.lockAssembly.visible = !route.unlocked;
+    // One flag per collider describes the door: shut, the frame's doorway stops
+    // the player; open, the leaf that swung into the corridor does. The switch
+    // sits right after the progress update and before the cabinet's early
+    // return so all leaf kinds (cabinet, elevator, single and sliding doors)
+    // share it.
+    const open = route.openProgress > 0.5;
+    if (route.doorCollider) route.doorCollider.active = !open;
+    if (route.swingCollider) route.swingCollider.active = open;
     if (route.kind === "cabinet") {
       const swing = route.openProgress * Math.PI * 0.58;
       route.model.leftHinge.rotation.y = swing;

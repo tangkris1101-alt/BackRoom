@@ -4,7 +4,7 @@ import { CELL_SIZE, CEILING_Y } from "../constants.js";
 import { addInstancedBoxes, createStableLightState } from "../common/lighting.js";
 import {
   collectGridWallTransforms,
-  createGridWalkability,
+  createGridCollision,
   createStandardPickupSet,
   eastWestWallGeometry,
   northSouthWallGeometry,
@@ -68,7 +68,7 @@ function createWaterSurface(scene) {
   return { uniforms };
 }
 
-function addPoolroomDetails(scene) {
+function addPoolroomDetails(scene, colliders) {
   const archMaterial = createGameMaterial({ color: 0xdce8df, emissive: 0x365b58, emissiveIntensity: 0.13, roughness: 0.64 });
   const darkMaterial = createGameMaterial({ color: 0x081516, emissive: 0x020809, emissiveIntensity: 0.08, roughness: 0.94 });
   for (const cell of [{ col: 12, row: 23 }, { col: 23, row: 17 }, { col: 35, row: 11 }, { col: 38, row: 24 }]) {
@@ -77,6 +77,20 @@ function addPoolroomDetails(scene) {
     arch.position.set(center.x, 1.35, center.z);
     arch.rotation.z = Math.PI;
     scene.add(arch);
+    // Flipped half torus: its ends stop at chest height (y 1.11..1.59) at
+    // x = centre ± (1.3 ± 0.24) while the middle sweeps down to the floor. One
+    // box over the whole span would fence the hall in half, so only the two
+    // ends - the part a walking player actually meets - get a body.
+    for (const side of [-1, 1]) {
+      const inner = center.x + side * 1.06;
+      const outer = center.x + side * 1.54;
+      colliders.push({
+        minX: Math.min(inner, outer),
+        maxX: Math.max(inner, outer),
+        minZ: center.z - 0.24,
+        maxZ: center.z + 0.24,
+      });
+    }
   }
   for (const cell of [{ col: 7, row: 10 }, { col: 42, row: 4 }]) {
     const center = levelThirtySevenCellCenter(cell.col, cell.row);
@@ -111,7 +125,8 @@ export function createLevelThirtySevenScene({ initialState = null } = {}) {
   addInstancedBoxes(scene, northSouthWallGeometry, wallMaterial, walls.northSouth);
   addInstancedBoxes(scene, eastWestWallGeometry, wallMaterial, walls.eastWest);
   const water = createWaterSurface(scene);
-  addPoolroomDetails(scene);
+  const colliders = [];
+  addPoolroomDetails(scene, colliders);
   scene.add(new THREE.HemisphereLight(0xd9fff7, 0x315657, 1.55));
   const sunlight = new THREE.DirectionalLight(0xe9fff8, 0.72);
   sunlight.position.set(-24, 36, -18);
@@ -125,9 +140,17 @@ export function createLevelThirtySevenScene({ initialState = null } = {}) {
     scene.add(light);
   });
   const updateLightState = createStableLightState("WATER", { dimBelow: 0.48, normalAbove: 0.68, dimDelay: 0.8, normalDelay: 1.1 });
-  const isWalkable = createGridWalkability({ worldToCell: levelThirtySevenWorldToCell, isOpen: isLevelThirtySevenOpenCell });
   const routes = [{ id: "level-thirty-seven-dark-tunnel", targetLevel: null, targetLabel: "DARK TUNNEL", label: "EXIT", kind: "door", position: targetPosition, rotation: 0 }];
-  const exitNetwork = createExitNetwork(scene, camera, routes, initialState?.interactions ?? {});
+  const { isWalkable, getFloorHeight, resolvePosition } = createGridCollision({
+    worldToCell: levelThirtySevenWorldToCell,
+    isOpen: isLevelThirtySevenOpenCell,
+    colliders,
+  });
+  // The exit network publishes the door's own frame footprint into `colliders`,
+  // the same list createGridCollision reads. It replaces the hand-written frame
+  // AABB that used to sit here - same geometry (2.74 x 0.22, centred on the cell
+  // and unrotated), but now driven by the door state instead of being permanent.
+  const exitNetwork = createExitNetwork(scene, camera, routes, initialState?.interactions ?? {}, { colliders });
   const pickupSet = createStandardPickupSet(scene, {
     cols: LEVEL_THIRTY_SEVEN_COLS, rows: LEVEL_THIRTY_SEVEN_ROWS, isCellOpen: isLevelThirtySevenOpenCell, getCellCenter: levelThirtySevenCellCenter,
     avoidPositions: [spawnCell, targetPosition], initialState: initialState?.pickups ?? {},
@@ -151,7 +174,8 @@ export function createLevelThirtySevenScene({ initialState = null } = {}) {
   }
   return {
     level: 37, levelLabel: "LEVEL 37", levelName: "SUBLIMITY", scene, camera, spawn, targetPosition,
-    nextLevel: null, exitMode: "network", isWalkable, movementSpeedMultiplier: 0.84, flashlightEffectiveness: 0.92,
+    nextLevel: null, exitMode: "network", isWalkable, getFloorHeight, resolvePosition,
+    movementSpeedMultiplier: 0.84, flashlightEffectiveness: 0.92,
     get viewModelName() { return getViewModelName(viewModel); },
     decorativeItemSpawns: [{ id: "seashell", position: { ...levelThirtySevenCellCenter(12, 28), y: 0.18 }, rotation: -0.3, tiltZ: 0.14 }],
     update,

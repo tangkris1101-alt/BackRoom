@@ -7,11 +7,12 @@ import { resolveFootstepSurface } from "./scene/common/footstep-surfaces.js";
 import { DebugMode, DEBUG_PLAYABLE_LEVELS } from "./debug-mode.js";
 import { createBackroomsScene, getBackroomsLevelInfo, preloadLevelScene } from "./scene.js";
 import { FirstPersonControls } from "./first-person-controls.js";
-import { syncFirstPersonHeldItem } from "./scene/common/view-model.js";
+import { syncFirstPersonHeldItem, preloadFirstPersonViewModel, primeFirstPersonViewModelPoses } from "./scene/common/view-model.js";
 import { disposeWorldResources } from "./scene/common/dispose.js";
 import { createFiresaltEffectManager } from "./scene/items/index.js";
 import {
   BACTERIA_CONTACT_RADIUS,
+  ALMOND_WATER_STAMINA_BONUS,
   HOUND_CONTACT_RADIUS,
   HUB_LEVEL,
   MATERIAL_QUALITY_STORAGE_KEY,
@@ -62,6 +63,7 @@ import {
   LEVEL_KEY_IDS,
 } from "./scene/common/world-items.js";
 import { CHANGELOG_ENTRIES } from "./ui/changelog.js";
+import { OPENING_STAND_UP_DURATION_S, sampleOpeningStandPose } from "./opening-stand-motion.js";
 
 const canvas = document.querySelector("#scene");
 const appRoot = canvas?.closest("#app") ?? document.body;
@@ -262,7 +264,6 @@ const PROGRESS_VERSION_KEY = "backrooms-progress-version";
 const PROGRESS_VERSION = 2;
 const ALMOND_WATER_DURATION = 45;
 const SUPER_ALMOND_WATER_DURATION = 25;
-const ALMOND_WATER_STAMINA_BONUS = 50;
 const ALMOND_WATER_DRINK_DURATION = 1.0;
 const WATER_LONG_PRESS_MS = 600;
 const SAVE_AUTOSAVE_INTERVAL_MS = 5000;
@@ -285,7 +286,6 @@ const SUPER_ALMOND_WATER_HEAL_DURATION = 5;
 // Three.js positive X camera rotation looks upward. Pi / 6 is a 30 degree
 // incline above the floor plane while the player is still lying down.
 const OPENING_INITIAL_PITCH = Math.PI / 6;
-const OPENING_STAND_UP_DURATION_S = 1.35;
 
 const OPENING_TEXT = {
   "zh-CN": {
@@ -575,6 +575,33 @@ function attachDebugAreaLightToCamera(camera) {
 }
 const ambientHum = createAmbientHum();
 
+// Start the first-person arm fetch while the player is still on the menu. The
+// arms are the only part of a level that arrives over the network; loading them
+// late pushes their shader compilation into the first seconds of play.
+preloadFirstPersonViewModel().catch(() => {
+  // The rejection is cached, so the level-load path reuses it rather than
+  // retrying: a failed fetch leaves the arms hidden for the session.
+});
+
+// Every level entry path funnels through here so no level can reach the player
+// with uncompiled shaders or unuploaded textures.
+async function prewarmScene() {
+  try {
+    // Decodes the grip-pose arm geometry ahead of the first item equip.
+    primeFirstPersonViewModelPoses();
+    await renderingPipeline.prewarm();
+  } catch (error) {
+    console.warn("Failed to precompile level scene", error);
+  }
+}
+
+function showLoadingOverlay() {
+  loadingComplete = false;
+  loadingOverlay?.classList.remove("is-hidden");
+  loadingOverlay?.removeAttribute("hidden");
+  if (loadingFill) loadingFill.style.transform = "scaleX(0)";
+}
+
 function syncAudioVolumeControls() {
   const values = ambientHum.getVolumes();
   audioVolumeInputs.forEach((input) => {
@@ -739,7 +766,7 @@ const ITEM_ICON_SVG = {
     <rect x="30" y="44" width="40" height="26" fill="#f8f4dc" stroke="#5a8050" stroke-width="0.6"/>
     <text x="50" y="54" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="6" font-weight="900" fill="#2c4a1c">ALMOND</text>
     <text x="50" y="62" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="6" font-weight="900" fill="#2c4a1c">WATER</text>
-    <text x="50" y="68" text-anchor="middle" font-family="Arial, sans-serif" font-size="2.6" font-weight="700" fill="#5a8050">+50 STAMINA</text>
+    <text x="50" y="68" text-anchor="middle" font-family="Arial, sans-serif" font-size="2.6" font-weight="700" fill="#5a8050">+100 STAMINA</text>
     <rect x="34" y="28" width="3" height="58" fill="#fff" opacity="0.35"/>
     <rect x="62" y="28" width="2" height="58" fill="#000" opacity="0.15"/>`,
 
@@ -757,7 +784,7 @@ const ITEM_ICON_SVG = {
     <text x="50" y="51" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="5.2" font-weight="900" fill="#704000">SUPER</text>
     <text x="50" y="59" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="6" font-weight="900" fill="#704000">ALMOND</text>
     <text x="50" y="67" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="5.2" font-weight="900" fill="#704000">WATER</text>
-    <text x="50" y="71.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="2.4" font-weight="700" fill="#9a6714">250 CAP ×2</text>
+    <text x="50" y="71.5" text-anchor="middle" font-family="Arial, sans-serif" font-size="2.4" font-weight="700" fill="#9a6714">500 CAP ×2</text>
     <rect x="34" y="28" width="3" height="58" fill="#fff" opacity="0.4"/>
     <rect x="62" y="28" width="2" height="58" fill="#000" opacity="0.15"/>`,
 
@@ -844,9 +871,14 @@ const ITEM_ICON_SVG = {
     <path d="M36 38 Q50 28 64 38" fill="none" stroke="#fff6cf" stroke-width="1.4" opacity="0.32"/>`,
 
   "crumpled-note": `
-    <path d="M22 20 L72 15 L82 32 L77 82 L28 87 L17 68 Z" fill="#d8cfaa" stroke="#6f664e" stroke-width="2" stroke-linejoin="round"/>
-    <path d="M25 42 Q39 33 54 42 T76 40 M27 55 Q42 47 57 56 T75 54 M31 68 Q43 60 55 68" fill="none" stroke="#30384e" stroke-width="3" stroke-linecap="round" opacity="0.82"/>
-    <path d="M22 20 L31 35 L17 68 M72 15 L65 33 L82 32 M77 82 L61 72 L28 87" fill="none" stroke="#8c8266" stroke-width="1.5" opacity="0.75"/>`,
+    <g transform="rotate(-6 50 50)">
+      <path d="M28 20 L74 20 L74 66 L63 78 L28 78 Z" fill="#d8cfaa" stroke="#6f664e" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M74 66 L63 78 L63 66 Z" fill="#b7ad85" stroke="#6f664e" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M32 24 L46 74" stroke="#8c8266" stroke-width="1.2" opacity="0.35"/>
+      <path d="M36 33 L62 33 M36 41 L65 41 M36 49 L59 49" stroke="#30384e" stroke-width="2.6" stroke-linecap="round" opacity="0.85"/>
+      <path d="M36 62 L45 62" stroke="#30384e" stroke-width="2.2" stroke-linecap="round" opacity="0.7"/>
+      <circle cx="58" cy="62" r="7.5" fill="none" stroke="#8a6b3d" stroke-width="2" opacity="0.38"/>
+    </g>`,
 
   "level-one-file": `
     <path d="M24 16 L72 16 L80 28 L76 86 L24 86 L18 72 L18 28 Z" fill="#d8d2ad" stroke="#31443a" stroke-width="3" stroke-linejoin="round"/>
@@ -1657,7 +1689,7 @@ function chooseLevel(nextLevel) {
   canvas.dataset.exitReached = "false";
   canvas.dataset.gameFailed = "false";
   hideExitOverlay();
-  loadLevel(nextLevel, { updateUrl: true });
+  loadLevel(nextLevel, { updateUrl: true, prewarm: true });
   showLevelDangerBriefing(getBackroomsLevelInfo(nextLevel));
 }
 
@@ -1828,7 +1860,7 @@ function markDirty() {
   }, SAVE_DEBOUNCE_MS);
 }
 
-async function loadLevel(level, { updateUrl = false, entryContext = null } = {}) {
+async function loadLevel(level, { updateUrl = false, entryContext = null, prewarm = false } = {}) {
   if (world && !gameFailed) {
     writeSaveSnapshot();
   }
@@ -1891,6 +1923,15 @@ async function loadLevel(level, { updateUrl = false, entryContext = null } = {})
   renderingPipeline.setWorld(world);
   resize();
   disposeWorld(previousWorld);
+  if (prewarm) {
+    // Level picker and "keep exploring" entries have no transition overlay, so
+    // raise the loader for the compile/upload pass instead of freezing the
+    // finished level. The frame counter is already past the fade threshold, so
+    // the overlay clears again on the next frame. A level transition already
+    // shows its own overlay.
+    if (!levelTransition) showLoadingOverlay();
+    await prewarmScene();
+  }
   return true;
 }
 
@@ -1959,6 +2000,13 @@ async function bootstrapWorld(level, save, { opening = false } = {}) {
     // The opening camera must nevertheless be in place before the first
     // render, so the loader cannot reveal a single standing-view frame.
     primeOpeningPresentation();
+  }
+  // Compile every program and upload every texture behind the opaque loader.
+  // Resuming a save keeps the first-person arms visible from the first frame and
+  // never ran this prewarm before, which left both the whole level and the arms
+  // to compile on the first frames the player could move - the startup stutter.
+  await prewarmScene();
+  if (opening && level === 0 && !save) {
     openingPending = true;
     canvas.dataset.opening = "waiting";
   } else {
@@ -1990,11 +2038,8 @@ function leaveMainMenu() {
 
 function beginGameSession(level, save, { opening = false } = {}) {
   leaveMainMenu();
-  loadingComplete = false;
   frameCount = 0;
-  loadingOverlay?.classList.remove("is-hidden");
-  loadingOverlay?.removeAttribute("hidden");
-  if (loadingFill) loadingFill.style.transform = "scaleX(0)";
+  showLoadingOverlay();
   showGameplayUi();
   bootstrapWorld(level, save, { opening });
 }
@@ -2273,6 +2318,10 @@ function startLevelTransitionLoad(transition) {
       const loaded = await loadLevel(transition.nextLevel, {
         updateUrl: true,
         entryContext: transition.entryContext,
+        // Compiles shaders and uploads textures before the new level is
+        // revealed. On supporting browsers this uses KHR_parallel_shader_compile;
+        // without it the first visible frames of the new level stall.
+        prewarm: true,
       });
       if (levelTransition !== transition) return;
       if (!loaded) {
@@ -2284,14 +2333,6 @@ function startLevelTransitionLoad(transition) {
         return;
       }
 
-      // Compile before the new level is revealed. On supporting browsers this
-      // uses KHR_parallel_shader_compile, preventing first-visible-frame shader
-      // stalls from spilling into player control.
-      try {
-        await renderingPipeline.prewarm();
-      } catch (error) {
-        console.warn("Failed to precompile level scene", error);
-      }
       if (levelTransition !== transition) return;
 
       transition.loaded = true;
@@ -2333,7 +2374,7 @@ async function continueExploringFromExit() {
   exitComplete = false;
   canvas.dataset.exitReached = "false";
   hideExitOverlay();
-  await loadLevel(HUB_LEVEL, { updateUrl: true });
+  await loadLevel(HUB_LEVEL, { updateUrl: true, prewarm: true });
   writeSaveSnapshot();
 }
 
@@ -3125,16 +3166,21 @@ function primeOpeningPresentation() {
 function updateOpeningSequence(delta) {
   if (!openingSequence || !world || !controls) return;
   openingSequence.elapsed += delta;
+  if (openingSequence.standing) {
+    openingSequence.standElapsed = Math.min(
+      openingSequence.standElapsed + delta,
+      OPENING_STAND_UP_DURATION_S,
+    );
+  }
   const lowEyeY = openingSequence.floorY + 0.18;
-  const riseProgress = openingSequence.standing
-    ? THREE.MathUtils.smoothstep(openingSequence.standElapsed / OPENING_STAND_UP_DURATION_S, 0, 1)
-    : 0;
-  world.camera.position.y = THREE.MathUtils.lerp(lowEyeY, openingSequence.standY, riseProgress);
-  controls.pitch = THREE.MathUtils.lerp(OPENING_INITIAL_PITCH, -0.025, riseProgress);
+  const pose = openingSequence.standing
+    ? sampleOpeningStandPose(openingSequence.standElapsed)
+    : { height: 0, pitch: 0 };
+  world.camera.position.y = THREE.MathUtils.lerp(lowEyeY, openingSequence.standY, pose.height);
+  controls.pitch = THREE.MathUtils.lerp(OPENING_INITIAL_PITCH, -0.025, pose.pitch);
   controls.applyRotation();
   controls.syncCameraState();
   if (openingSequence.standing) {
-    openingSequence.standElapsed += delta;
     if (openingSequence.standElapsed >= OPENING_STAND_UP_DURATION_S) {
       finishOpeningSequence();
       return;

@@ -1,21 +1,65 @@
 import * as THREE from "three";
 import bakedLeftArmBase64 from "../../assets/models/fps-arm-para-baked.bin.b64?raw";
 import bakedRightArmBase64 from "../../assets/models/fps-arm-para-right-baked.bin.b64?raw";
+import relaxedLeftArmUrl from "../../assets/models/fps-arm-para-relaxed-baked.bin?url";
+import relaxedRightArmUrl from "../../assets/models/fps-arm-para-right-relaxed-baked.bin?url";
 import { SHOW_FIRST_PERSON_VIEW_MODEL } from "../constants.js";
-import { createWorldItemModel } from "./world-items.js";
+import { createWorldItemModel, getWorldItemDefinition } from "./world-items.js";
+import armAnchors from "../../assets/models/fps-arm-anchors.json";
 
 const VIEW_MODEL_NAME = "BAKED RIGGED FPS HAZMAT ARMS";
 const ARMS_SCALE = 0.15;
 const ARMS_POSITION = new THREE.Vector3(-0.024, -0.32, -0.36);
+const EMPTY_ARMS_POSITION = new THREE.Vector3(-0.024, -0.5, -0.42);
+const TUCKED_ARMS_POSITION = new THREE.Vector3(-0.024, -0.88, -0.42);
+const ARM_POSE_TRANSITION_HALF = 0.11;
+const EMPTY_ARM_OUTSET = 3;
 const BAKED_HEADER_BYTES = 4;
 const FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
 
 const bakedArmGeometries = new Map();
+let relaxedArmLoad = null;
 let bakedArmMaterial = null;
 
 const motionEuler = new THREE.Euler(0, 0, 0, "YXZ");
 const motionQuaternion = new THREE.Quaternion();
 const HELD_ITEM_NAME = "first-person-held-item";
+const HELD_ITEM_MOUNT_NAME = "first-person-held-item-mount";
+// Fallback grip centre for the right hand in the arm group's local units,
+// measured from the grip bake. The bake script exports the authoritative
+// value to fps-arm-anchors.json; this only covers a missing or stale file.
+const FALLBACK_GRIP_ANCHOR = new THREE.Vector3(0.974, -0.852, -3.026);
+
+function getGripAnchor(arms, side = "right") {
+  const anchor = armAnchors?.[arms?.userData?.pose]?.[side]?.position;
+  if (Array.isArray(anchor) && anchor.length === 3 && anchor.every((value) => Number.isFinite(value))) {
+    return new THREE.Vector3().fromArray(anchor);
+  }
+  return FALLBACK_GRIP_ANCHOR.clone();
+}
+
+// Held props ride the baked right hand instead of the camera: the mount sits on
+// the exported grip centre, cancels the arm rig's scale so items keep camera
+// units, and inherits the pose transition, walk swing and camera motion for
+// free. Its position is refreshed whenever the hand pose changes.
+function syncHeldItemMount(arms) {
+  const mesh = arms?.userData?.meshes?.right;
+  if (!mesh) return null;
+  let mount = arms.userData.heldItemMount;
+  if (!mount) {
+    mount = new THREE.Group();
+    mount.name = HELD_ITEM_MOUNT_NAME;
+    mount.scale.setScalar(1 / ARMS_SCALE);
+    mesh.add(mount);
+    arms.userData.heldItemMount = mount;
+  }
+  mount.position.copy(getGripAnchor(arms, "right"));
+  return mount;
+}
+
+function randomBetween(min, max) {
+  return min + Math.random() * (max - min);
+}
 const FLASHLIGHT_LENS_AXIS = new THREE.Vector3(1, 0, 0);
 const HELD_FLASHLIGHT_DIRECTION = new THREE.Vector3(-0.08, -0.14, -1).normalize();
 const VIEW_MODEL_LIGHT_LAYER = 1;
@@ -45,9 +89,9 @@ function cloneFloatSection(buffer, offset, length) {
   return new Float32Array(buffer.slice(offset, offset + length * FLOAT_BYTES));
 }
 
-function decodeBakedArmGeometry(id, base64) {
+function decodeBakedArmGeometry(id, source) {
   if (bakedArmGeometries.has(id)) return bakedArmGeometries.get(id);
-  const buffer = base64ToArrayBuffer(base64);
+  const buffer = typeof source === "string" ? base64ToArrayBuffer(source) : source;
   const view = new DataView(buffer);
   const vertexCount = view.getUint32(0, true);
   const componentCount = vertexCount * 3;
@@ -75,6 +119,33 @@ function decodeBakedArmGeometry(id, base64) {
   geometry.computeBoundingSphere();
   bakedArmGeometries.set(id, geometry);
   return geometry;
+}
+
+// The relaxed arm geometry is fetched over the network, so the arms are added
+// to the camera well after the scene has been constructed. Callers that want a
+// complete first render (shader prewarm, loading gate) must await this.
+export function preloadFirstPersonViewModel() {
+  if (!SHOW_FIRST_PERSON_VIEW_MODEL) return Promise.resolve(null);
+  return loadRelaxedArmGeometries();
+}
+
+export function primeFirstPersonViewModelPoses() {
+  decodeBakedArmGeometry("grip-left", bakedLeftArmBase64);
+  decodeBakedArmGeometry("grip-right", bakedRightArmBase64);
+}
+
+function loadRelaxedArmGeometries() {
+  if (!relaxedArmLoad) {
+    relaxedArmLoad = Promise.all([relaxedLeftArmUrl, relaxedRightArmUrl].map(async (url) => {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`unable to load relaxed arm: ${response.status}`);
+      return response.arrayBuffer();
+    })).then(([left, right]) => ({
+      left: decodeBakedArmGeometry("empty-left", left),
+      right: decodeBakedArmGeometry("empty-right", right),
+    }));
+  }
+  return relaxedArmLoad;
 }
 
 function getBakedArmMaterial() {
@@ -137,24 +208,40 @@ function createArmMesh(name, geometry) {
   return mesh;
 }
 
-function createBakedHazmatArms() {
+function createBakedHazmatArms(relaxedGeometries) {
   const arms = new THREE.Group();
   arms.name = "first-person-baked-hazmat-arms-model";
-  arms.position.copy(ARMS_POSITION);
+  arms.position.copy(EMPTY_ARMS_POSITION);
   arms.rotation.set(0, 0, 0);
   arms.scale.setScalar(ARMS_SCALE);
 
   const left = createArmMesh(
     "first-person-left-hazmat-arm-mesh",
-    decodeBakedArmGeometry("left", bakedLeftArmBase64),
+    relaxedGeometries.left,
   );
   const right = createArmMesh(
     "first-person-right-hazmat-arm-mesh",
-    decodeBakedArmGeometry("right", bakedRightArmBase64),
+    relaxedGeometries.right,
   );
   arms.add(left, right);
   arms.userData.meshes = { left, right };
+  arms.userData.pose = "empty";
   return arms;
+}
+
+function setArmPoseGeometry(arms, pose) {
+  if (arms.userData.pose === pose) return;
+  const { left, right } = arms.userData.meshes;
+  left.geometry = pose === "grip"
+    ? decodeBakedArmGeometry("grip-left", bakedLeftArmBase64)
+    : bakedArmGeometries.get("empty-left");
+  right.geometry = pose === "grip"
+    ? decodeBakedArmGeometry("grip-right", bakedRightArmBase64)
+    : bakedArmGeometries.get("empty-right");
+  arms.userData.pose = pose;
+  // The grip anchor moves with the fingers, so the prop mount has to follow the
+  // geometry it was measured against.
+  if (arms.userData.heldItemMount) syncHeldItemMount(arms);
 }
 
 export function attachFirstPersonViewModel(camera) {
@@ -163,6 +250,8 @@ export function attachFirstPersonViewModel(camera) {
   viewModel.name = "first-person-baked-hazmat-arms";
   viewModel.userData.modelName = VIEW_MODEL_NAME;
   viewModel.userData.loaded = false;
+  viewModel.userData.heldItemId = null;
+  viewModel.userData.targetHeldItemId = null;
   // A small camera-space bounce keeps the hands readable in dark scenes, but
   // directional and local scene lights remain the dominant illumination.
   const fillLight = new THREE.HemisphereLight(0xe8f0df, 0x304039, 0.12);
@@ -179,14 +268,16 @@ export function attachFirstPersonViewModel(camera) {
   viewModel.userData.keyLight = keyLight;
   camera.add(viewModel);
 
-  try {
-    const arms = createBakedHazmatArms();
+  loadRelaxedArmGeometries().then((relaxedGeometries) => {
+    const arms = createBakedHazmatArms(relaxedGeometries);
     viewModel.add(arms);
     viewModel.userData.arms = arms;
     viewModel.userData.loaded = true;
-  } catch (error) {
+  }).catch((error) => {
     viewModel.userData.loadError = error?.message ?? "failed";
-  }
+  });
+  // Never rejects: a failed arm fetch must not be able to hold up the loader.
+  viewModel.userData.ready = loadRelaxedArmGeometries().catch(() => null);
   return viewModel;
 }
 
@@ -233,62 +324,128 @@ function setHeldItemMaterialState(root) {
 }
 
 function positionHeldItem(item, itemId) {
-  item.position.set(0.19, -0.475, -0.64);
+  // Offsets are camera units measured from the exported grip centre of the
+  // right hand, so the prop sits inside the palm instead of at fixed
+  // camera-space coordinates that drift with every re-bake. Scale is applied
+  // with multiplyScalar because several models (keys, bottles) carry their own
+  // authored scale on the root group and assigning would flatten it.
+  item.position.set(0, 0.01, 0.03);
   item.rotation.set(0, 0, 0);
-  item.scale.setScalar(0.8);
+  const shape = getWorldItemDefinition(itemId)?.shape ?? "generic";
 
   if (itemId === "flashlight") {
-    // The baked arms do not expose wrist or palm bones. This camera-space
-    // pose is therefore calibrated to overlap the right palm. The model's
-    // lens is on local +X, so align that axis with the camera forward vector
-    // instead of leaving the barrel pointed down-right across the screen.
-    item.position.set(0.15, -0.58, -0.74);
+    // The model's lens is on local +X, so align that axis with the camera
+    // forward vector instead of leaving the barrel pointed down-right across
+    // the screen, then roll the button up into the thumb.
+    item.position.set(0.01, 0.035, 0.045);
     item.quaternion.setFromUnitVectors(FLASHLIGHT_LENS_AXIS, HELD_FLASHLIGHT_DIRECTION);
     item.rotateX(-0.38);
-    item.scale.setScalar(0.32);
+    item.scale.multiplyScalar(0.32);
   } else if (itemId === "detector") {
-    item.position.set(0.19, -0.51, -0.63);
+    item.position.set(0.02, 0.02, 0.06);
     item.rotation.set(-0.82, 0.16, -0.14);
-    item.scale.setScalar(0.9);
+    item.scale.multiplyScalar(0.55);
   } else if (itemId === "compass") {
-    item.position.set(0.18, -0.51, -0.62);
+    item.position.set(0.015, 0.05, 0.055);
     item.rotation.set(-0.95, 0.06, -0.08);
-    item.scale.setScalar(0.42);
+    item.scale.multiplyScalar(0.3);
   } else if (itemId === "almond-water" || itemId === "super-almond-water" || itemId === "silence-liquid") {
-    item.position.set(0.155, -0.6, -0.84);
+    // The bottle profile starts at its base, so drop it until the palm grips
+    // the middle of the body instead of the bottom edge.
+    item.position.set(0.015, -0.12, 0.06);
     item.rotation.set(0.08, -0.26, -0.08);
-    item.scale.setScalar(0.36);
+    item.scale.multiplyScalar(0.3);
   } else if (itemId === "firesalt") {
-    item.position.set(0.17, -0.55, -0.7);
+    item.position.set(0.02, 0.03, 0.05);
     item.rotation.set(0.28, -0.42, -0.18);
-    item.scale.setScalar(0.72);
+    item.scale.multiplyScalar(0.4);
+  } else if (shape === "note" || shape === "file" || shape === "badge") {
+    // Flat sheets are unreadable lying face-up on the palm; stand them up and
+    // lean them back towards the eyes like a held page.
+    item.position.set(0.01, 0.06, 0.07);
+    item.rotation.set(1.15, 0.12, -0.12);
+    item.scale.multiplyScalar(shape === "note" ? 0.5 : 0.62);
   } else if (itemId?.startsWith("level-key-")) {
-    item.position.set(0.18, -0.49, -0.62);
+    item.position.set(0.015, 0.03, 0.05);
     item.rotation.set(0.18, -0.26, -0.52);
-    item.scale.setScalar(0.9);
+    item.scale.multiplyScalar(0.9);
   } else {
-    item.position.set(0.18, -0.5, -0.62);
+    item.position.set(0.015, 0.03, 0.05);
     item.rotation.set(0.18, -0.3, -0.18);
-    item.scale.setScalar(0.78);
+    item.scale.multiplyScalar(0.78);
   }
 }
 
-export function syncFirstPersonHeldItem(camera, itemId) {
-  const viewModel = camera?.getObjectByName("first-person-baked-hazmat-arms");
-  if (!viewModel) return;
-  const heldItemId = typeof itemId === "string" && itemId ? itemId : null;
+function replaceHeldItem(viewModel, heldItemId) {
   if (viewModel.userData.heldItemId === heldItemId) return;
-
   const previous = viewModel.getObjectByName(HELD_ITEM_NAME);
-  if (previous) viewModel.remove(previous);
+  if (previous) previous.removeFromParent();
   viewModel.userData.heldItemId = heldItemId;
   if (!heldItemId) return;
+
+  const arms = viewModel.userData.arms;
+  const mount = arms ? syncHeldItemMount(arms) : null;
+  if (!mount) return;
 
   const heldItem = createWorldItemModel(heldItemId);
   heldItem.name = HELD_ITEM_NAME;
   setHeldItemMaterialState(heldItem);
   positionHeldItem(heldItem, heldItemId);
-  viewModel.add(heldItem);
+  mount.add(heldItem);
+}
+
+export function syncFirstPersonHeldItem(camera, itemId) {
+  const viewModel = camera?.getObjectByName("first-person-baked-hazmat-arms");
+  if (!viewModel) return;
+  const arms = viewModel.userData.arms;
+  if (!arms) return;
+  const targetId = typeof itemId === "string" && itemId ? itemId : null;
+  if (viewModel.userData.targetHeldItemId === targetId) return;
+  viewModel.userData.targetHeldItemId = targetId;
+
+  // Item-to-item changes stay in the grip pose. Empty-to-held changes tuck
+  // the arms below the frame before replacing the baked finger geometry.
+  if (targetId && viewModel.userData.heldItemId && arms.userData.pose === "grip") {
+    replaceHeldItem(viewModel, targetId);
+    return;
+  }
+  if (Boolean(targetId) === Boolean(viewModel.userData.heldItemId) && !viewModel.userData.poseTransition) return;
+  if (viewModel.userData.poseTransition?.phase === "lower") return;
+  viewModel.userData.poseTransition = {
+    phase: "lower",
+    elapsed: 0,
+    startPosition: arms.position.clone(),
+  };
+}
+
+function updateArmPoseTransition(viewModel, delta) {
+  const arms = viewModel.userData.arms;
+  if (!arms) return;
+  const transition = viewModel.userData.poseTransition;
+  if (transition) {
+    transition.elapsed += delta;
+    const progress = THREE.MathUtils.smoothstep(
+      Math.min(1, transition.elapsed / ARM_POSE_TRANSITION_HALF), 0, 1,
+    );
+    if (transition.phase === "lower") {
+      arms.position.lerpVectors(transition.startPosition, TUCKED_ARMS_POSITION, progress);
+      if (transition.elapsed >= ARM_POSE_TRANSITION_HALF) {
+        const targetId = viewModel.userData.targetHeldItemId;
+        setArmPoseGeometry(arms, targetId ? "grip" : "empty");
+        replaceHeldItem(viewModel, targetId);
+        transition.phase = "raise";
+        transition.elapsed = 0;
+        arms.position.copy(TUCKED_ARMS_POSITION);
+      }
+    } else {
+      const targetPosition = arms.userData.pose === "grip" ? ARMS_POSITION : EMPTY_ARMS_POSITION;
+      arms.position.lerpVectors(TUCKED_ARMS_POSITION, targetPosition, progress);
+      if (transition.elapsed >= ARM_POSE_TRANSITION_HALF) {
+        arms.position.copy(targetPosition);
+        viewModel.userData.poseTransition = null;
+      }
+    }
+  }
 }
 
 export function getViewModelName(viewModel) {
@@ -313,7 +470,7 @@ export function updateFirstPersonHazmatViewModel(viewModel, elapsed) {
     motionDelta,
   );
   const sprintBlend = viewModel.userData.sprintBlend;
-  const strideScale = THREE.MathUtils.lerp(0.78, 2.2, sprintBlend);
+  const strideScale = THREE.MathUtils.lerp(0.98, 2.2, sprintBlend);
   const bodyScale = THREE.MathUtils.lerp(0.72, 1.35, sprintBlend);
   const breathe = Math.sin(elapsed * 1.8) * 0.0045;
   const bob = Math.sin(stridePhase * 2) * 0.0045 * walkAmount * bodyScale;
@@ -332,35 +489,95 @@ export function updateFirstPersonHazmatViewModel(viewModel, elapsed) {
 
   const arms = viewModel.userData.arms;
   if (!arms) return;
+  updateArmPoseTransition(viewModel, motionDelta);
+  if (!viewModel.userData.armVariation) {
+    viewModel.userData.armVariation = { left: 1, right: 1, leftPhase: 0, rightPhase: 0 };
+    viewModel.userData.armVariationTarget = { ...viewModel.userData.armVariation };
+    viewModel.userData.armVariationStep = -1;
+  }
+  const armStepIndex = Math.floor(stridePhase / Math.PI);
+  if (walkAmount > 0.05 && armStepIndex !== viewModel.userData.armVariationStep) {
+    viewModel.userData.armVariationStep = armStepIndex;
+    viewModel.userData.armVariationTarget = {
+      left: randomBetween(0.86, 1.14),
+      right: randomBetween(0.86, 1.14),
+      leftPhase: randomBetween(-0.08, 0.08),
+      rightPhase: randomBetween(-0.08, 0.08),
+    };
+  }
+  const armVariation = viewModel.userData.armVariation;
+  const armVariationTarget = viewModel.userData.armVariationTarget;
+  armVariation.left = THREE.MathUtils.damp(
+    armVariation.left,
+    armVariationTarget.left,
+    5.5,
+    motionDelta,
+  );
+  armVariation.right = THREE.MathUtils.damp(
+    armVariation.right,
+    armVariationTarget.right,
+    5.5,
+    motionDelta,
+  );
+  armVariation.leftPhase = THREE.MathUtils.damp(
+    armVariation.leftPhase,
+    armVariationTarget.leftPhase,
+    5.5,
+    motionDelta,
+  );
+  armVariation.rightPhase = THREE.MathUtils.damp(
+    armVariation.rightPhase,
+    armVariationTarget.rightPhase,
+    5.5,
+    motionDelta,
+  );
   const holdingItem = Boolean(viewModel.userData.heldItemId);
+  const emptyOutset = EMPTY_ARM_OUTSET * THREE.MathUtils.clamp(
+    (viewModel.parent?.aspect ?? 16 / 9) / (16 / 9), 0.25, 1,
+  );
   for (const side of ["left", "right"]) {
     const isLeft = side === "left";
     const sideSign = isLeft ? -1 : 1;
-    // A walking cycle should alternate the hands, but real arms never trace
-    // perfectly mirrored sine waves. The unequal cadence, phase and idle
-    // drift keep the relaxed bake from turning into a mannequin pose.
-    const cadence = isLeft ? 0.94 : 1.06;
-    const phase = stridePhase * cadence + (isLeft ? 0.2 : Math.PI - 0.13);
-    const sideAmplitude = isLeft ? 0.78 : 1;
+    // Keep both arms on one footstep clock; small per-step amplitude and phase
+    // changes add life without allowing the hands to drift out of opposition.
+    const phase = stridePhase
+      + (isLeft ? 0.2 + armVariation.leftPhase : Math.PI - 0.13 + armVariation.rightPhase);
+    const sideAmplitude = isLeft ? 0.9 : 1;
     const heldDamping = holdingItem && !isLeft ? 0.36 : 1;
-    const stride = Math.sin(phase) * walkAmount * strideScale * sideAmplitude * heldDamping;
-    const returnSwing = Math.cos(phase) * walkAmount * strideScale * sideAmplitude * heldDamping;
+    const swingAmplitude = walkAmount * strideScale * sideAmplitude * armVariation[side] * heldDamping;
+    const stride = Math.sin(phase) * swingAmplitude;
+    const returnSwing = Math.cos(phase) * swingAmplitude;
     const idleDrift = Math.sin(elapsed * (isLeft ? 1.19 : 1.47) + (isLeft ? 0.6 : 1.9));
     const idleRoll = Math.sin(elapsed * (isLeft ? 0.83 : 1.04) + (isLeft ? 1.2 : 0.25));
     const mesh = arms.userData.meshes[side];
     const restPosition = mesh?.userData.viewModelRestPosition;
     const restQuaternion = mesh?.userData.viewModelRestQuaternion;
     if (!mesh || !restPosition || !restQuaternion) continue;
-    mesh.position.set(
-      restPosition.x - sideSign * stride * 0.028 + idleDrift * (isLeft ? 0.0015 : 0.0022),
-      restPosition.y + Math.sin(phase * 2) * 0.008 * walkAmount * bodyScale - landingImpact * 0.016 + idleDrift * 0.0015,
-      restPosition.z + returnSwing * 0.06 + (airborne ? 0.012 : 0) + (holdingItem && !isLeft ? -0.012 : 0),
-    );
-    motionEuler.set(
-      returnSwing * 0.055 + landingImpact * 0.018 + idleDrift * (isLeft ? 0.008 : 0.012),
-      sideSign * stride * 0.04 + idleRoll * 0.009,
-      sideSign * stride * 0.065 + idleRoll * (isLeft ? 0.008 : -0.011),
-    );
+    if (holdingItem) {
+      mesh.position.set(
+        restPosition.x - sideSign * stride * 0.04 + idleDrift * (isLeft ? 0.0015 : 0.0022),
+        restPosition.y + Math.sin(phase * 2) * 0.011 * walkAmount * bodyScale - landingImpact * 0.016 + idleDrift * 0.0015,
+        restPosition.z + returnSwing * 0.082 + (airborne ? 0.012 : 0) + (!isLeft ? -0.012 : 0),
+      );
+      motionEuler.set(
+        returnSwing * 0.065 + landingImpact * 0.018 + idleDrift * (isLeft ? 0.008 : 0.012),
+        sideSign * stride * 0.04 + idleRoll * 0.009,
+        sideSign * stride * 0.075 + idleRoll * (isLeft ? 0.008 : -0.011),
+      );
+    } else {
+      // Opposite fore-and-aft swings let each relaxed hand briefly enter the
+      // bottom edge without lifting both hands together on every footfall.
+      mesh.position.set(
+        restPosition.x + sideSign * emptyOutset - sideSign * stride * 0.025,
+        restPosition.y + returnSwing * 0.085 - landingImpact * 0.016 + idleDrift * 0.0015,
+        restPosition.z + returnSwing * 0.19 + (airborne ? 0.012 : 0),
+      );
+      motionEuler.set(
+        returnSwing * 0.105 + landingImpact * 0.018,
+        sideSign * stride * 0.018 + idleRoll * 0.005,
+        sideSign * stride * 0.032 + idleRoll * (isLeft ? 0.005 : -0.005),
+      );
+    }
     motionQuaternion.setFromEuler(motionEuler);
     mesh.quaternion.copy(restQuaternion).multiply(motionQuaternion);
   }

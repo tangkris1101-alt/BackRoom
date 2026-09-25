@@ -4,6 +4,7 @@ import { createGameMaterial, isLowQuality } from "../common/materials.js";
 import { createExitNetwork } from "../common/exit-network.js";
 import { createLocalRelocationNetwork } from "../common/local-relocation.js";
 import { createInteractionSpot, getFocusedInteraction } from "../entities/interactions.js";
+import { colliderBlocksAtFeetHeight, getPlatformFloorHeight, resolvePlatformOverlap } from "../common/platform-collision.js";
 import { circleIntersectsAabb } from "../constants.js";
 import {
   LEVEL_TWELVE_COLS,
@@ -34,8 +35,8 @@ export function createLevelTwelveScene({ initialState = null } = {}) {
   const camera = new THREE.PerspectiveCamera(74, 1, 0.05, 260);
   const viewModel = attachFirstPersonViewModel(camera);
   scene.add(camera);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xbebeb8, 1.7));
-  const fill = new THREE.DirectionalLight(0xffffff, 0.72);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xbebeb8, 1.25));
+  const fill = new THREE.DirectionalLight(0xffffff, 0.85);
   fill.position.set(-20, 42, 16);
   scene.add(fill);
 
@@ -46,9 +47,10 @@ export function createLevelTwelveScene({ initialState = null } = {}) {
     ...createLevelTwelveFloorMaps(28, 24, !low),
     color: 0xffffff,
     emissive: 0xf7f7f2,
-    emissiveIntensity: 0.48,
+    emissiveIntensity: 0.08,
     roughness: 0.96,
-    normalScale: new THREE.Vector2(0.16, 0.16),
+    normalScale: new THREE.Vector2(0.42, 0.42),
+    aoMapIntensity: 1.2,
   });
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(LEVEL_TWELVE_COLS * 4, LEVEL_TWELVE_ROWS * 4), floorMaterial);
   floor.name = "level-twelve-white-void-floor";
@@ -56,13 +58,33 @@ export function createLevelTwelveScene({ initialState = null } = {}) {
   scene.add(floor);
 
   const props = addLevelTwelveProps(scene);
-  function isWalkable(x, z, radius = 0.36) {
-    const samples = [[0, 0], [radius, 0], [-radius, 0], [0, radius], [0, -radius]];
+  function isWalkable(x, z, radius = 0.36, feetY = 0) {
+    const corner = radius * 0.72;
+    const samples = [
+      [0, 0],
+      [radius, 0],
+      [-radius, 0],
+      [0, radius],
+      [0, -radius],
+      [corner, corner],
+      [-corner, corner],
+      [corner, -corner],
+      [-corner, -corner],
+    ];
     if (!samples.every(([dx, dz]) => {
       const cell = levelTwelveWorldToCell(x + dx, z + dz);
       return isLevelTwelveOpenCell(cell.col, cell.row);
     })) return false;
-    return !props.colliders.some((bounds) => bounds.active !== false && circleIntersectsAabb(x, z, radius, bounds));
+    return !props.colliders.some((bounds) =>
+      colliderBlocksAtFeetHeight(bounds, feetY) && circleIntersectsAabb(x, z, radius, bounds));
+  }
+
+  function getFloorHeight(x, z, feetY) {
+    return getPlatformFloorHeight({ colliders: props.colliders, x, z, feetY });
+  }
+
+  function resolvePosition(x, z, radius, feetY, maxCorrection) {
+    return resolvePlatformOverlap({ colliders: props.colliders, x, z, radius, feetY, maxCorrection });
   }
 
   const savedInteractions = initialState?.interactions ?? {};
@@ -136,6 +158,13 @@ export function createLevelTwelveScene({ initialState = null } = {}) {
     label: "WHITE STAIR",
     kind: "threshold",
     position: props.stairPosition,
+    // The steps are solid and each rises 0.22m, which beats the 0.18m landing
+    // clearance, so the flight can only be jumped, never walked up. Keeping the
+    // trigger on the model centre would bury the 2.6m circle behind the steps,
+    // so it moves to the foot of the flight: the bottom step's front face is at
+    // stairPosition.z + 3.6 (0.9 cells), plus 1.2m of clearance in front of it,
+    // i.e. (50, -37.2) for the stair cell at (50, -42).
+    entryPosition: { x: props.stairPosition.x, z: props.stairPosition.z + 4.8 },
     enterRadius: 2.6,
   }], savedInteractions);
 
@@ -215,6 +244,8 @@ export function createLevelTwelveScene({ initialState = null } = {}) {
     nextLevel: null,
     exitMode: "network",
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     getFootstepSurface: () => "concrete",
     get viewModelName() { return getViewModelName(viewModel); },
     update,

@@ -492,6 +492,8 @@ export function addLevelFiveHotelDetails(scene, interactionInitial = {}) {
     scene.add(windowMesh);
   });
 
+  const pipeRadius = 0.1;
+  const pipeCenterY = 1.48;
   [
     { col: 36, row: 21, axis: "z", length: 4.2 },
     { col: 39, row: 21, axis: "z", length: 4.8 },
@@ -501,11 +503,31 @@ export function addLevelFiveHotelDetails(scene, interactionInitial = {}) {
     { col: 38, row: 20, axis: "x", length: 4.3 },
   ].forEach((pipe) => {
     const center = levelFiveCellCenter(pipe.col, pipe.row);
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, pipe.length, 12), boilerMaterial);
-    mesh.position.set(center.x, 1.48, center.z);
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(pipeRadius, pipeRadius, pipe.length, 12), boilerMaterial);
+    mesh.position.set(center.x, pipeCenterY, center.z);
     if (pipe.axis === "x") mesh.rotation.z = Math.PI / 2;
     if (pipe.axis === "z") mesh.rotation.x = Math.PI / 2;
     scene.add(mesh);
+    // The pipes cross the boiler room at chest height (1.38 - 1.58) with no
+    // collision at all, so the player used to walk straight through them.
+    // Publish the thin column the cylinder occupies; its top is above the jump
+    // apex, so it is never a surface to stand on.
+    const halfLength = pipe.length / 2;
+    colliders.push(pipe.axis === "x"
+      ? {
+          minX: center.x - halfLength,
+          maxX: center.x + halfLength,
+          minZ: center.z - pipeRadius,
+          maxZ: center.z + pipeRadius,
+          topY: pipeCenterY + pipeRadius,
+        }
+      : {
+          minX: center.x - pipeRadius,
+          maxX: center.x + pipeRadius,
+          minZ: center.z - halfLength,
+          maxZ: center.z + halfLength,
+          topY: pipeCenterY + pipeRadius,
+        });
   });
 
   [
@@ -527,7 +549,15 @@ export function addLevelFiveHotelDetails(scene, interactionInitial = {}) {
     drum.rotation.z = Math.PI / 2;
     drum.rotation.y = furnace.rotation;
     scene.add(drum);
-    addCollider(center.x, center.z, 0.74, 0.74);
+    // The drum lies on its side, so the old +/-0.74 square under-covered it and
+    // the player clipped into the shell. Use the mesh's own rotated footprint.
+    const drumBounds = new THREE.Box3().setFromObject(drum);
+    addCollider(
+      center.x,
+      center.z,
+      (drumBounds.max.x - drumBounds.min.x) / 2,
+      (drumBounds.max.z - drumBounds.min.z) / 2,
+    );
 
     const furnaceGlow = new THREE.Mesh(
       new THREE.CircleGeometry(0.19, 12),
@@ -539,10 +569,23 @@ export function addLevelFiveHotelDetails(scene, interactionInitial = {}) {
   });
 
   const valveCenter = levelFiveCellCenter(38, 22);
-  const valve = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.035, 8, 18), brassMaterial);
-  valve.position.set(valveCenter.x, 1.28, valveCenter.z);
+  const valveCenterY = 1.28;
+  const valveRadius = 0.34;
+  const valveTube = 0.035;
+  const valve = new THREE.Mesh(new THREE.TorusGeometry(valveRadius, valveTube, 8, 18), brassMaterial);
+  valve.position.set(valveCenter.x, valveCenterY, valveCenter.z);
   valve.rotation.y = Math.PI / 2;
   scene.add(valve);
+  // The wheel hangs at 0.91 - 1.66 with no collision, so the player walked
+  // through its ring. rotation.y lays that ring in the world Y-Z plane: the
+  // footprint is 0.07m thin on X and 0.75m wide on Z, like the mesh.
+  colliders.push({
+    minX: valveCenter.x - valveTube,
+    maxX: valveCenter.x + valveTube,
+    minZ: valveCenter.z - (valveRadius + valveTube),
+    maxZ: valveCenter.z + (valveRadius + valveTube),
+    topY: valveCenterY + valveRadius + valveTube,
+  });
   interactions.push(
     createInteractionSpot({
       id: "level-five-boiler-valve",

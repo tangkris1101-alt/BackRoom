@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { colliderBlocksAtFeetHeight, getPlatformFloorHeight, resolvePlatformOverlap } from "../common/platform-collision.js";
 import { createGameMaterial } from "../common/materials.js";
 import {
   CELL_SIZE,
@@ -209,9 +210,6 @@ function addLevelSevenDetails(scene, interactionInitial = {}) {
   const colliders = [];
   const interactions = [];
   const buoyStates = new Map();
-  const addCollider = (x, z, halfX, halfZ) => {
-    colliders.push({ minX: x - halfX, maxX: x + halfX, minZ: z - halfZ, maxZ: z + halfZ });
-  };
 
   const woodMaterial = createGameMaterial({
     color: 0x3a2619,
@@ -246,10 +244,15 @@ function addLevelSevenDetails(scene, interactionInitial = {}) {
     scene.add(patch);
   });
 
+  // The boards are rotated, so the footprint is the rotated 2.2 x 0.42 box
+  // (half extents 1.1|cos| + 0.21|sin| in x and 1.1|sin| + 0.21|cos| in z)
+  // instead of the axis-aligned 1.8 x 0.48 box that blocked the whole cell.
+  // `topY` is the 0.08m board's top face at y 0.17, so it is stepped over
+  // rather than acting as an invisible waist-high wall.
   [
-    { col: 15, row: 13, rot: 0.18 },
-    { col: 26, row: 16, rot: -0.4 },
-    { col: 9, row: 20, rot: 0.7 },
+    { col: 15, row: 13, rot: 0.18, bounds: { minX: -23.12, maxX: -20.88, minZ: -6.4, maxZ: -5.6 } },
+    { col: 26, row: 16, rot: -0.4, bounds: { minX: 20.9, maxX: 23.1, minZ: 5.38, maxZ: 6.62 } },
+    { col: 9, row: 20, rot: 0.7, bounds: { minX: -46.98, maxX: -45.02, minZ: 21.13, maxZ: 22.87 } },
   ].forEach((spot) => {
     const center = levelSevenCellCenter(spot.col, spot.row);
     const plank = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 0.42), woodMaterial);
@@ -257,12 +260,14 @@ function addLevelSevenDetails(scene, interactionInitial = {}) {
     plank.rotation.y = spot.rot;
     plank.rotation.z = (Math.random() - 0.5) * 0.1;
     scene.add(plank);
-    addCollider(center.x, center.z, 0.9, 0.24);
+    colliders.push({ ...spot.bounds, topY: 0.17 });
   });
 
+  // The body is 0.28m at its waterline base and its top face sits at 0.595m
+  // before the idle bob, so the buoy blocks at knee height instead of nothing.
   [
-    { col: 18, row: 9 },
-    { col: 32, row: 23 },
+    { col: 18, row: 9, bounds: { minX: -10.28, maxX: -9.72, minZ: -22.28, maxZ: -21.72 } },
+    { col: 32, row: 23, bounds: { minX: 45.72, maxX: 46.28, minZ: 33.72, maxZ: 34.28 } },
   ].forEach((spot) => {
     const center = levelSevenCellCenter(spot.col, spot.row);
     const buoy = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.55, 16), buoyMaterial);
@@ -270,6 +275,7 @@ function addLevelSevenDetails(scene, interactionInitial = {}) {
     buoy.position.set(center.x, 0.32, center.z);
     buoy.rotation.x = (Math.random() - 0.5) * 0.28;
     buoy.rotation.z = (Math.random() - 0.5) * 0.28;
+    colliders.push({ ...spot.bounds, topY: 0.6 });
     const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 4.3, 8), buoyRopeMaterial);
     rope.name = `${buoy.name}-rope`;
     rope.position.y = -2.28;
@@ -486,7 +492,12 @@ export function createLevelSevenScene({ initialState = null } = {}) {
     // the starting room. It is still on an open boundary cell and reachable.
     { id: "level-seven-hidden-hub-door", targetLevel: HUB_LEVEL, targetLabel: "THE HUB", kind: "door", hidden: true, position: levelSevenCellCenter(12, 26), rotation: 0 },
   ];
-  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
+  // The pickups below are placed with `blockedAabbs: propColliders`, so the door
+  // colliders are collected separately and merged only after every item exists:
+  // that keeps the candidate cells (and therefore saved item positions) exactly
+  // as they were before doors became solid.
+  const exitColliders = [];
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial, { colliders: exitColliders });
 
   const almondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_SEVEN_COLS,
@@ -548,6 +559,9 @@ export function createLevelSevenScene({ initialState = null } = {}) {
     initialState: pickupInitial["silence-liquid"] ?? null,
   });
 
+  // Every pickup is placed, so the door colliders can join the list that
+  // isWalkable / getFloorHeight / resolvePosition walk.
+  propColliders.push(...exitColliders);
   const thingSpawn = levelSevenCellCenter(33, 23);
   const thing = createLevelSevenThingEntity(scene, {
     spawnPosition: thingSpawn,
@@ -562,7 +576,7 @@ export function createLevelSevenScene({ initialState = null } = {}) {
 
   let objectiveReached = Boolean(objectiveInitial.reached);
 
-  function isWalkable(x, z, radius = 0.36) {
+  function isWalkable(x, z, radius = 0.36, feetY = 0) {
     const corner = radius * 0.72;
     const samples = [
       [0, 0],
@@ -580,7 +594,17 @@ export function createLevelSevenScene({ initialState = null } = {}) {
       return isLevelSevenOpenCell(cell.col, cell.row);
     });
     if (!isInOpenCells) return false;
-    return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
+    return !propColliders.some((collider) =>
+      colliderBlocksAtFeetHeight(collider, feetY) && circleIntersectsAabb(x, z, radius, collider),
+    );
+  }
+
+  function getFloorHeight(x, z, feetY) {
+    return getPlatformFloorHeight({ colliders: propColliders, x, z, feetY });
+  }
+
+  function resolvePosition(x, z, radius, feetY, maxCorrection) {
+    return resolvePlatformOverlap({ colliders: propColliders, x, z, radius, feetY, maxCorrection });
   }
 
   function update(delta, elapsed, playerPosition, effects = {}) {
@@ -661,6 +685,8 @@ export function createLevelSevenScene({ initialState = null } = {}) {
     spawn,
     targetPosition,
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     decorativeItemSpawns: [
       { id: "seashell", position: { ...levelSevenCellCenter(12, 12), y: 0.18 }, rotation: -0.4, tiltZ: 0.16 },
     ],

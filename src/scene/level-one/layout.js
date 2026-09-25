@@ -8,6 +8,11 @@ export const LEVEL_ONE_ROWS = 33;
 export const LEVEL_ONE_EXIT_TRIGGER_RADIUS = CELL_SIZE * 0.86;
 export const LEVEL_ONE_START_CELL = { col: 4, row: 22, yaw: -Math.PI * 0.18 };
 export const LEVEL_ONE_TARGET_CELL = { col: 31, row: 1 };
+// Players arriving from Level 0 step out of an elevator. Its doors sit in the
+// lobby cell's north wall, with the cab recessed into the solid block behind
+// so the shaft stays concealed on the other three sides.
+export const LEVEL_ONE_ARRIVAL_LOBBY_CELL = { col: 4, row: 20 };
+export const LEVEL_ONE_ARRIVAL_SHAFT_CELL = { col: 4, row: 19 };
 // Every dynamic light is paired with a visible fluorescent fixture. Keep this
 // cap high enough to cover the expanded warehouse grid without relying on
 // invisible fill or ambient lights.

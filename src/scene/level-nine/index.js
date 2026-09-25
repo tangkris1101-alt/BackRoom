@@ -3,7 +3,7 @@ import { createGameMaterial } from "../common/materials.js";
 import { CELL_SIZE } from "../constants.js";
 import { createStableLightState } from "../common/lighting.js";
 import {
-  createGridWalkability,
+  createGridCollision,
   createStandardPickupSet,
 } from "../common/grid-world.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
@@ -21,9 +21,39 @@ import {
   levelNineCellCenter,
   levelNineWorldToCell,
 } from "./layout.js";
-import { createLevelNineGrassTexture, createLevelNineRoadTexture } from "./textures.js";
+import { createLevelNineAsphaltMaps, createLevelNineGrassTexture } from "./textures.js";
 import { addLevelNineDetails } from "./props.js";
 import { enableAoUv } from "../common/texture-utils.js";
+
+function createAsphaltRoadGeometry(centers) {
+  const positions = [];
+  const normals = [];
+  const uvs = [];
+  const half = (CELL_SIZE + 0.025) / 2;
+  const metresPerTile = 7.2;
+  centers.forEach(({ x, z }) => {
+    const left = x - half;
+    const right = x + half;
+    const near = z - half;
+    const far = z + half;
+    // World-space UVs continue across road cells rather than restarting at
+    // every four-metre boundary. This hides the photo's periodic seam grid.
+    for (const [px, pz] of [
+      [left, near], [right, far], [right, near],
+      [left, near], [left, far], [right, far],
+    ]) {
+      positions.push(px, 0.012, pz);
+      normals.push(0, 1, 0);
+      uvs.push(px / metresPerTile, pz / metresPerTile);
+    }
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.computeBoundingSphere();
+  return enableAoUv(geometry);
+}
 
 export function createLevelNineScene({ initialState = null } = {}) {
   const scene = new THREE.Scene();
@@ -43,12 +73,12 @@ export function createLevelNineScene({ initialState = null } = {}) {
     map: createLevelNineGrassTexture(), color: 0x496b51, emissive: 0x08120c, emissiveIntensity: 0.34, roughness: 0.95,
   });
   const roadMaterial = createGameMaterial({
-    map: createLevelNineRoadTexture(), color: 0x74808d, emissive: 0x0b111a, emissiveIntensity: 0.42, roughness: 0.36, metalness: 0.08,
+    ...createLevelNineAsphaltMaps(), color: 0xb9c0c4, normalScale: new THREE.Vector2(0.52, 0.52),
+    roughness: 0.94, metalness: 0, aoMapIntensity: 0.85,
   });
   const floor = new THREE.Mesh(enableAoUv(new THREE.PlaneGeometry(LEVEL_NINE_COLS * CELL_SIZE, LEVEL_NINE_ROWS * CELL_SIZE)), grassMaterial);
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
-  const roadGeometry = new THREE.PlaneGeometry(CELL_SIZE + 0.025, CELL_SIZE + 0.025);
   const roadCells = [];
   for (let row = 0; row < LEVEL_NINE_ROWS; row += 1) {
     for (let col = 0; col < LEVEL_NINE_COLS; col += 1) {
@@ -57,15 +87,7 @@ export function createLevelNineScene({ initialState = null } = {}) {
       roadCells.push(center);
     }
   }
-  const roads = new THREE.InstancedMesh(roadGeometry, roadMaterial, roadCells.length);
-  const roadTransform = new THREE.Object3D();
-  roadTransform.rotation.x = -Math.PI / 2;
-  roadCells.forEach((center, index) => {
-    roadTransform.position.set(center.x, 0.012, center.z);
-    roadTransform.updateMatrix();
-    roads.setMatrixAt(index, roadTransform.matrix);
-  });
-  roads.instanceMatrix.needsUpdate = true;
+  const roads = new THREE.Mesh(createAsphaltRoadGeometry(roadCells), roadMaterial);
   roads.name = "level-nine-asphalt-roads";
   scene.add(roads);
   const fieldTrack = new THREE.Mesh(
@@ -85,16 +107,16 @@ export function createLevelNineScene({ initialState = null } = {}) {
   fieldGlow.position.set(fieldTargetPosition.x - 1.8, 1.9, fieldTargetPosition.z);
   fieldGlow.rotation.y = Math.PI / 2;
   scene.add(fieldGlow);
-  scene.add(new THREE.HemisphereLight(0x5e7695, 0x020407, 0.74));
-  const moonlight = new THREE.DirectionalLight(0x7795c4, 0.18);
-  moonlight.position.set(-42, 32, -28);
+  scene.add(new THREE.HemisphereLight(0x829abc, 0x17251d, 1.08));
+  const moonlight = new THREE.DirectionalLight(0x9fb8d4, 0.46);
+  moonlight.position.set(25, 32, 28);
   scene.add(moonlight);
   const cameraMistLight = new THREE.PointLight(0x9ab4d4, 0.28, 7.2, 2.15);
   cameraMistLight.position.set(0, 0.12, -0.42);
   camera.add(cameraMistLight);
 
   const details = addLevelNineDetails(scene, levelNineCellCenter, { coarse });
-  const isWalkable = createGridWalkability({
+  const { isWalkable, getFloorHeight, resolvePosition } = createGridCollision({
     worldToCell: levelNineWorldToCell,
     isOpen: isLevelNineOpenCell,
     colliders: details.colliders,
@@ -207,6 +229,10 @@ export function createLevelNineScene({ initialState = null } = {}) {
 
   return {
     level: 9,
+    presentation: {
+      exposure: 0.82,
+      post: { aoIntensity: 0.5, vignette: 0.22, grain: 0.045 },
+    },
     levelLabel: "LEVEL 9",
     levelName: "THE SUBURBS",
     get viewModelName() { return getViewModelName(viewModel); },
@@ -217,6 +243,8 @@ export function createLevelNineScene({ initialState = null } = {}) {
     spawn,
     targetPosition,
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     getFootstepSurface,
     flashlightEffectiveness: 1.12,
     decorativeItemSpawns: [

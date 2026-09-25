@@ -19,19 +19,18 @@ import {
   createLevelZeroWallpaperDetailMaps,
   createLevelZeroCarpetTexture,
   createLevelZeroCarpetDetailMaps,
+  createLevelZeroCarpetMacroTexture,
   createLevelZeroCeilingTexture,
 } from "./textures.js";
 import { createManilaRoom } from "./manila-room.js";
+import { createElevatorCab, getLevelZeroElevatorWallMount, LEVEL_ZERO_ELEVATOR_ID } from "./elevator.js";
 import {
   createLights,
-  addExitSign,
-  addExitHole,
   addMoodZones,
   addRoomTables,
   BRIGHT_ZONES,
   DARK_ZONES,
   collectWallTransforms,
-  createFloorGeometryWithHole,
 } from "./world.js";
 import {
   cellCenter,
@@ -39,8 +38,6 @@ import {
   worldToCell,
   START_CELL,
   EXIT_CELL,
-  EXIT_HOLE_RADIUS,
-  EXIT_FALL_TRIGGER_Y,
   COLS,
   ROWS,
   MAP_CENTER,
@@ -293,20 +290,27 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   ];
 
   const floor = new THREE.Mesh(
-    createFloorGeometryWithHole(
-      COLS * CELL_SIZE,
-      ROWS * CELL_SIZE,
-      {
-        x: exitPosition.x - MAP_CENTER.x,
-        z: exitPosition.z - MAP_CENTER.z,
-      },
-      EXIT_HOLE_RADIUS,
-    ),
+    new THREE.PlaneGeometry(COLS * CELL_SIZE, ROWS * CELL_SIZE),
     floorMaterial,
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(MAP_CENTER.x, 0, MAP_CENTER.z);
   scene.add(floor);
+
+  // Map-scale, non-repeating wear layer floating just above the carpet: broad
+  // stains and traffic trails at 10-100m scale, so the 3m carpet tile repeat
+  // underneath never reads as identical copies side by side.
+  const carpetMacroOverlay = new THREE.Mesh(
+    new THREE.PlaneGeometry(COLS * CELL_SIZE, ROWS * CELL_SIZE),
+    new THREE.MeshBasicMaterial({
+      map: createLevelZeroCarpetMacroTexture(),
+      transparent: true,
+      depthWrite: false,
+    }),
+  );
+  carpetMacroOverlay.rotation.x = -Math.PI / 2;
+  carpetMacroOverlay.position.set(MAP_CENTER.x, 0.014, MAP_CENTER.z);
+  scene.add(carpetMacroOverlay);
 
   const ceiling = new THREE.Mesh(
     new THREE.PlaneGeometry(COLS * CELL_SIZE, ROWS * CELL_SIZE),
@@ -332,13 +336,29 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     wallMaterials,
     eastWest,
   );
+  // The map leaves a full-height opening for the shaft. Fill its upper part
+  // with matching wallpaper so only the framed lift entrance is exposed.
+  const elevatorWallHeadHeight = WALL_HEIGHT - 2.54;
+  const elevatorWallHead = new THREE.Mesh(
+    new THREE.BoxGeometry(WALL_THICKNESS, elevatorWallHeadHeight, CELL_SIZE),
+    wallMaterials,
+  );
+  elevatorWallHead.position.set(
+    exitPosition.x + CELL_SIZE / 2,
+    2.54 + elevatorWallHeadHeight / 2,
+    exitPosition.z,
+  );
+  scene.add(elevatorWallHead);
   const { fixtures, updateFixtureVisuals, updatePointLights } = createLights(scene, fixturePositions);
   const updateLightState = createStableLightState("HUM", {
     dimBelow: 0.5,
     normalAbove: 0.66,
   });
-  addExitHole(scene, exitPosition, EXIT_HOLE_RADIUS);
-  addExitSign(scene, exitPosition);
+  const elevator = createElevatorCab(
+    scene,
+    getLevelZeroElevatorWallMount(exitPosition),
+    interactionInitial[LEVEL_ZERO_ELEVATOR_ID] ?? null,
+  );
   addMoodZones(scene);
   const manilaRoom = createManilaRoom(scene, MANILA_ROOM, cellCenter);
   const propColliders = [...manilaRoom.colliders, ...addRoomTables(scene, cellCenter)];
@@ -353,11 +373,16 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       initialState: interactionInitial["level-zero-meg-file"] ?? null,
       onInteract: () => ({ documentId: "level-zero-meg-file" }),
     }),
+    elevator,
   ];
+  // The open map cell behind the lift doors is a shaft, not a room in which
+  // random pickups should appear outside the sealed cabin.
+  const isPickupCellOpen = (col, row) =>
+    isOpenCell(col, row) && !(col === EXIT_CELL.col + 1 && row === EXIT_CELL.row);
   const almondWater = createAlmondWaterPickup(scene, {
     cols: COLS,
     rows: ROWS,
-    isCellOpen: isOpenCell,
+    isCellOpen: isPickupCellOpen,
     getCellCenter: cellCenter,
     avoidPositions: [spawnCell, exitPosition],
     blockedAabbs: propColliders,
@@ -366,7 +391,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   const superAlmondWater = createAlmondWaterPickup(scene, {
     cols: COLS,
     rows: ROWS,
-    isCellOpen: isOpenCell,
+    isCellOpen: isPickupCellOpen,
     getCellCenter: cellCenter,
     avoidPositions: [spawnCell, exitPosition],
     blockedAabbs: propColliders,
@@ -380,7 +405,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   const flashlight = createFlashlightPickup(scene, {
     cols: COLS,
     rows: ROWS,
-    isCellOpen: isOpenCell,
+    isCellOpen: isPickupCellOpen,
     getCellCenter: cellCenter,
     avoidPositions: [spawnCell, exitPosition],
     blockedAabbs: propColliders,
@@ -389,7 +414,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   const compass = createCompassPickup(scene, {
     cols: COLS,
     rows: ROWS,
-    isCellOpen: isOpenCell,
+    isCellOpen: isPickupCellOpen,
     getCellCenter: cellCenter,
     avoidPositions: [spawnCell, exitPosition],
     blockedAabbs: propColliders,
@@ -413,7 +438,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
 
     const insideLevelGeometry = samples.every(([offsetX, offsetZ]) => {
       const cell = worldToCell(x + offsetX, z + offsetZ);
-      return isOpenCell(cell.col, cell.row);
+      return isOpenCell(cell.col, cell.row) && !elevator.blocksMovement(x + offsetX, z + offsetZ);
     });
     return insideLevelGeometry && !propColliders.some((collider) =>
       colliderBlocksAtFeetHeight(collider, feetY) &&
@@ -425,8 +450,6 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   }
 
   function getFloorHeight(x, z, feetY) {
-    const exitDistance = Math.hypot(x - exitPosition.x, z - exitPosition.z);
-    if (exitDistance < EXIT_HOLE_RADIUS - 0.12) return null;
     return getPlatformFloorHeight({ colliders: propColliders, x, z, feetY });
   }
 
@@ -454,13 +477,11 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     const manilaBlackout = manilaRoom.update(elapsed);
 
     const exitDistance = Math.hypot(
-      playerPosition.x - exitPosition.x,
-      playerPosition.z - exitPosition.z,
+      playerPosition.x - elevator.doorCenter.x,
+      playerPosition.z - elevator.doorCenter.z,
     );
-    const fallingIntoExit =
-      exitDistance < EXIT_HOLE_RADIUS - 0.06 &&
-      playerPosition.y < EXIT_FALL_TRIGGER_Y;
-    if (fallingIntoExit) {
+    const enteredElevator = elevator.update(delta, playerPosition);
+    if (enteredElevator) {
       exitReached = true;
     }
     scene.fog.density = 0.0095 + (1 - flicker) * 0.004;
@@ -473,8 +494,8 @@ export function createLevelZeroScene({ initialState = null } = {}) {
 
     return {
       exitDistance: Math.round(exitDistance),
-      exitReached,
-      fallingIntoExit,
+      exitReached: enteredElevator,
+      nextLevel: enteredElevator ? 1 : null,
       flicker,
       manilaBlackout,
       lightState: updateLightState(delta, flicker),
@@ -504,7 +525,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
       return exposureBias;
     },
     nextLevel: 1,
-    exitMode: "fall",
+    exitMode: "network",
     // Nudges GTAO contact darkening at wall/floor and wall/ceiling junctions
     // a touch past this level's presentation preset of 0.55 (presentation.js).
     presentation: { post: { aoIntensity: 0.66 } },
@@ -512,7 +533,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     camera,
     disposableTextures: fixtureLightField?.texture ? [fixtureLightField.texture] : [],
     spawn,
-    targetPosition: exitPosition,
+    targetPosition: elevator.doorCenter,
     isWalkable,
     getFloorHeight,
     resolvePosition,

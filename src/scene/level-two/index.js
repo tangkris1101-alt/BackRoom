@@ -11,6 +11,11 @@ import {
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
   HUB_LEVEL,
 } from "../constants.js";
+import {
+  colliderBlocksAtFeetHeight,
+  getPlatformFloorHeight,
+  resolvePlatformOverlap,
+} from "../common/platform-collision.js";
 import { createGameMaterial } from "../common/materials.js";
 import { updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
@@ -166,7 +171,7 @@ function triangulateConvex(poly) {
   return tris;
 }
 
-function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
+export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
   const floorPositions = [];
   const floorNormals = [];
   const floorUvs = [];
@@ -179,15 +184,18 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
 
   const wallPositions = [];
   const wallNormals = [];
+  const wallUvs = [];
   const wallIndices = [];
   const wallMaterials = [];
 
   const diagWallPositions = [];
   const diagWallNormals = [];
+  const diagWallUvs = [];
   const diagWallIndices = [];
 
   const fillPositions = [];
   const fillNormals = [];
+  const fillUvs = [];
   const fillIndices = [];
 
   let floorIdx = 0;
@@ -199,19 +207,37 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
   function pushQuad(positions, normals, uvs, indices, v0, v1, v2, v3, uv0, uv1, uv2, uv3, normal) {
     const base = positions.length / 3;
     positions.push(v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z);
-    normals.push(normal.x, normal.y, normal.z, normal.x, normal.y, normal.z, normal.x, normal.y, normal.z, normal.x, normal.y, normal.z);
-    uvs.push(uv0.x, uv0.y, uv1.x, uv1.y, uv2.x, uv2.y, uv3.x, uv3.y);
+    // The old cardinal-wall normals faced away from the lit corridor.
+    const faceNormal = new THREE.Vector3(v1.x - v0.x, v1.y - v0.y, v1.z - v0.z)
+      .cross(new THREE.Vector3(v2.x - v0.x, v2.y - v0.y, v2.z - v0.z))
+      .normalize();
+    for (let i = 0; i < 4; i += 1) normals.push(faceNormal.x, faceNormal.y, faceNormal.z);
+    // World-space horizontal UVs avoid restarting the same grime pattern at
+    // every cell boundary along the corridor.
+    const alongX = Math.abs(v1.x - v0.x) >= Math.abs(v1.z - v0.z);
+    const worldU = (vertex) => alongX
+      ? (vertex.x - originX) / (S * 2.1) + (vertex.z - originZ) / (S * 13)
+      : (vertex.z - originZ) / (S * 2.1) + (vertex.x - originX) / (S * 13);
+    for (const vertex of [v0, v1, v2, v3]) uvs.push(worldU(vertex), vertex.y / H);
     indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
 
-  function pushTri(positions, normals, indices, v0, v1, v2, normal) {
+  function pushTri(positions, normals, uvs, indices, v0, v1, v2, normal) {
+    const ab = new THREE.Vector3(v1.x - v0.x, v1.y - v0.y, v1.z - v0.z);
+    const ac = new THREE.Vector3(v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
+    if (ab.cross(ac).dot(new THREE.Vector3(normal.x, normal.y, normal.z)) < 0) {
+      [v1, v2] = [v2, v1];
+    }
     const base = positions.length / 3;
     positions.push(v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z);
     normals.push(normal.x, normal.y, normal.z, normal.x, normal.y, normal.z, normal.x, normal.y, normal.z);
+    for (const vertex of [v0, v1, v2]) {
+      uvs.push((vertex.x - originX) / (cols * S), (vertex.z - originZ) / (rows * S));
+    }
     indices.push(base, base + 1, base + 2);
   }
 
-  function pushPolyPrism(positions, normals, indices, poly, y0, y1) {
+  function pushPolyPrism(positions, normals, uvs, indices, poly, y0, y1) {
     // Sides of a prism from y0 to y1.
     for (let i = 0; i < poly.length; i += 1) {
       const a = poly[i];
@@ -227,7 +253,7 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
       const v1 = { x: b.x, y: y0, z: b.z };
       const v2 = { x: b.x, y: y1, z: b.z };
       const v3 = { x: a.x, y: y1, z: a.z };
-      pushQuad(positions, normals, [], indices, v0, v1, v2, v3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+      pushQuad(positions, normals, uvs, indices, v0, v1, v2, v3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
     }
   }
 
@@ -239,9 +265,9 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
       const v1 = { x: poly[j].x, y, z: poly[j].z };
       const v2 = { x: poly[k].x, y, z: poly[k].z };
       if (normalY > 0) {
-        pushTri(floorPositions, floorNormals, floorIndices, v0, v1, v2, normal);
+        pushTri(floorPositions, floorNormals, floorUvs, floorIndices, v0, v1, v2, normal);
       } else {
-        pushTri(ceilingPositions, ceilingNormals, ceilingIndices, v0, v1, v2, normal);
+        pushTri(ceilingPositions, ceilingNormals, ceilingUvs, ceilingIndices, v0, v1, v2, normal);
       }
     }
   }
@@ -268,10 +294,10 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
         const v3c = { x: cellMinX, y: CEILING_Y, z: cellMinZ + S };
         const normalUp = { x: 0, y: 1, z: 0 };
         const normalDown = { x: 0, y: -1, z: 0 };
-        pushTri(floorPositions, floorNormals, floorIndices, v0, v1, v2, normalUp);
-        pushTri(floorPositions, floorNormals, floorIndices, v0, v2, v3, normalUp);
-        pushTri(ceilingPositions, ceilingNormals, ceilingIndices, v0c, v3c, v2c, normalDown);
-        pushTri(ceilingPositions, ceilingNormals, ceilingIndices, v0c, v2c, v1c, normalDown);
+        pushTri(floorPositions, floorNormals, floorUvs, floorIndices, v0, v1, v2, normalUp);
+        pushTri(floorPositions, floorNormals, floorUvs, floorIndices, v0, v2, v3, normalUp);
+        pushTri(ceilingPositions, ceilingNormals, ceilingUvs, ceilingIndices, v0c, v3c, v2c, normalDown);
+        pushTri(ceilingPositions, ceilingNormals, ceilingUvs, ceilingIndices, v0c, v2c, v1c, normalDown);
 
         // Cell-edge walls where neighbor is not walkable
         const northOpen = isLevelTwoWalkableCell(col, row - 1);
@@ -285,7 +311,7 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
           const w2 = { x: cellMinX + S, y: H, z: cellMinZ };
           const w3 = { x: cellMinX, y: H, z: cellMinZ };
           const normal = { x: 0, y: 0, z: -1 };
-          pushQuad(wallPositions, wallNormals, [], wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
           wallMaterials.push(0);
         }
         if (!southOpen) {
@@ -294,7 +320,7 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
           const w2 = { x: cellMinX, y: H, z: cellMinZ + S };
           const w3 = { x: cellMinX + S, y: H, z: cellMinZ + S };
           const normal = { x: 0, y: 0, z: 1 };
-          pushQuad(wallPositions, wallNormals, [], wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
           wallMaterials.push(0);
         }
         if (!westOpen) {
@@ -303,7 +329,7 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
           const w2 = { x: cellMinX, y: H, z: cellMinZ };
           const w3 = { x: cellMinX, y: H, z: cellMinZ + S };
           const normal = { x: -1, y: 0, z: 0 };
-          pushQuad(wallPositions, wallNormals, [], wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
           wallMaterials.push(0);
         }
         if (!eastOpen) {
@@ -312,7 +338,7 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
           const w2 = { x: cellMinX + S, y: H, z: cellMinZ + S };
           const w3 = { x: cellMinX + S, y: H, z: cellMinZ };
           const normal = { x: 1, y: 0, z: 0 };
-          pushQuad(wallPositions, wallNormals, [], wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
           wallMaterials.push(0);
         }
       } else if (DIAGONAL_TYPES.has(ch)) {
@@ -337,9 +363,9 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
             const v0 = { x: fillPoly[i].x, y: CEILING_Y, z: fillPoly[i].z };
             const v1 = { x: fillPoly[j].x, y: CEILING_Y, z: fillPoly[j].z };
             const v2 = { x: fillPoly[k].x, y: CEILING_Y, z: fillPoly[k].z };
-            pushTri(fillPositions, fillNormals, fillIndices, v0, v1, v2, normalUp);
+            pushTri(fillPositions, fillNormals, fillUvs, fillIndices, v0, v1, v2, normalUp);
           }
-          pushPolyPrism(fillPositions, fillNormals, fillIndices, fillPoly, 0, H);
+          pushPolyPrism(fillPositions, fillNormals, fillUvs, fillIndices, fillPoly, 0, H);
         }
 
         // Inner diagonal wall (separating walkable from fill) - 2 sides
@@ -364,7 +390,7 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
           const w2 = { x: innerEnd.x, y: H, z: innerEnd.z };
           const w3 = { x: innerStart.x, y: H, z: innerStart.z };
           const normal = { x: -perpX, y: 0, z: -perpZ };
-          pushQuad(diagWallPositions, diagWallNormals, [], diagWallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(diagWallPositions, diagWallNormals, diagWallUvs, diagWallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
         }
         // Fill-side face
         {
@@ -373,7 +399,7 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
           const w2 = { x: innerStart.x, y: H, z: innerStart.z };
           const w3 = { x: innerEnd.x, y: H, z: innerEnd.z };
           const normal = { x: perpX, y: 0, z: perpZ };
-          pushQuad(diagWallPositions, diagWallNormals, [], diagWallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(diagWallPositions, diagWallNormals, diagWallUvs, diagWallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
         }
 
         // Cell-edge walls on walkable side only
@@ -424,7 +450,7 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
             const w1 = { x: edge.to.x, y: 0, z: edge.to.z };
             const w2 = { x: edge.to.x, y: H, z: edge.to.z };
             const w3 = { x: edge.from.x, y: H, z: edge.from.z };
-            pushQuad(wallPositions, wallNormals, [], wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+            pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
             wallMaterials.push(0);
           }
 
@@ -475,7 +501,7 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
               const w1 = { x: b.x, y: 0, z: b.z };
               const w2 = { x: b.x, y: H, z: b.z };
               const w3 = { x: a.x, y: H, z: a.z };
-              pushQuad(wallPositions, wallNormals, [], wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+              pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
               wallMaterials.push(0);
             }
           }
@@ -484,20 +510,21 @@ function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, originZ) {
     }
   }
 
-  function makeBuffer(pos, norm, idx) {
+  function makeBuffer(pos, norm, uv, idx) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute("normal", new THREE.Float32BufferAttribute(norm, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
     geo.setIndex(idx);
     return geo;
   }
 
   return {
-    floor: makeBuffer(floorPositions, floorNormals, floorIndices),
-    ceiling: makeBuffer(ceilingPositions, ceilingNormals, ceilingIndices),
-    wall: makeBuffer(wallPositions, wallNormals, wallIndices),
-    diagWall: makeBuffer(diagWallPositions, diagWallNormals, diagWallIndices),
-    fill: makeBuffer(fillPositions, fillNormals, fillIndices),
+    floor: makeBuffer(floorPositions, floorNormals, floorUvs, floorIndices),
+    ceiling: makeBuffer(ceilingPositions, ceilingNormals, ceilingUvs, ceilingIndices),
+    wall: makeBuffer(wallPositions, wallNormals, wallUvs, wallIndices),
+    diagWall: makeBuffer(diagWallPositions, diagWallNormals, diagWallUvs, diagWallIndices),
+    fill: makeBuffer(fillPositions, fillNormals, fillUvs, fillIndices),
     wallMaterials,
   };
 }
@@ -528,7 +555,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
   // flashlight has visible lighting headroom on nearby floors and walls.
   const floorMaterial = createGameMaterial({
     map: createLevelTwoFloorTexture(),
-    color: 0xa58d6c,
+    color: 0xe8ddc8,
     emissive: 0x24150b,
     emissiveIntensity: 0.12,
     roughness: 0.91,
@@ -536,18 +563,20 @@ export function createLevelTwoScene({ initialState = null } = {}) {
   });
   const wallMaterial = createGameMaterial({
     map: createLevelTwoWallTexture(),
-    color: 0xae997b,
+    color: 0xe6dccb,
     emissive: 0x1d1108,
     emissiveIntensity: 0.08,
     roughness: 0.91,
     metalness: 0.02,
     side: THREE.DoubleSide,
   });
+  const ceilingTexture = createLevelTwoCeilingTexture();
   const ceilingMaterial = createGameMaterial({
-    map: createLevelTwoCeilingTexture(),
-    color: 0x8d8068,
-    emissive: 0x21160c,
-    emissiveIntensity: 0.18,
+    map: ceilingTexture,
+    color: 0xd4c9b8,
+    emissiveMap: ceilingTexture,
+    emissive: 0xb99572,
+    emissiveIntensity: 0.42,
     roughness: 0.9,
     metalness: 0.05,
   });
@@ -599,8 +628,8 @@ export function createLevelTwoScene({ initialState = null } = {}) {
   const fillMesh = new THREE.Mesh(merged.fill, fillMaterial);
   scene.add(fillMesh);
 
-  scene.add(new THREE.HemisphereLight(0xffb778, 0x3a2818, 0.86));
-  const heatFill = new THREE.DirectionalLight(0xff9a55, 0.22);
+  scene.add(new THREE.HemisphereLight(0xffd0a3, 0x79543a, 1.16));
+  const heatFill = new THREE.DirectionalLight(0xffb477, 0.36);
   heatFill.position.set(-12, CEILING_Y - 0.4, 22);
   scene.add(heatFill);
   const playerAmbient = new THREE.PointLight(0xffd9a8, 0.1, 6.4, 1.9);
@@ -684,10 +713,15 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     initialState: pickupInitial["silence-liquid"] ?? null,
   });
 
+  // Valve cell (30, 14) is solid, so its centre (22, 2) is inside the wall: the
+  // prompt hung on blank concrete 2.36m away from the nearest standable spot.
+  // The cell's west edge is the wall face shared with corridor cell (29, 14),
+  // which leaves the spot 0.36m from the player and matches the wheel below.
+  const valveCenter = levelTwoCellCenter(30, 14);
   const interactions = [
     createInteractionSpot({
       id: "level-two-valve",
-      position: levelTwoCellCenter(30, 14),
+      position: { x: valveCenter.x - S / 2, z: valveCenter.z },
       inspectHeight: 1.45,
       inspectRadius: 0.72,
       responseKey: "levelTwoValveResponse",
@@ -700,7 +734,10 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     { id: "level-two-door-level-four", targetLevel: 4, targetLabel: "LEVEL 4", label: "OFFICE", kind: "door", position: levelTwoCellCenter(37, 26), rotation: Math.PI },
     { id: "level-two-hidden-hub-door", targetLevel: HUB_LEVEL, targetLabel: "THE HUB", kind: "door", hidden: true, position: levelTwoCellCenter(31, 9), rotation: Math.PI / 2 },
   ];
-  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
+  // Door colliders join the prop list that isWalkable / getFloorHeight /
+  // resolvePosition already walk. Every pickup above was placed before this
+  // call, so item candidate cells and saved positions are untouched.
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial, { colliders: propColliders });
   const hound = createHoundEntity(scene, {
     spawnPosition:
       chooseBacteriaSpawn({
@@ -723,7 +760,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
 
   let objectiveReached = Boolean(objectiveInitial.reached);
 
-  function isWalkable(x, z, radius = 0.36) {
+  function isWalkable(x, z, radius = 0.36, feetY = 0) {
     const corner = radius * 0.72;
     const samples = [
       [0, 0],
@@ -753,7 +790,17 @@ export function createLevelTwoScene({ initialState = null } = {}) {
       return false;
     }
 
-    return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
+    return !propColliders.some((collider) =>
+      colliderBlocksAtFeetHeight(collider, feetY) && circleIntersectsAabb(x, z, radius, collider),
+    );
+  }
+
+  function getFloorHeight(x, z, feetY) {
+    return getPlatformFloorHeight({ colliders: propColliders, x, z, feetY });
+  }
+
+  function resolvePosition(x, z, radius, feetY, maxCorrection) {
+    return resolvePlatformOverlap({ colliders: propColliders, x, z, radius, feetY, maxCorrection });
   }
 
   function inBoundsCheck(col, row) {
@@ -838,6 +885,10 @@ export function createLevelTwoScene({ initialState = null } = {}) {
 
   return {
     level: 2,
+    presentation: {
+      exposure: 0.94,
+      post: { aoIntensity: 0.56, vignette: 0.18 },
+    },
     levelLabel: "LEVEL 2",
     levelName: "PIPE DREAMS",
     get viewModelName() {
@@ -851,6 +902,8 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     spawn,
     targetPosition,
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     decorativeItemSpawns: [
       { id: "wire-spool", position: { ...levelTwoCellCenter(24, 16), y: 0.2 }, rotation: 1.1, tiltZ: 0.16 },
       { id: "rusted-key", position: { ...levelTwoCellCenter(14, 6), y: 0.08 }, rotation: -0.8, tiltX: 0.06 },

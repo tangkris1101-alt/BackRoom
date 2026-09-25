@@ -6,6 +6,7 @@ import {
   WALL_THICKNESS,
 } from "../constants.js";
 import { createWideSignTexture } from "../common/textures.js";
+import { buildDetailedTable, buildPaperStack, createTableAssetKit } from "./table-model.js";
 import { isInAnyZone } from "../common/layout.js";
 import {
   isOpenCell,
@@ -61,32 +62,26 @@ export const LEVEL_ZERO_ROOM_TABLE_CELLS = Object.freeze([
 export const LEVEL_ZERO_ROOM_TABLE_COUNT = LEVEL_ZERO_ROOM_TABLE_CELLS.length;
 
 export function addRoomTables(scene, cellCenter) {
-  const wood = new THREE.MeshStandardMaterial({ color: 0x4b3a28, roughness: 0.9 });
-  const metal = new THREE.MeshStandardMaterial({ color: 0x3b3b34, roughness: 0.74, metalness: 0.3 });
-  const paper = new THREE.MeshStandardMaterial({ color: 0xd8cba8, roughness: 0.96 });
-  const tabletopGeometry = new THREE.BoxGeometry(2.28, 0.12, 1.18);
-  const legGeometry = new THREE.BoxGeometry(0.09, 0.78, 0.09);
+  const kit = createTableAssetKit({ woodColor: 0x4b3a28, metalColor: 0x3b3b34 });
+  const tablePrototype = buildDetailedTable(kit, {
+    width: 2.28,
+    depth: 1.18,
+    topThickness: 0.12,
+    topCenterY: 0.82,
+    legX: 0.9,
+    legZ: 0.43,
+  });
   const colliders = [];
 
   LEVEL_ZERO_ROOM_TABLE_CELLS.forEach((table, index) => {
     const center = cellCenter(table.col, table.row);
-    const group = new THREE.Group();
+    const group = index === 0 ? tablePrototype : tablePrototype.clone();
     group.name = `level-zero-room-table-${index + 1}`;
     group.position.set(center.x, 0, center.z);
     group.rotation.y = table.rotation;
 
-    const tabletop = new THREE.Mesh(tabletopGeometry, wood);
-    tabletop.position.y = 0.82;
-    group.add(tabletop);
-    for (const x of [-0.9, 0.9]) {
-      for (const z of [-0.43, 0.43]) {
-        const leg = new THREE.Mesh(legGeometry, metal);
-        leg.position.set(x, 0.39, z);
-        group.add(leg);
-      }
-    }
-    const paperStack = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.025, 0.38), paper);
-    paperStack.position.set(index % 2 === 0 ? -0.34 : 0.34, 0.895, index % 3 === 0 ? -0.14 : 0.14);
+    const paperStack = buildPaperStack(kit, { width: 0.5, depth: 0.36, seed: 1013 + index * 97 });
+    paperStack.position.set(index % 2 === 0 ? -0.34 : 0.34, 0.8815, index % 3 === 0 ? -0.14 : 0.14);
     paperStack.rotation.y = index * 0.37;
     group.add(paperStack);
     scene.add(group);
@@ -210,9 +205,11 @@ export function createLights(scene, fixturePositions) {
   halos.instanceColor?.setUsage(THREE.DynamicDrawUsage);
   scene.add(trims, panels, halos);
 
+  // Keep the pool lights visible at zero intensity from the first frame.
+  // Toggling `visible` changes the scene's light count, which makes three.js
+  // recompile every lit shader program mid-game (the post-stand-up stall).
   for (let index = 0; index < activeLightCount; index += 1) {
     const light = new THREE.PointLight(0xfff9df, 0, 10, 2);
-    light.visible = false;
     scene.add(light);
     activeLights.push(light);
   }
@@ -227,8 +224,10 @@ export function createLights(scene, fixturePositions) {
     activeLights.forEach((light, index) => {
       const fixture = closestFixtures[index] ?? null;
       light.userData.fixture = fixture;
-      light.visible = fixture !== null;
-      if (!fixture) return;
+      if (!fixture) {
+        light.intensity = 0;
+        return;
+      }
       light.color.setHex(fixture.color);
       light.distance = fixture.range * 1.35;
       light.position.set(fixture.x, CEILING_Y - 0.24, fixture.z);
@@ -445,10 +444,36 @@ export function addMoodZones(scene) {
   BRIGHT_ZONES.forEach((zone) => addFloorTint(zone, glowMaterial, 0.022));
 }
 
+// Perpendicular wall boxes only meet at their inner edges at a convex corner,
+// leaving an empty half-thickness notch for the full wall height that reads as
+// a scooped dent near the floor. When both cells flanking a wall end are open
+// (the corner pokes into walkable space), stretch that end past the vertex so
+// the two walls cross and fill the notch. The extension stops 1mm short of the
+// partner's outer face so no coplanar faces z-fight.
+const WALL_CORNER_EXTENSION = WALL_THICKNESS / 2 - 0.001;
+
 export function collectWallTransforms() {
   const northSouth = [];
   const eastWest = [];
   const fixtureCandidates = [];
+
+  const wallSegment = (x, z, axis, extendNegative, extendPositive) => {
+    const negative = extendNegative ? WALL_CORNER_EXTENSION : 0;
+    const positive = extendPositive ? WALL_CORNER_EXTENSION : 0;
+    if (!negative && !positive) {
+      return new THREE.Vector3(x, WALL_HEIGHT / 2, z);
+    }
+    const stretch = (CELL_SIZE + negative + positive) / CELL_SIZE;
+    const shift = (positive - negative) / 2;
+    return {
+      position: new THREE.Vector3(
+        axis === "x" ? x + shift : x,
+        WALL_HEIGHT / 2,
+        axis === "z" ? z + shift : z,
+      ),
+      scale: new THREE.Vector3(axis === "x" ? stretch : 1, 1, axis === "z" ? stretch : 1),
+    };
+  };
 
   for (let row = 0; row < ROWS; row += 1) {
     for (let col = 0; col < COLS; col += 1) {
@@ -460,20 +485,40 @@ export function collectWallTransforms() {
       const openNeighborCount = countOpenNeighbors(col, row);
       const isSpacious = openNeighborCount >= 3;
       if (!isOpenCell(col, row - 1)) {
-        const position = new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2);
-        northSouth.push(position);
+        northSouth.push(wallSegment(
+          center.x,
+          center.z - CELL_SIZE / 2,
+          "x",
+          isOpenCell(col - 1, row) && isOpenCell(col - 1, row - 1),
+          isOpenCell(col + 1, row) && isOpenCell(col + 1, row - 1),
+        ));
       }
       if (!isOpenCell(col, row + 1)) {
-        const position = new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2);
-        northSouth.push(position);
+        northSouth.push(wallSegment(
+          center.x,
+          center.z + CELL_SIZE / 2,
+          "x",
+          isOpenCell(col - 1, row) && isOpenCell(col - 1, row + 1),
+          isOpenCell(col + 1, row) && isOpenCell(col + 1, row + 1),
+        ));
       }
       if (!isOpenCell(col - 1, row)) {
-        const position = new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z);
-        eastWest.push(position);
+        eastWest.push(wallSegment(
+          center.x - CELL_SIZE / 2,
+          center.z,
+          "z",
+          isOpenCell(col, row - 1) && isOpenCell(col - 1, row - 1),
+          isOpenCell(col, row + 1) && isOpenCell(col - 1, row + 1),
+        ));
       }
       if (!isOpenCell(col + 1, row)) {
-        const position = new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z);
-        eastWest.push(position);
+        eastWest.push(wallSegment(
+          center.x + CELL_SIZE / 2,
+          center.z,
+          "z",
+          isOpenCell(col, row - 1) && isOpenCell(col + 1, row - 1),
+          isOpenCell(col, row + 1) && isOpenCell(col + 1, row + 1),
+        ));
       }
 
       const roomFixtureGrid = col % 2 === 1 && row % 2 === 1;

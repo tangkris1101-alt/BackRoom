@@ -11,9 +11,9 @@ export function createLevelTwoGrimyTexture(seed, repeatX, repeatY, base, rust = 
       for (let y = 0; y < size; y += 1) {
         for (let x = 0; x < size; x += 1) {
           const i = (y * size + x) * 4;
-          const grime = (tileNoise(x, y, size, 5, seed * 0.021) - 0.5) * 36;
-          const soot = Math.max(0, tileNoise(x, y, size, 11, seed * 0.047) - 0.58) * -46;
-          const heat = Math.max(0, tileNoise(x, y, size, 8, seed * 0.091) - 0.68) * 28 * rust;
+          const grime = (tileNoise(x, y, size, 5, seed * 0.021) - 0.5) * 52;
+          const soot = Math.max(0, tileNoise(x, y, size, 11, seed * 0.047) - 0.58) * -68;
+          const heat = Math.max(0, tileNoise(x, y, size, 8, seed * 0.091) - 0.68) * 38 * rust;
           const fine = (random() - 0.5) * 10;
           data[i] = clampColor(base[0] + grime + soot + heat + fine);
           data[i + 1] = clampColor(base[1] + grime * 0.84 + soot * 0.72 + heat * 0.42 + fine);
@@ -26,17 +26,27 @@ export function createLevelTwoGrimyTexture(seed, repeatX, repeatY, base, rust = 
       const isWall = seed === 0x2f2003;
       const isCeiling = seed === 0x2f2004;
       if (isWall) {
-        context.globalAlpha = 0.24;
-        for (let i = 0; i < 18; i += 1) {
+        context.globalAlpha = 0.42;
+        for (let i = 0; i < 14; i += 1) {
           const x = random() * size;
           const y = random() * size * 0.38;
           const length = 70 + random() * 210;
           const width = 4 + random() * 12;
           const gradient = context.createLinearGradient(x, y, x, y + length);
-          gradient.addColorStop(0, "rgba(124,63,25,0.52)");
+          gradient.addColorStop(0, "rgba(112,47,18,0.78)");
           gradient.addColorStop(1, "rgba(124,63,25,0)");
           context.fillStyle = gradient;
           context.fillRect(x, y, width, length);
+        }
+        for (let i = 0; i < 12; i += 1) {
+          const x = random() * size;
+          const y = random() * size;
+          const radius = 24 + random() * 76;
+          const rust = context.createRadialGradient(x, y, 2, x, y, radius);
+          rust.addColorStop(0, "rgba(94,44,20,0.7)");
+          rust.addColorStop(1, "rgba(94,44,20,0)");
+          context.fillStyle = rust;
+          context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
         }
         context.globalAlpha = 1;
       } else if (isCeiling) {
@@ -65,9 +75,11 @@ export function createLevelTwoGrimyTexture(seed, repeatX, repeatY, base, rust = 
       }
       context.globalAlpha = 1;
 
-      for (let x = 0; x <= size; x += 86) {
-        context.fillStyle = "rgba(28,24,18,0.18)";
-        context.fillRect(x - 1, 0, 2, size);
+      if (isWall) {
+        context.fillStyle = "rgba(22,19,14,0.35)";
+        context.fillRect(size / 2 - 1, 0, 2, size);
+        context.fillStyle = "rgba(216,176,118,0.1)";
+        context.fillRect(size / 2 + 2, 0, 1, size);
       }
 
       drawSpeckles(context, size, 980, 0.1, "13,12,9", random);
@@ -83,7 +95,7 @@ export function createLevelTwoFloorTexture() {
   return makeTexture(
     512,
     (context, size) => {
-      context.fillStyle = "#3d3d30";
+      context.fillStyle = "#726d5c";
       context.fillRect(0, 0, size, size);
 
       for (let y = 0; y < size; y += 1) {
@@ -140,10 +152,46 @@ export function createLevelTwoFloorTexture() {
 }
 
 export function createLevelTwoWallTexture() {
-  return createLevelTwoGrimyTexture(0x2f2003, 2.4, 1.1, [84, 78, 61], 1.15);
+  return createLevelTwoGrimyTexture(0x2f2003, 1.2, 1.1, [130, 119, 96], 1.15);
 }
 
 export function createLevelTwoCeilingTexture() {
-  return createLevelTwoGrimyTexture(0x2f2004, 8, 6, [56, 54, 44], 0.8);
+  return createLevelTwoGrimyTexture(0x2f2004, 8, 6, [105, 100, 82], 0.8);
+}
+
+export function createLevelTwoMetalTexture(seed = 0x2f2005) {
+  const random = createSeededRandom(seed);
+  return makeTexture(
+    256,
+    (context, size) => {
+      const image = context.createImageData(size, size);
+      const data = image.data;
+      for (let y = 0; y < size; y += 1) {
+        for (let x = 0; x < size; x += 1) {
+          const i = (y * size + x) * 4;
+          const wear = (tileNoise(x, y, size, 8, seed * 0.031) - 0.5) * 56;
+          const rust = Math.max(0, tileNoise(x, y, size, 5, seed * 0.067) - 0.56) * 138;
+          const grain = (random() - 0.5) * 16;
+          data[i] = clampColor(116 + wear + rust + grain);
+          data[i + 1] = clampColor(110 + wear * 0.78 + rust * 0.36 + grain);
+          data[i + 2] = clampColor(96 + wear * 0.6 + rust * 0.12 + grain);
+          data[i + 3] = 255;
+        }
+      }
+      context.putImageData(image, 0, 0);
+      context.strokeStyle = "rgba(24,21,17,0.22)";
+      context.lineWidth = 1;
+      for (let i = 0; i < 28; i += 1) {
+        const x = random() * size;
+        const y = random() * size;
+        context.beginPath();
+        context.moveTo(x, y);
+        context.lineTo(x + (random() - 0.5) * 11, y + 15 + random() * 70);
+        context.stroke();
+      }
+    },
+    1,
+    1,
+  );
 }
 

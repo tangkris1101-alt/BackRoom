@@ -1,4 +1,4 @@
-import { CELL_SIZE } from "../constants.js";
+import { CELL_SIZE, WALL_THICKNESS } from "../constants.js";
 
 const LEVEL_THREE_LEGACY_COLS = 39;
 const LEVEL_THREE_LEGACY_ROWS = 23;
@@ -185,15 +185,83 @@ export function countLevelThreeOpenNeighbors(col, row) {
   return count;
 }
 
+// Wall panels are CELL_SIZE-wide boxes of WALL_THICKNESS centred on the cell
+// border, so a wall's inner face lies CELL_SIZE / 2 - WALL_THICKNESS / 2
+// (= 1.890) from the cell centre. Stopping at WALL_THICKNESS * 0.7 (= 1.846)
+// instead buries the mounting plane 0.044 into that face: a thin prop
+// (0.12 deep) then sits 0.016 inside the wall, so it can never show a gap
+// against the brick while its front still stands clear. Level two uses the
+// same formula.
+const LEVEL_THREE_MOUNT_OFFSET = CELL_SIZE / 2 - WALL_THICKNESS * 0.7;
+
+// Fallback search budget, in cells. Expanding the ring-R cells checks walls
+// R + 1 cells out, so rings 0..RADIUS-1 cover every wall within RADIUS cells.
+// For reference, no prop on the current map needs more than one step.
+const LEVEL_THREE_MOUNT_SEARCH_RADIUS = 3;
+
+// One entry per cardinal wall, tested north -> south -> west -> east.
+// dCol/dRow point at the wall cell, dx/dz move the prop from the cell centre
+// to that wall, and rotation is the yaw that leaves the prop's local +Z (the
+// face a viewer sees) looking back into the room: N = 0, S = PI, W = PI/2,
+// E = -PI/2.
+const LEVEL_THREE_MOUNT_WALLS = [
+  { dCol: 0, dRow: -1, dx: 0, dz: -LEVEL_THREE_MOUNT_OFFSET, rotation: 0 },
+  { dCol: 0, dRow: 1, dx: 0, dz: LEVEL_THREE_MOUNT_OFFSET, rotation: Math.PI },
+  { dCol: -1, dRow: 0, dx: -LEVEL_THREE_MOUNT_OFFSET, dz: 0, rotation: Math.PI / 2 },
+  { dCol: 1, dRow: 0, dx: LEVEL_THREE_MOUNT_OFFSET, dz: 0, rotation: -Math.PI / 2 },
+];
+
+// Which way a wall prop faces is decided by the cells around it, never by the
+// point that was passed in. Callers hand over a cell centre (props.js mounts
+// every instance from levelThreeCellCenter), so an offset along the passed-in
+// point would be zero: the old Math.sign(0) * 1.68 put all 13 props in the
+// middle of their cell or room, including five solid switchgear cabinets.
+function findLevelThreeMountWall(col, row) {
+  for (const wall of LEVEL_THREE_MOUNT_WALLS) {
+    // Fence cells (LEVEL_THREE_BAR_POSITIONS) are stored as "#", so they rank
+    // as walls here too — correct, since they block the cell just like one.
+    if (!isLevelThreeOpenCell(col + wall.dCol, row + wall.dRow)) {
+      return { col, row, ...wall };
+    }
+  }
+
+  // All four neighbours are open (a prop dropped in the middle of a room).
+  // Walk outward over open cells, breadth first so the first hit is the
+  // nearest wall, and mount on the last open cell before that wall: the prop
+  // lands flush against real geometry instead of floating on an interior cell
+  // border.
+  const queue = [{ col, row, ring: 0 }];
+  const visited = new Set([`${col},${row}`]);
+  while (queue.length > 0) {
+    const cell = queue.shift();
+    if (cell.ring >= LEVEL_THREE_MOUNT_SEARCH_RADIUS) continue;
+    for (const wall of LEVEL_THREE_MOUNT_WALLS) {
+      const nextCol = cell.col + wall.dCol;
+      const nextRow = cell.row + wall.dRow;
+      if (!isLevelThreeOpenCell(nextCol, nextRow)) {
+        return { col: cell.col, row: cell.row, ...wall };
+      }
+      const key = `${nextCol},${nextRow}`;
+      if (!visited.has(key)) {
+        visited.add(key);
+        queue.push({ col: nextCol, row: nextRow, ring: cell.ring + 1 });
+      }
+    }
+  }
+
+  // No wall inside the search radius. Kept deterministic on purpose: face
+  // north, like level two's fallback. Unreached on the current map.
+  return { col, row, ...LEVEL_THREE_MOUNT_WALLS[0] };
+}
+
 export function getLevelThreeTargetMount({ x, z }) {
   const col = Math.round((x - LEVEL_THREE_ORIGIN_X - CELL_SIZE / 2) / CELL_SIZE);
   const row = Math.round((z - LEVEL_THREE_ORIGIN_Z - CELL_SIZE / 2) / CELL_SIZE);
-  const center = levelThreeCellCenter(col, row);
-  const offset = CELL_SIZE * 0.42;
-  const dx = x - center.x;
-  const dz = z - center.z;
-  if (Math.abs(dx) > Math.abs(dz)) {
-    return { x: center.x + Math.sign(dx) * offset, z: center.z, rotation: dx > 0 ? -Math.PI / 2 : Math.PI / 2 };
-  }
-  return { x: center.x, z: center.z + Math.sign(dz) * offset, rotation: dz > 0 ? Math.PI : 0 };
+  const wall = findLevelThreeMountWall(col, row);
+  const center = levelThreeCellCenter(wall.col, wall.row);
+  return {
+    x: center.x + wall.dx,
+    z: center.z + wall.dz,
+    rotation: wall.rotation,
+  };
 }

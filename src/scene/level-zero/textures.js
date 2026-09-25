@@ -208,54 +208,11 @@ export function createLevelZeroWallpaperDetailMaps() {
 }
 
 // The Level 0 floor is 180x156 metres (45x39 cells x CELL_SIZE 4). These
-// repeats make one 512px tile cover ~3x3 metres (~170px/m), so fibre strokes,
-// footprints and pile rows land at real carpet scale instead of being
-// stretched into invisible blurs.
+// repeats make one 512px tile cover ~3x3 metres (~170px/m), so fibre strokes
+// and pile rows land at real carpet scale instead of being stretched into
+// invisible blurs.
 const CARPET_REPEAT_X = 60;
 const CARPET_REPEAT_Y = 52;
-
-// Deterministic traffic-wear layout shared by the colour map and the detail
-// maps so compaction, footprints and roughness changes line up exactly.
-function createCarpetWearLayout() {
-  const random = createSeededRandom(0x5a17c9);
-  const lanes = [];
-  const footprints = [];
-  for (let lane = 0; lane < 3; lane += 1) {
-    const pads = [];
-    let x = random();
-    let y = random();
-    let angle = random() * Math.PI * 2;
-    const padCount = 9 + Math.floor(random() * 4);
-    for (let i = 0; i < padCount; i += 1) {
-      angle += (random() - 0.5) * 0.7;
-      x += Math.cos(angle) * (0.06 + random() * 0.05);
-      y += Math.sin(angle) * (0.06 + random() * 0.05);
-      const pad = {
-        x,
-        y,
-        rx: 0.05 + random() * 0.045,
-        ry: 0.035 + random() * 0.03,
-        angle,
-        strength: 0.6 + random() * 0.4,
-      };
-      if (i > 0 && random() > 0.6) {
-        const prev = pads[i - 1];
-        const side = (i % 2 === 0 ? 1 : -1) * 0.018;
-        footprints.push({
-          x: (prev.x + pad.x) / 2 + Math.cos(angle + Math.PI / 2) * side,
-          y: (prev.y + pad.y) / 2 + Math.sin(angle + Math.PI / 2) * side,
-          rx: 0.014 + random() * 0.006,
-          ry: 0.038 + random() * 0.012,
-          angle,
-          strength: 0.5 + random() * 0.5,
-        });
-      }
-      pads.push(pad);
-    }
-    lanes.push(pads);
-  }
-  return { lanes, footprints };
-}
 
 // Draws a soft-edged ellipse. Spots may sit outside the 0..1 tile, so the
 // ellipse is repeated at neighbouring tile offsets to keep the wrap seamless.
@@ -278,20 +235,8 @@ function drawSoftEllipse(context, size, spot, inner, outer) {
   }
 }
 
-function drawCarpetWear(context, size, layout, laneColor, printColor) {
-  for (const lane of layout.lanes) {
-    for (const pad of lane) {
-      drawSoftEllipse(context, size, pad, laneColor(pad.strength), laneColor(0));
-    }
-  }
-  for (const print of layout.footprints) {
-    drawSoftEllipse(context, size, print, printColor(print.strength), printColor(0));
-  }
-}
-
 export function createLevelZeroCarpetTexture() {
   const random = createSeededRandom(0xca9f04);
-  const layout = createCarpetWearLayout();
   return makeTexture(
     512,
     (context, size) => {
@@ -303,12 +248,21 @@ export function createLevelZeroCarpetTexture() {
           const i = (y * size + x) * 4;
           const u = x / size;
           const v = y / size;
-          const broad = (tileNoise(x, y, size, 4, 4.1) - 0.5) * 12;
-          const mid = (tileNoise(x, y, size, 11, 8.7) - 0.5) * 7;
+          // Low-frequency content stays minimal here — the macro overlay owns
+          // all broad variation; per-tile lows would repeat every 3m.
+          const broad =
+            (tileNoise(x, y, size, 4, 4.1) - 0.5) * 5 +
+            (tileNoise(x, y, size, 9, 6.8) - 0.5) * 3.5;
+          const mid = (tileNoise(x, y, size, 11, 8.7) - 0.5) * 9;
           const fine = (random() - 0.5) * 6;
+          // Phase-distort the pile stripes with fine-scale tileable noise and
+          // keep them barely-there: any stronger and the wavy band shapes
+          // repeat identically every tile and the eye catches the rhythm.
+          const wobbleA = tileNoise(x, y, size, 9, 9.4) * 4.5;
+          const wobbleB = tileNoise(x, y, size, 11, 3.8) * 3.5;
           const pile =
-            Math.sin(Math.PI * 2 * (u * 18 + v * 2)) * 0.55 +
-            Math.sin(Math.PI * 2 * (u * 7 - v * 3)) * 0.45;
+            Math.sin(Math.PI * 2 * (u * 18 + v * 2 + wobbleA)) * 0.12 +
+            Math.sin(Math.PI * 2 * (u * 7 - v * 3 + wobbleB)) * 0.1;
           const wear = broad + mid + fine + pile;
           data[i] = clampColor(185 + wear);
           data[i + 1] = clampColor(165 + wear * 0.78);
@@ -319,7 +273,8 @@ export function createLevelZeroCarpetTexture() {
       context.putImageData(image, 0, 0);
 
       // Broad, faint tonal drift so large areas never read as a flat fill.
-      for (let i = 0; i < 10; i += 1) {
+      // Kept few and weak — identical blobs every 3m read as copies.
+      for (let i = 0; i < 6; i += 1) {
         const pale = random() < 0.5;
         const spot = {
           x: random(),
@@ -333,24 +288,18 @@ export function createLevelZeroCarpetTexture() {
           size,
           spot,
           pale
-            ? `rgba(228,210,152,${0.025 + random() * 0.015})`
-            : `rgba(118,106,72,${0.02 + random() * 0.015})`,
+            ? `rgba(228,210,152,${0.018 + random() * 0.012})`
+            : `rgba(118,106,72,${0.015 + random() * 0.012})`,
           "rgba(0,0,0,0)",
         );
       }
 
-      // Trod-down traffic lanes and faint footprints, kept deliberately weak.
-      drawCarpetWear(
-        context,
-        size,
-        layout,
-        (strength) => `rgba(94,80,46,${0.07 * strength})`,
-        (strength) => `rgba(88,74,44,${0.08 * strength})`,
-      );
-
       context.globalAlpha = 0.028;
       for (let y = 0; y < size; y += 5) {
-        const offset = Math.sin((y / size) * Math.PI * 2 * 4) * 0.8;
+        const row = y / 5;
+        const offset =
+          Math.sin((y / size) * Math.PI * 2 * 4) * (0.4 + tileHash(row, 0, 3.1) * 1.5) +
+          (tileHash(row, 1, 7.7) - 0.5) * 1.2;
         context.strokeStyle = y % 10 === 0 ? "#8b774e" : "#ddc48c";
         context.lineWidth = 0.55;
         context.beginPath();
@@ -388,10 +337,10 @@ export function createLevelZeroCarpetTexture() {
   );
 }
 
-// Greyscale data maps for the carpet. Both stay linear (NoColorSpace); the
-// wear layout matches the colour map so trod-down spots align across maps.
+// Greyscale data maps for the carpet. Both stay linear (NoColorSpace). Wear
+// character lives in the map-scale macro overlay; the per-tile maps carry
+// only non-directional grain so nothing repeats visibly every 3m.
 export function createLevelZeroCarpetDetailMaps() {
-  const layout = createCarpetWearLayout();
   const bumpRandom = createSeededRandom(0xca9f04);
   const bumpMap = makeTexture(
     512,
@@ -406,9 +355,13 @@ export function createLevelZeroCarpetDetailMaps() {
           const v = y / size;
           const mid = (tileNoise(x, y, size, 11, 8.7) - 0.5) * 16;
           const fine = (bumpRandom() - 0.5) * 44;
+          // Same wobbled pile rows as the colour map, so the emboss does not
+          // shade long straight bands even when the albedo stays subtle.
+          const wobbleA = tileNoise(x, y, size, 9, 9.4) * 4.5;
+          const wobbleB = tileNoise(x, y, size, 11, 3.8) * 3.5;
           const pile =
-            Math.sin(Math.PI * 2 * (u * 18 + v * 2)) * 6 +
-            Math.sin(Math.PI * 2 * (u * 7 - v * 3)) * 4;
+            Math.sin(Math.PI * 2 * (u * 18 + v * 2 + wobbleA)) * 2 +
+            Math.sin(Math.PI * 2 * (u * 7 - v * 3 + wobbleB)) * 1.6;
           const height = clampColor(128 + mid + fine + pile);
           data[i] = height;
           data[i + 1] = height;
@@ -417,15 +370,6 @@ export function createLevelZeroCarpetDetailMaps() {
         }
       }
       context.putImageData(image, 0, 0);
-
-      // Compacted pile sits slightly lower.
-      drawCarpetWear(
-        context,
-        size,
-        layout,
-        (strength) => `rgba(70,70,70,${0.28 * strength})`,
-        (strength) => `rgba(60,60,60,${0.34 * strength})`,
-      );
     },
     CARPET_REPEAT_X,
     CARPET_REPEAT_Y,
@@ -452,15 +396,6 @@ export function createLevelZeroCarpetDetailMaps() {
         }
       }
       context.putImageData(image, 0, 0);
-
-      // Trod-down fibres are a touch smoother.
-      drawCarpetWear(
-        context,
-        size,
-        layout,
-        (strength) => `rgba(170,170,170,${0.3 * strength})`,
-        (strength) => `rgba(160,160,160,${0.36 * strength})`,
-      );
     },
     CARPET_REPEAT_X,
     CARPET_REPEAT_Y,
@@ -468,6 +403,96 @@ export function createLevelZeroCarpetDetailMaps() {
   roughnessMap.colorSpace = THREE.NoColorSpace;
 
   return { bumpMap, roughnessMap };
+}
+
+// Map-scale overlay drawn once over the whole floor (no repeat): broad tonal
+// drift, stains and long meandering traffic trails at 10-100m scale. The 3m
+// carpet tile underneath repeats, so this non-repeating layer is what stops
+// the eye from catching identical copies side by side.
+export function createLevelZeroCarpetMacroTexture() {
+  const random = createSeededRandom(0x9a4c01);
+  const texture = makeTexture(
+    1024,
+    (context, size) => {
+      context.clearRect(0, 0, size, size);
+
+      // Broad tonal drift, tens of metres across. This layer now carries most
+      // of the floor's low-frequency variation, so it stays fairly rich.
+      for (let i = 0; i < 58; i += 1) {
+        const pale = random() < 0.45;
+        drawSoftEllipse(
+          context,
+          size,
+          {
+            x: random(),
+            y: random(),
+            rx: 0.05 + random() * 0.16,
+            ry: 0.05 + random() * 0.16,
+            angle: random() * Math.PI,
+          },
+          pale
+            ? `rgba(232,214,156,${0.04 + random() * 0.03})`
+            : `rgba(96,82,48,${0.035 + random() * 0.03})`,
+          "rgba(0,0,0,0)",
+        );
+      }
+
+      // Irregular stains: tight clusters of small soft ellipses.
+      for (let stain = 0; stain < 9; stain += 1) {
+        const cx = random();
+        const cy = random();
+        const blotches = 4 + Math.floor(random() * 4);
+        const dark = random() < 0.7;
+        for (let i = 0; i < blotches; i += 1) {
+          drawSoftEllipse(
+            context,
+            size,
+            {
+              x: cx + (random() - 0.5) * 0.03,
+              y: cy + (random() - 0.5) * 0.03,
+              rx: 0.008 + random() * 0.02,
+              ry: 0.006 + random() * 0.016,
+              angle: random() * Math.PI,
+            },
+            dark
+              ? `rgba(80,64,34,${0.05 + random() * 0.04})`
+              : `rgba(236,220,168,${0.045 + random() * 0.035})`,
+            "rgba(0,0,0,0)",
+          );
+        }
+      }
+
+      // Worn traffic areas: broad, very soft patches instead of thin lines.
+      // Long thin trails read as drawn streaks on the floor; blotchy patches
+      // read as decades of use.
+      for (let patch = 0; patch < 9; patch += 1) {
+        const cx = random();
+        const cy = random();
+        const angle = random() * Math.PI;
+        const pieces = 5 + Math.floor(random() * 4);
+        for (let i = 0; i < pieces; i += 1) {
+          drawSoftEllipse(
+            context,
+            size,
+            {
+              x: cx + (random() - 0.5) * 0.09,
+              y: cy + (random() - 0.5) * 0.09,
+              rx: 0.05 + random() * 0.07,
+              ry: 0.04 + random() * 0.05,
+              angle,
+            },
+            `rgba(90,76,44,${0.03 + random() * 0.025})`,
+            "rgba(0,0,0,0)",
+          );
+        }
+      }
+    },
+    1,
+    1,
+  );
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  return texture;
 }
 
 export function createLevelZeroCeilingTexture() {

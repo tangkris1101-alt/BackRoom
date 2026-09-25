@@ -7,12 +7,12 @@ export const ITEM_TEXT = {
     },
     "almond-water": {
       name: "杏仁水",
-      effect: "+50 体力上限 / 持续回血",
+      effect: "+100 体力上限 / 持续回血",
       action: "F / 按钮拾取并饮用",
     },
     "super-almond-water": {
       name: "超级杏仁水",
-      effect: "上限 250 / 恢复 x2 / 移速 x1.5 / 强力持续回血",
+      effect: "上限 500 / 恢复 x2 / 移速 x1.5 / 强力持续回血",
       action: "F / 按钮拾取并饮用",
     },
     flashlight: {
@@ -44,12 +44,12 @@ export const ITEM_TEXT = {
     },
     "almond-water": {
       name: "ALMOND WATER",
-      effect: "+50 STAMINA CAP / HEALTH REGEN",
+      effect: "+100 STAMINA CAP / HEALTH REGEN",
       action: "F / BUTTON PICK UP",
     },
     "super-almond-water": {
       name: "SUPER ALMOND WATER",
-      effect: "250 CAP / RECOVERY x2 / SPEED x1.5 / STRONG HEALTH REGEN",
+      effect: "500 CAP / RECOVERY x2 / SPEED x1.5 / STRONG HEALTH REGEN",
       action: "F / BUTTON DRINK",
     },
     flashlight: {
@@ -563,11 +563,11 @@ export const BUFF_TEXT = {
   "zh-CN": {
     "almond-water": {
       name: "杏仁水",
-      detail: "+50 体力上限",
+      detail: "+100 体力上限",
     },
     "super-almond-water": {
       name: "超级杏仁水",
-      detail: "体力上限 250 · 恢复 x2",
+      detail: "体力上限 500 · 恢复 x2",
     },
     "health-regen": {
       name: "生命恢复",
@@ -581,11 +581,11 @@ export const BUFF_TEXT = {
   en: {
     "almond-water": {
       name: "ALMOND WATER",
-      detail: "+50 STAMINA CAP",
+      detail: "+100 STAMINA CAP",
     },
     "super-almond-water": {
       name: "SUPER ALMOND WATER",
-      detail: "250 STAMINA CAP · RECOVERY x2",
+      detail: "500 STAMINA CAP · RECOVERY x2",
     },
     "health-regen": {
       name: "HEALTH REGEN",

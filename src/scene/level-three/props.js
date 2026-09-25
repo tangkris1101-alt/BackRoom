@@ -4,7 +4,7 @@ import {
   CEILING_Y,
 } from "../constants.js";
 import { createWideSignTexture } from "../common/textures.js";
-import { levelThreeCellCenter, getLevelThreeTargetMount, LEVEL_THREE_BAR_POSITIONS } from "./layout.js";
+import { levelThreeCellCenter, getLevelThreeTargetMount, isLevelThreeOpenCell, LEVEL_THREE_BAR_POSITIONS } from "./layout.js";
 
 export function addLevelThreeElectricalDetails(scene) {
   const colliders = [];
@@ -37,13 +37,31 @@ export function addLevelThreeElectricalDetails(scene) {
     { col: 11, row: 17 },
     { col: 30, row: 19 },
   ];
+  const panelGeometry = new THREE.BoxGeometry(1.05, 1.18, 0.12);
   panels.forEach((location, index) => {
     const center = levelThreeCellCenter(location.col, location.row);
     const mount = getLevelThreeTargetMount(center);
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.18, 0.12), panelMaterial);
+    const panel = new THREE.Mesh(panelGeometry, panelMaterial);
     panel.position.set(mount.x, 1.25, mount.z);
     panel.rotation.y = mount.rotation;
     scene.add(panel);
+
+    // The cabinet is a solid 1.05 x 0.12 m steel plate (top at 1.84 m) standing
+    // flush against a wall, so the collider has to follow the mount: unrotated
+    // it blocks a 1.05 x 0.12 slab, and on a west/east wall the sin/cos swap
+    // turns it 0.12 x 1.05. The wall itself is already blocked by the open-cell
+    // test in isWalkable, so the plate only has to cover the 1.846 m it stands
+    // off the cell centre.
+    const cos = Math.abs(Math.cos(mount.rotation));
+    const sin = Math.abs(Math.sin(mount.rotation));
+    const { width, height, depth } = panelGeometry.parameters;
+    colliders.push({
+      minX: panel.position.x - (cos * width + sin * depth) / 2,
+      maxX: panel.position.x + (cos * width + sin * depth) / 2,
+      minZ: panel.position.z - (sin * width + cos * depth) / 2,
+      maxZ: panel.position.z + (sin * width + cos * depth) / 2,
+      topY: panel.position.y + height / 2,
+    });
 
     for (let i = 0; i < 4; i += 1) {
       const switchMesh = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.04, 0.035), warningMaterial);
@@ -117,35 +135,6 @@ export function addLevelThreeElectricalDetails(scene) {
   return colliders;
 }
 
-export function addLevelThreeBreakerDoor(scene, position) {
-  const mount = getLevelThreeTargetMount(position);
-  const doorMaterial = new THREE.MeshStandardMaterial({
-    color: 0x171b18,
-    emissive: 0x06120d,
-    emissiveIntensity: 0.2,
-    roughness: 0.62,
-    metalness: 0.34,
-  });
-  const door = new THREE.Mesh(new THREE.BoxGeometry(1.55, 2.1, 0.14), doorMaterial);
-  door.position.set(mount.x, 1.06, mount.z);
-  door.rotation.y = mount.rotation;
-  scene.add(door);
-
-  const sign = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.65, 0.45),
-    new THREE.MeshStandardMaterial({
-      map: createWideSignTexture("BREAKER EXIT", "#1a1508", "#ffe77a"),
-      emissive: 0x604208,
-      emissiveIntensity: 0.36,
-      roughness: 0.56,
-      side: THREE.DoubleSide,
-    }),
-  );
-  sign.position.set(mount.x, 2.42, mount.z);
-  sign.rotation.y = mount.rotation;
-  scene.add(sign);
-}
-
 export function addLevelThreeBlackSludgePipes(scene) {
   const sludgeMaterial = new THREE.MeshStandardMaterial({
     color: 0x080705,
@@ -198,7 +187,8 @@ export function addLevelThreeBlackSludgePipes(scene) {
 // Renders the indestructible bars at LEVEL_THREE_BAR_POSITIONS. Each bar
 // is a small gate of 5 vertical metal rods welded between two horizontal
 // beams — visually heavy, clearly impassable, and the only way through
-// is to find another route.
+// is to find another route. The gate is yawed to span the corridor it
+// blocks (see the per-cell comment below).
 export function addLevelThreeIndestructibleBars(scene) {
   const barMaterial = new THREE.MeshStandardMaterial({
     color: 0x0a0908,
@@ -220,6 +210,15 @@ export function addLevelThreeIndestructibleBars(scene) {
     const barCount = 5;
     const spacing = CELL_SIZE * 0.18;
     const totalWidth = (barCount - 1) * spacing;
+
+    // The rods are laid out along the group's local X, and a gate only blocks
+    // a corridor if it spans the corridor's cross-section. The three row-7
+    // bars sit in east-west corridors (open cells to their west and east), so
+    // they need a quarter turn; (28,14) sits in the north-south connector and
+    // already runs across it. Cells are read from the map rather than
+    // hard-coded so a moved bar keeps blocking the right way.
+    const spansEastWestCorridor =
+      isLevelThreeOpenCell(col - 1, row) || isLevelThreeOpenCell(col + 1, row);
 
     const group = new THREE.Group();
     for (let i = 0; i < barCount; i += 1) {
@@ -244,6 +243,7 @@ export function addLevelThreeIndestructibleBars(scene) {
     group.add(bottomBeam);
     scene.add(group);
     group.position.set(center.x, 0, center.z);
+    group.rotation.y = spansEastWestCorridor ? Math.PI / 2 : 0;
   });
 }
 
@@ -293,13 +293,14 @@ export function addLevelThreeSanctumStatue(scene) {
   );
   head.position.y = 1.74;
   group.add(head);
+  const wingGeometry = new THREE.BoxGeometry(0.6, 0.9, 0.05);
+  const wingTilt = 0.5;
+  const wingOffsetX = 0.32;
+  const wingCenterY = 1.4;
   [-1, 1].forEach((side) => {
-    const wing = new THREE.Mesh(
-      new THREE.BoxGeometry(0.6, 0.9, 0.05),
-      stoneMaterial,
-    );
-    wing.position.set(side * 0.32, 1.4, 0);
-    wing.rotation.z = side * 0.5;
+    const wing = new THREE.Mesh(wingGeometry, stoneMaterial);
+    wing.position.set(side * wingOffsetX, wingCenterY, 0);
+    wing.rotation.z = side * wingTilt;
     group.add(wing);
   });
   [-1, 1].forEach((side) => {
@@ -316,11 +317,23 @@ export function addLevelThreeSanctumStatue(scene) {
   const halo = new THREE.PointLight(0xffd68a, 0.6, 3.8, 2);
   halo.position.set(center.x, 1.7, center.z);
   scene.add(halo);
+  // The pedestal is only 0.8 m wide, but the tilted wings reach 0.799 m off
+  // centre and 1.939 m up — the old +/-0.4 box let the player stand inside the
+  // wings. Z keeps the previous 0.4 m half-depth (body r 0.32, glyph at 0.41).
+  const wingHalfX =
+    (Math.cos(wingTilt) * wingGeometry.parameters.width +
+      Math.sin(wingTilt) * wingGeometry.parameters.height) /
+    2;
+  const wingHalfY =
+    (Math.cos(wingTilt) * wingGeometry.parameters.height +
+      Math.sin(wingTilt) * wingGeometry.parameters.width) /
+    2;
   return [{
-    minX: center.x - 0.4,
-    maxX: center.x + 0.4,
+    minX: center.x - (wingOffsetX + wingHalfX),
+    maxX: center.x + (wingOffsetX + wingHalfX),
     minZ: center.z - 0.4,
     maxZ: center.z + 0.4,
+    topY: wingCenterY + wingHalfY,
   }];
 }
 
@@ -456,19 +469,21 @@ export function addLevelThreePurpificationSpots(scene) {
   ];
   spots.forEach(({ col, row }) => {
     const center = levelThreeCellCenter(col, row);
+    const mount = getLevelThreeTargetMount(center);
 
     // Floor stain — small dark-purple patch bleeding out from under the
-    // wall spot.
+    // wall spot, so it is placed from the mount rather than the cell centre:
+    // the mount sits near a wall face, and for the wall-less spot it can be a
+    // whole cell off the centre.
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(0.7, 0.55),
       floorMaterial,
     );
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(center.x, 0.045, center.z);
+    floor.position.set(mount.x, 0.045, mount.z);
     scene.add(floor);
 
     // Wall patch — the glowing purple energy on the wall.
-    const mount = getLevelThreeTargetMount(center);
     const wall = new THREE.Mesh(
       new THREE.PlaneGeometry(0.55, 0.85),
       purpleMaterial,
@@ -489,6 +504,7 @@ export function addLevelThreePurpificationSpots(scene) {
 // confined to a specific level" — we render two static conveyor belts
 // plus a handful of scattered cardboard boxes to evoke that factory feel.
 export function addLevelThreeAssemblyLineEquipment(scene) {
+  const colliders = [];
   const beltMaterial = new THREE.MeshStandardMaterial({
     color: 0x1a1815,
     emissive: 0x050403,
@@ -525,12 +541,22 @@ export function addLevelThreeAssemblyLineEquipment(scene) {
   ];
   belts.forEach((belt) => {
     const center = levelThreeCellCenter(belt.col, belt.row);
-    const beltMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(belt.length, 0.08, 0.7),
-      beltMaterial,
-    );
+    const beltGeometry = new THREE.BoxGeometry(belt.length, 0.08, 0.7);
+    const beltMesh = new THREE.Mesh(beltGeometry, beltMaterial);
     beltMesh.position.set(center.x, beltCenterY, center.z);
     scene.add(beltMesh);
+
+    // Solid belt: the west 6 m of the model is buried inside the room's solid
+    // wall, so the collider is clipped to the Assembly Line floor (col 4,
+    // x = -62) instead of extending into unwalkable cells. Top is 0.59 m.
+    const { width: beltWidth, height: beltHeight, depth: beltDepth } = beltGeometry.parameters;
+    colliders.push({
+      minX: -62,
+      maxX: beltMesh.position.x + beltWidth / 2,
+      minZ: beltMesh.position.z - beltDepth / 2,
+      maxZ: beltMesh.position.z + beltDepth / 2,
+      topY: beltMesh.position.y + beltHeight / 2,
+    });
 
     const rollerPositions = [-1, 1];
     rollerPositions.forEach((sign) => {
@@ -557,7 +583,7 @@ export function addLevelThreeAssemblyLineEquipment(scene) {
     scene.add(label);
   });
 
-  // 5 scattered boxes (no collision — purely decorative)
+  // 5 scattered boxes — solid crates the player can step onto.
   const boxes = [
     { col: 8, row: 13, w: 0.55, h: 0.4, d: 0.5, x: 0.3, z: 0.2, rot: 0.4 },
     { col: 11, row: 15, w: 0.7, h: 0.45, d: 0.6, x: -0.4, z: 0.35, rot: -0.3 },
@@ -574,6 +600,18 @@ export function addLevelThreeAssemblyLineEquipment(scene) {
     boxMesh.position.set(center.x + box.x, box.h / 2, center.z + box.z);
     boxMesh.rotation.y = box.rot;
     scene.add(boxMesh);
+
+    // Every crate is rotated, so use the rotated footprint as the collider.
+    // They are knee-high (0.30-0.50 m), i.e. steps the player can climb.
+    const cos = Math.abs(Math.cos(box.rot));
+    const sin = Math.abs(Math.sin(box.rot));
+    colliders.push({
+      minX: boxMesh.position.x - (cos * box.w + sin * box.d) / 2,
+      maxX: boxMesh.position.x + (cos * box.w + sin * box.d) / 2,
+      minZ: boxMesh.position.z - (sin * box.w + cos * box.d) / 2,
+      maxZ: boxMesh.position.z + (sin * box.w + cos * box.d) / 2,
+      topY: boxMesh.position.y + box.h / 2,
+    });
   });
 
   // 2 almond-water style bottles (using box, simple visual)
@@ -591,6 +629,8 @@ export function addLevelThreeAssemblyLineEquipment(scene) {
     bottleMesh.rotation.y = Math.random() * Math.PI;
     scene.add(bottleMesh);
   });
+
+  return colliders;
 }
 
 // New prop: Boiler Room pipes. Wiki says boiler rooms are "the source
@@ -622,18 +662,30 @@ export function addLevelThreeBoilerRoomPipe(scene) {
 
   // Boiler drum in the NE corner of the Boiler Room.
   const drumCenter = levelThreeCellCenter(32, 18);
-  const drum = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.55, 0.55, 1.4, 14),
-    drumMaterial,
-  );
+  const drumGeometry = new THREE.CylinderGeometry(0.55, 0.55, 1.4, 14);
+  const drum = new THREE.Mesh(drumGeometry, drumMaterial);
   drum.position.set(drumCenter.x, 0.7, drumCenter.z);
   scene.add(drum);
-  const drumCap = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.42, 0.55, 0.18, 14),
-    drumMaterial,
-  );
+  const drumCapGeometry = new THREE.CylinderGeometry(0.42, 0.55, 0.18, 14);
+  const drumCap = new THREE.Mesh(drumCapGeometry, drumMaterial);
   drumCap.position.set(drumCenter.x, 1.49, drumCenter.z);
   scene.add(drumCap);
+
+  // Solid drum (shell r 0.55, cap top at 1.58 m) plus the valve wheel 0.62 m
+  // out on -X. The wheel is rotated into the Y-Z plane, so only its tube
+  // radius adds to the x footprint. The drum is far taller than the jump apex,
+  // so the topY below records the model top rather than a reachable step.
+  const drumRadius = drumGeometry.parameters.radiusBottom;
+  const valveX = drumCenter.x - 0.62;
+  const valveGeometry = new THREE.TorusGeometry(0.18, 0.024, 8, 20);
+  const valveReach = drumCenter.x - valveX + valveGeometry.parameters.tube;
+  const boilerColliders = [{
+    minX: drumCenter.x - Math.max(drumRadius, valveReach),
+    maxX: drumCenter.x + drumRadius,
+    minZ: drumCenter.z - drumRadius,
+    maxZ: drumCenter.z + drumRadius,
+    topY: drumCap.position.y + drumCapGeometry.parameters.height / 2,
+  }];
 
   // 2 large horizontal pipes running across the room.
   const pipes = [
@@ -660,11 +712,10 @@ export function addLevelThreeBoilerRoomPipe(scene) {
   });
 
   // 1 valve wheel on the drum.
-  const valve = new THREE.Mesh(
-    new THREE.TorusGeometry(0.18, 0.024, 8, 20),
-    valveMaterial,
-  );
-  valve.position.set(drumCenter.x - 0.62, 0.8, drumCenter.z);
+  const valve = new THREE.Mesh(valveGeometry, valveMaterial);
+  valve.position.set(valveX, 0.8, drumCenter.z);
   valve.rotation.y = Math.PI / 2;
   scene.add(valve);
+
+  return boilerColliders;
 }

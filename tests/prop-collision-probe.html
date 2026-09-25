@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>道具实体碰撞验收（Level 0 椅子等）</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0d100e; color: #d9e3d6; font: 13px/1.5 ui-monospace, Consolas, monospace; }
+    #report { margin: 0; padding: 14px 18px; white-space: pre-wrap; }
+    .ok { color: #8fe08a; }
+    .bad { color: #ff8b7a; }
+  </style>
+</head>
+<body>
+  <pre id="report">加载中…</pre>
+  <script type="module">
+    import * as THREE from "three";
+    import { createBackroomsScene } from "/src/scene/index.js";
+    import { FirstPersonControls } from "/src/first-person-controls.js";
+
+    // [x, z, feetY, "b"|"f"] —— "b" = 脚在该高度时必须被挡住， "f" = 必须能站
+    // 每个点都来自一次真实的采样（探针点由各关卡的几何算出）。
+    const PROBES = {
+      [-1]: [
+        [0, 112, 0, "f"], [4.2, -30, 0, "f"], [7.0625, 57, 0, "f"], [-7.0625, -54, 0, "f"],
+        [10.55, 0, 0, "f"], [-10.55, 21, 0, "f"], [14.9, 57, 0, "f"], [-14.9, -126, 0, "f"],
+        [16.19, 126, 0, "f"],
+        [17, 21, 0, "b"], [17, -54, 0, "b"], [17, 126, 0, "b"], [-17, -111, 0, "b"], [-17, 57, 0, "b"],
+        [16.15, 21, 0, "f"], [16.15, 126, 0, "f"], [-16.15, -111, 0, "f"],
+      ],
+      0: [
+        [82.75, 60.7, 0, "b"], [82.75, 61.09, 0, "b"], [82.75, 62.0, 0, "f"],
+        [84.0, 58.2, 0, "f"], [84.3, 59.45, 0, "b"], [84.3, 59.45, 1.0, "f"],
+      ],
+      1: [
+        [-40.42, 0.02, 0.98, "b"], [-39.42, -0.08, 0.98, "b"], [-40.0, 0.0, 0, "b"],
+        [-40.0, 0.0, 1.15, "f"], [-40.0, 1.4, 0, "f"],
+        [-47.98, -15.58, 0.98, "b"], [-48.08, -16.58, 0.98, "b"],
+        [43.8, 24.4, 0, "b"], [42.5, 24.4, 0, "f"],
+      ],
+      2: [
+        [-75.5, -29.7, 0, "b"], [-75.5, -28.4, 0, "f"], [-23.5, -29.8, 0, "b"], [-23.5, -31.1, 0, "f"],
+        [4.5, -30.4, 0, "b"], [4.5, -30.4, 1, "f"], [16.5, -18.2, 0, "b"], [17.6, -18.2, 0, "f"],
+        [16.5, 22.3, 0, "b"], [16.5, 23.5, 0, "f"], [32.5, 34.2, 0, "b"], [32.5, 33, 0, "f"],
+        [52.5, 33.6, 0, "b"], [52.5, 34.8, 0, "f"], [-49.4, -34.55, 0, "b"], [-51.5, -35.5, 0, "f"],
+        [26.55, -6.5, 0, "b"], [24.4, -7.6, 0, "f"], [1.4, -25.5, 0, "b"], [0.5, -24.5, 0, "f"],
+        [49.45, 38.55, 0, "b"], [48.5, 39.5, 0, "f"], [50, 42, 0, "f"], [50, 46, 0, "f"],
+        [20, 2, 0, "b"], [19.5, 2, 0, "f"],
+      ],
+      3: [
+        [-56, -25.846, 0, "b"], [-57.185, -25.396, 0, "f"], [-54.815, -25.396, 0, "f"],
+        [-44, -14.154, 0, "b"], [-42.815, -14.604, 0, "f"], [-45.185, -14.604, 0, "f"],
+        [-21.846, 12, 0, "b"], [-21.396, 13.185, 0, "f"], [-21.396, 10.815, 0, "f"],
+        [-32, 22.154, 0, "b"], [-33.185, 22.604, 0, "f"], [-30.815, 22.604, 0, "f"],
+        [42.154, 28, 0, "b"], [42.604, 29.185, 0, "f"], [42.604, 26.815, 0, "f"],
+        [52, 28, 0, "b"], [50.6, 28, 0, "f"],
+        [52, 29.4, 0, "f"], [-56, 12, 0, "b"], [-56, 12, 0.9, "f"], [-56, 13.6, 0, "f"],
+        [-56, 24, 0, "b"], [-42, 24, 0, "f"], [-56, 22.4, 0, "f"], [-43.7, 8.2, 0, "b"],
+        [-42.7, 8.2, 0, "f"], [-32.4, 16.35, 0, "b"], [-32.4, 15.35, 0, "f"], [-19.55, 11.75, 0, "b"],
+        [-19.55, 10.75, 0, "f"], [-52.35, 28.3, 0, "b"], [-50.95, 28.3, 0, "f"], [-23.8, 27.6, 0, "b"],
+        [-22.8, 27.6, 0, "f"], [8.7, -16, 0, "b"], [8, -15, 0, "f"], [9.6, -16, 0, "f"], [8, -12, 0, "f"],
+      ],
+      4: [
+        [-24, 27.08, 0, "b"], [-25.12, 28, 0, "b"], [-25.12, 28.8, 0, "b"], [-23.76, 27.54, 0, "b"],
+        [-23.76, 27.54, 0.8, "f"], [-25.58, 28.5, 0, "f"], [-22.65, 28.9, 0, "f"],
+        [28, 23.08, 0, "b"], [26.88, 24, 0, "b"], [26.88, 24.8, 0, "b"], [28.24, 23.54, 0, "b"],
+        [28.24, 23.54, 0.8, "f"], [26.42, 24.5, 0, "f"], [29.35, 24.9, 0, "f"],
+        [-40, -4.92, 0, "b"], [-41.12, -4, 0, "b"], [-41.12, -3.2, 0, "b"], [-39.76, -4.46, 0, "b"],
+        [-39.76, -4.46, 0.8, "f"], [-41.58, -3.5, 0, "f"], [-38.65, -3.1, 0, "f"],
+        [-52, -28, 0, "b"], [-52, -27.25, 0, "f"], [48, -32, 0, "b"], [48, -31.25, 0, "f"],
+        [-4, -32, 0, "b"], [-4, -31.25, 0, "f"],
+      ],
+      5: [
+        [58, 32, 0, "b"], [56.8, 32, 0, "f"], [59.2, 32, 0, "f"], [70, 32, 0, "b"], [68.8, 32, 0, "f"],
+        [70, 35, 0, "f"], [62, 44, 0, "b"], [62, 42.5, 0, "f"], [62, 45.5, 0, "f"], [52.5, 28.4, 0, "b"],
+        [54, 30.5, 0, "f"], [78, 36, 0, "b"], [76, 36, 0, "f"], [66, 28.4, 0, "b"], [66, 30.5, 0, "f"],
+        [66, 36, 0, "b"], [66, 36.3, 0, "b"], [67.2, 36, 0, "f"], [66, 34.4, 0, "f"], [62, 32, 0, "b"],
+        [63.2, 32, 0, "b"], [63.35, 32, 0, "f"], [62, 33.07, 0, "f"], [74, 36, 0, "b"], [75.25, 36, 0, "b"],
+        [75.4, 36, 0, "f"],
+      ],
+      6: [
+        [61.5, 27, 0, "b"], [60.8, 25, 0, "b"], [59, 27, 0, "f"], [62, 29, 0, "f"],
+        [2, -24, 0, "b"], [2.5, -24, 0, "f"], [2, -22.4, 0, "b"], [1, -24, 0, "f"],
+        [-54, 8, 0, "b"], [-54, 7.4, 0, "f"],
+      ],
+      7: [
+        [-22, -6, 0, "f"], [-22, -7.6, 0, "f"], [22, 6, 0, "f"], [22, 4.5, 0, "f"],
+        [-46, 22, 0, "f"], [-46, 20.4, 0, "f"], [-10, -22, 0, "b"], [-10, -20.6, 0, "f"],
+        [46, 34, 0, "b"], [46, 35.6, 0, "f"],
+      ],
+      8: [
+        [89.3, -62, 0, "b"], [86, -62, 0, "b"], [86, -61.4, 0, "f"], [17.3, -14, 0, "b"], [17.3, -12.5, 0, "f"],
+        [-6.7, 58, 0, "b"], [-6.7, 59.4, 0, "f"], [-30, 46, 0, "b"], [-30, 47.4, 0, "f"],
+        [18, -10, 0, "b"], [19.4, -10, 0, "f"], [70, -22, 0, "b"], [71.4, -22, 0, "f"],
+        [89.3, -62, 1.15, "b"], [70, -22, 1.15, "f"],
+      ],
+      9: [
+        [-74, 26, 0, "b"], [-70.35, 26, 0, "f"], [62, -66, 0, "b"], [65.65, -66, 0, "f"],
+        [-30, -26, 0, "b"], [-26.35, -26, 0, "f"], [26, -26, 0, "b"], [29.65, -26, 0, "f"],
+        [-79.15, 55.15, 0, "b"], [-78.31, 55.15, 0, "f"], [-4.85, 3.15, 0, "b"], [-4.01, 3.15, 0, "f"],
+        [79.15, -52.85, 0, "b"], [79.99, -52.85, 0, "f"], [59.15, -44.85, 0, "b"], [59.99, -44.85, 0, "f"],
+        [-98.42, -74.56, 0, "b"], [-97.623, -73.956, 0, "f"], [-62, 74, 0, "b"], [-61.358, 73.233, 0, "f"],
+        [34, -74, 0, "b"], [33.582, -73.091, 0, "f"], [98, -46, 0, "b"], [97.095, -45.575, 0, "f"],
+        [-98, 33.72, 0, "b"], [-97.054, 33.395, 0, "f"], [82, 73.72, 0, "b"], [81.256, 73.051, 0, "f"],
+        [10, 3.15, 0, "f"], [-94, -50, 0, "f"],
+      ],
+      10: [
+        [-62, 14, 0, "b"], [-60.4, 14, 0, "f"], [-62, 14, 1.711, "f"], [-38, -6, 0, "b"],
+        [-36.562, -6, 0, "f"], [-70, -2, 0, "b"], [-68.652, -2, 0, "f"], [30, -10, 0, "b"],
+        [30.9, -10, 0, "f"], [70, 6, 0, "b"], [77.2, 6, 0, "f"], [70, 12.2, 0, "b"], [73.7, 9.7, 0, "b"],
+        [70, 13.1, 0, "f"], [75.6, 11.6, 0, "f"], [2, -74, 0, "f"],
+      ],
+      11: [
+        [-76.55, 55.3, 0, "b"], [-75.75, 55.3, 0, "f"], [-4.55, 55.3, 0, "b"], [-3.75, 55.3, 0, "f"],
+        [67.45, 55.3, 0, "b"], [68.25, 55.3, 0, "f"], [-76.55, -0.7, 0, "b"], [-75.75, -0.7, 0, "f"],
+        [-4.55, -0.7, 0, "b"], [-3.75, -0.7, 0, "f"], [67.45, -0.7, 0, "b"], [68.25, -0.7, 0, "f"],
+        [-76.55, -56.7, 0, "b"], [-75.75, -56.7, 0, "f"], [-4.55, -56.7, 0, "b"], [-3.75, -56.7, 0, "f"],
+        [67.45, -56.7, 0, "b"], [68.25, -56.7, 0, "f"], [14, -18.115, 0, "b"], [17.875, -18.115, 0, "f"],
+        [14, -14.24, 0, "f"], [10, -18, 0, "f"], [18, -18, 0, "f"], [92, -55, 0, "f"],
+        [98.5, -54.6, 0, "f"], [87, -65.2, 0, "b"], [18, 54, 0, "b"],
+      ],
+      12: [
+        [-46, -22, 0, "b"], [-46, -24, 0, "f"], [-46.6, -20.4, 0, "f"], [30.23, -22.74, 0, "b"],
+        [30.23, -22.74, 0.86, "f"], [31.43, -22.74, 0, "f"], [-50.1, -9.82, 0, "b"], [-50.9, -9.82, 0, "f"],
+        [7.39, 2.09, 0, "b"], [8.19, 2.09, 0, "f"],
+        [50, -38.8, 0, "b"], [50, -39.5, 0, "b"], [50, -40.2, 0, "b"], [50, -40.9, 0, "b"],
+        [50, -41.6, 0, "b"], [50, -42.3, 0, "b"], [50, -43, 0, "b"], [50, -43.7, 0, "b"],
+        [50, -44.4, 0, "b"], [50, -45.1, 0, "b"], [50, -45.1, 2.22, "f"], [50, -42, 0, "b"],
+        [50, -39, 1.15, "f"], [50, -37.2, 0, "f"], [50, -36, 0, "f"], [50, -38.4, 0, "b"],
+        [47.9, -42, 0, "f"], [48.2, -42, 0, "b"], [50, -46, 0, "f"],
+      ],
+      13: [
+        [-90, 58, 0, "b"], [-90, 58.8, 0, "f"], [-10, -18, 0, "b"], [-10, -17.2, 0, "f"],
+        [6, 58, 0, "b"], [6, 58.8, 0, "f"], [86, -18, 0, "b"], [86, -17.2, 0, "f"],
+        [102, 58, 0, "b"], [102, 58.8, 0, "f"], [-118.9, -9.2, 0, "b"], [-118.34, -8.64, 0, "f"],
+        [-18.9, -9.2, 0, "b"], [-18.9, -8.4, 0, "f"], [21.1, 42.8, 0, "b"], [21.66, 43.36, 0, "f"],
+        [77.1, -9.2, 0, "b"], [77.1, -8.4, 0, "f"], [117.1, 42.8, 0, "b"], [117.66, 43.36, 0, "f"],
+        [-124.6, -3.9, 0, "b"], [-124.6, -3.9, 0.7, "f"], [-24.6, -3.9, 0, "b"], [-24.6, -3.9, 0.7, "f"],
+        [15.4, 48.1, 0, "b"], [15.4, 48.1, 0.7, "f"], [71.4, -3.9, 0, "b"], [71.4, -3.9, 0.7, "f"],
+        [111.4, 48.1, 0, "b"], [111.4, 48.1, 0.7, "f"],
+        [-119.25, -6, 0, "f"], [-21.25, -4, 0, "f"], [20.75, 48, 0, "f"], [74.75, -4, 0, "f"],
+        [116.75, 48, 0, "f"],
+        [-70, -54, 0, "b"], [-70, -54, 2.3, "f"], [-70, -55, 0, "f"], [-68.05, -54, 0, "f"],
+        [-70, -55.2, 0, "f"],
+        [-98, -71.9, 0, "b"], [-98, -71.3, 0, "f"], [-98, -70, 0, "f"],
+        [-2, -71.9, 0, "b"], [-2, -71.3, 0, "f"], [-2, -70, 0, "f"],
+        [94, -71.9, 0, "b"], [94, -71.3, 0, "f"], [94, -70, 0, "f"],
+        [-99.32, 66.7, 0, "b"], [-96.67, 66.7, 0, "b"], [-98, 66.35, 0, "f"], [-100, 66.35, 0, "f"],
+        [-96, 66.35, 0, "f"], [-3.32, 66.7, 0, "b"], [-0.67, 66.7, 0, "b"], [-2, 66.35, 0, "f"],
+        [-4, 66.35, 0, "f"], [0, 66.35, 0, "f"], [-3.32, -65.3, 0, "b"], [-0.67, -65.3, 0, "b"],
+        [-2, -65.65, 0, "f"], [-4, -65.65, 0, "f"], [0, -65.65, 0, "f"],
+        [92.68, -65.3, 0, "b"], [95.33, -65.3, 0, "b"], [94, -65.65, 0, "f"], [92, -65.65, 0, "f"],
+        [96, -65.65, 0, "f"], [-98, 58, 0, "f"], [-98, 59.6, 0, "b"],
+      ],
+      37: [
+        [78, -58, 0, "b"], [78, -57.38, 0, "f"], [78, -58.62, 0, "f"], [80, -58, 0, "f"],
+        [-47.3, 22, 0, "b"], [-48.1, 22, 0, "f"], [-46, 22, 0, "f"], [-44.7, 22, 0, "b"], [-43.9, 22, 0, "f"],
+        [-3.3, -2, 0, "b"], [-4.1, -2, 0, "f"], [-2, -2, 0, "f"], [-0.7, -2, 0, "b"], [0.1, -2, 0, "f"],
+        [44.7, -26, 0, "b"], [43.9, -26, 0, "f"], [46, -26, 0, "f"],
+        [56.7, 26, 0, "b"], [55.9, 26, 0, "f"], [58, 26, 0, "f"], [59.3, 26, 0, "b"], [60.1, 26, 0, "f"],
+      ],
+    };
+
+    const lines = [];
+    const report = document.getElementById("report");
+    let passed = 0;
+    const failures = [];
+    const record = (ok, label, detail = "") => {
+      if (ok) passed += 1;
+      else failures.push(`${label} — ${detail}`);
+      return ok;
+    };
+    const flush = () => {
+      const head = failures.length === 0
+        ? `<span class="ok">PASS</span> ${passed} 项检查全部通过`
+        : `<span class="bad">FAIL</span> ${passed} 项通过，${failures.length} 项失败`;
+      report.innerHTML = `${head}\n\n${failures.map((entry) => `<span class="bad">✗ ${entry}</span>`).join("\n")}\n\n${lines.join("\n")}`;
+    };
+    const say = (text) => { lines.push(text); flush(); };
+    const idle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    const stubCanvas = () => ({
+      dataset: {},
+      addEventListener() {},
+      classList: { add() {}, remove() {}, toggle() {} },
+    });
+
+    // Level 13 stacks three apartment modules side by side and links them with
+    // stair teleports, so a walking-only search cannot cross modules. Its
+    // reachability checks stay inside the module the default spawn opens in.
+    const REACH_TARGETS = {
+      // The stair treads are solid now, so the walk-in target is the trigger at
+      // the stair foot; the copycat door slab is solid too, so its F prompt spot
+      // in front of it is the reachable point.
+      12: [
+        { x: 50, z: -37.2, stop: 1.25, label: "白楼梯出口触发点" },
+        { x: -46, z: -20.4, stop: 3, label: "复制门交互点" },
+      ],
+      13: [
+        { x: -6, z: -6, stop: 1.7, label: "71304 领钥匙门" },
+        { x: -10, z: -18, stop: 1.7, label: "公寓门 (33,16)" },
+        { x: 6, z: 58, stop: 1.7, label: "公寓门 (37,35)" },
+      ],
+    };
+
+    function reachTargetDistance(world, target, stopDistance) {
+      const spawn = world.spawn;
+      if (!target || !spawn) return null;
+      const step = 0.5;
+      const key = (x, z) => `${x.toFixed(2)},${z.toFixed(2)}`;
+      const startX = Math.round(spawn.x / step) * step;
+      const startZ = Math.round(spawn.z / step) * step;
+      const queue = [[startX, startZ]];
+      const seen = new Set([key(startX, startZ)]);
+      let best = Math.hypot(startX - target.x, startZ - target.z);
+      let cursor = 0;
+      for (; cursor < queue.length; cursor += 1) {
+        const [x, z] = queue[cursor];
+        const distance = Math.hypot(x - target.x, z - target.z);
+        if (distance < best) best = distance;
+        if (best <= stopDistance) return best;
+        for (const [dx, dz] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+          const nextX = x + dx;
+          const nextZ = z + dz;
+          const id = key(nextX, nextZ);
+          if (seen.has(id)) continue;
+          seen.add(id);
+          if (Math.abs(nextX) > 420 || Math.abs(nextZ) > 420) continue;
+          if (!world.isWalkable(nextX, nextZ, 0.36, 0)) continue;
+          queue.push([nextX, nextZ]);
+        }
+      }
+      return best;
+    }
+
+    // Solid props must block the whole footprint of the model they draw, not
+    // just the point a script picked, so sample each rendered object's box.
+    function checkModelFootprint(world, meshes, feetY, label, boxFilter = () => true) {
+      const box = new THREE.Box3();
+      for (const mesh of meshes) {
+        if (!boxFilter(mesh)) continue;
+        box.setFromObject(mesh);
+        if (!Number.isFinite(box.min.x) || box.max.x - box.min.x <= 0) continue;
+        const name = mesh.name || mesh.parent?.name || "mesh";
+        let free = 0;
+        let samples = 0;
+        for (let u = 1; u <= 3; u += 1) {
+          for (let v = 1; v <= 3; v += 1) {
+            const x = box.min.x + ((box.max.x - box.min.x) * u) / 4;
+            const z = box.min.z + ((box.max.z - box.min.z) * v) / 4;
+            samples += 1;
+            if (world.isWalkable(x, z, 0.36, feetY)) free += 1;
+          }
+        }
+        record(free === 0, `${label} · ${name}`, `footprint x ${box.min.x.toFixed(2)}..${box.max.x.toFixed(2)} z ${box.min.z.toFixed(2)}..${box.max.z.toFixed(2)} 有 ${free}/${samples} 个采样点可穿过`);
+      }
+    }
+
+    // Level 0's headline bug: walking straight at the chair used to pass
+    // through it. Drive the real controls and check where the player stops.
+    function walkTest(world, { startX, startZ, yaw, frames = 150 }) {
+      const controls = new FirstPersonControls({
+        camera: world.camera,
+        canvas: stubCanvas(),
+        isWalkable: world.isWalkable,
+        getFloorHeight: world.getFloorHeight,
+        resolvePosition: world.resolvePosition,
+        spawn: { x: startX, z: startZ, yaw },
+      });
+      controls.relocate({ x: startX, z: startZ, yaw });
+      controls.onKeyDown({ code: "KeyW", preventDefault() {} });
+      for (let index = 0; index < frames; index += 1) controls.update(1 / 60);
+      controls.onKeyUp({ code: "KeyW", preventDefault() {} });
+      return { x: world.camera.position.x, z: world.camera.position.z };
+    }
+
+    const levels = Object.keys(PROBES).map(Number).sort((a, b) => a - b);
+    for (const level of levels) {
+      const world = await createBackroomsScene(level);
+      await idle();
+      // Nothing renders here, so the scene graph still holds un-built world
+      // matrices; the model-footprint checks need them up to date.
+      world.scene.updateMatrixWorld(true);
+      let levelPassed = 0;
+      record(typeof world.getFloorHeight === "function", `L${level} 导出 getFloorHeight`, `实际 ${typeof world.getFloorHeight}`);
+      record(typeof world.resolvePosition === "function", `L${level} 导出 resolvePosition`, `实际 ${typeof world.resolvePosition}`);
+      for (const [x, z, feetY, expect] of PROBES[level]) {
+        const walkable = world.isWalkable(x, z, 0.36, feetY);
+        const wanted = expect === "f";
+        const ok = record(
+          walkable === wanted,
+          `L${level} 探针 (${x}, ${z}) feet=${feetY}`,
+          `期望${wanted ? "可通行" : "被阻挡"}，实际${walkable ? "可通行" : "被阻挡"}`,
+        );
+        if (ok) levelPassed += 1;
+        // A player who ends up inside a prop must be pushed back out, otherwise
+        // new colliders would turn into traps. Points that stay blocked even a
+        // full body height up are grid geometry (walls, sealed cells), which the
+        // push-out is not responsible for.
+        if (!walkable && expect === "b" && typeof world.resolvePosition === "function") {
+          const wallBlocked = !world.isWalkable(x, z, 0.36, feetY + 1.2);
+          if (!wallBlocked) {
+            const resolved = world.resolvePosition(x, z, 0.36, feetY, 1);
+            const moved = Math.hypot(resolved.x - x, resolved.z - z);
+            const pushed = record(
+              moved > 0.01,
+              `L${level} 嵌进道具能被推出 (${x}, ${z}) feet=${feetY}`,
+              "resolvePosition 没有移动玩家",
+            );
+            if (pushed) levelPassed += 1;
+          }
+        }
+      }
+      if (level === -1) {
+        const floorAtPad = world.getFloorHeight?.(14.6, 57, 0);
+        record(
+          Math.abs(floorAtPad - 0.105) < 1e-6,
+          "Hub 出生点站在 10.5cm 地台上",
+          `getFloorHeight(±14.6) = ${floorAtPad}`,
+        );
+        const floorAtHall = world.getFloorHeight?.(0, 112, 0);
+        record(floorAtHall === 0, "Hub 中央地板高度为 0", `getFloorHeight(0,112) = ${floorAtHall}`);
+      }
+      if (level === 9) {
+        // The tree line hid the player's head in the crown until the foliage was
+        // lifted above standing height, so measure the drawn instance bounds.
+        const crowns = world.scene.getObjectByName("level-nine-tree-crowns");
+        record(Boolean(crowns?.isInstancedMesh), "L9 找到树冠实例网格", "找不到 level-nine-tree-crowns");
+        if (crowns?.isInstancedMesh) {
+          const geometryBox = new THREE.Box3().setFromBufferAttribute(crowns.geometry.attributes.position);
+          const instanceMatrix = new THREE.Matrix4();
+          const box = new THREE.Box3();
+          let lowest = Infinity;
+          for (let index = 0; index < crowns.count; index += 1) {
+            crowns.getMatrixAt(index, instanceMatrix);
+            box.copy(geometryBox).applyMatrix4(instanceMatrix).applyMatrix4(crowns.matrixWorld);
+            lowest = Math.min(lowest, box.min.y);
+          }
+          record(
+            lowest >= 1.75,
+            "L9 每棵树的树冠最低点都在头顶(1.75m)以上",
+            `最低 ${lowest.toFixed(3)}m（共 ${crowns.count} 棵）`,
+          );
+        }
+      }
+      if (level === 0) {
+        const chair = world.scene.getObjectByName("level-zero-manila-chair");
+        record(Boolean(chair), "L0 椅子模型存在", "找不到 level-zero-manila-chair");
+        if (chair) checkModelFootprint(world, [chair], 0, "L0 椅子整个占地");
+        const table = world.scene.getObjectByName("level-zero-room-table-1");
+        if (table) checkModelFootprint(world, [table], 0, "L0 房间桌整个占地");
+
+        const blockedWalk = walkTest(world, { startX: 80.5, startZ: 60.78, yaw: -Math.PI / 2 });
+        record(
+          blockedWalk.x <= 82.02 && blockedWalk.x >= 81.6,
+          "L0 直冲椅子被挡在座位前",
+          `终点 (${blockedWalk.x.toFixed(2)}, ${blockedWalk.z.toFixed(2)})，期望 x ≈ 81.9`,
+        );
+        const freeWalk = walkTest(world, { startX: 80.5, startZ: 62.2, yaw: -Math.PI / 2 });
+        record(
+          freeWalk.x >= 82.5,
+          "L0 椅子旁边同一段路仍可自由行走",
+          `终点 (${freeWalk.x.toFixed(2)}, ${freeWalk.z.toFixed(2)})，期望 x ≥ 82.5`,
+        );
+      }
+      if (level === 1) {
+        const groups = world.scene.children.filter((child) => child.name === "level-one-workbench-table");
+        record(groups.length === 2, "L1 找到两张工作台", `找到 ${groups.length} 张`);
+        for (const group of groups) {
+          const tools = [];
+          group.traverse((child) => {
+            if (!child.isMesh) return;
+            const box = new THREE.Box3().setFromObject(child);
+            if (box.max.y > 1.02) tools.push(child);
+          });
+          record(tools.length === 2, `L1 ${group.position.x},${group.position.z} 台面工具数`, `找到 ${tools.length} 个高于台面的工具`);
+          checkModelFootprint(world, tools, 0.98, `L1 工作台 ${group.position.x},${group.position.z} 工具占地`);
+        }
+      }
+
+      const targets = REACH_TARGETS[level] ?? (world.targetPosition
+        ? [{ x: world.targetPosition.x, z: world.targetPosition.z, stop: 1.25, label: "关卡目标" }]
+        : []);
+      for (const target of targets) {
+        const distance = reachTargetDistance(world, target, target.stop);
+        if (distance === null) continue;
+        const ok = record(
+          distance <= target.stop + 1e-6,
+          `L${level} 出生点仍能走到 ${target.label}`,
+          `最近只能到 ${distance.toFixed(2)}m（需要 ≤${target.stop}m）`,
+        );
+        if (ok) levelPassed += 1;
+      }
+      say(`L${level}: ${levelPassed} 项通过`);
+      world.scene.clear();
+      await idle();
+    }
+
+    flush();
+    if (failures.length === 0) document.title = "PASS 道具实体碰撞验收";
+    else document.title = `FAIL ${failures.length}`;
+  </script>
+</body>
+</html>

@@ -463,7 +463,7 @@ assert.match(levelOneTexturesSource, /createLevelOneWallPbrMaps/);
 assert.match(levelOneSource, /applyLevelOnePropLightField\(scene, lightField\)/);
 assert.match(levelOnePropsSource, /fixtures\.updatePointLights = \(playerPosition, delta, elapsed\)/);
 assert.match(viewModelSource, /setFirstPersonViewModelLighting/);
-assert.match(viewModelSource, /THREE\.MathUtils\.lerp\(0\.78, 2\.2, sprintBlend\)/);
+assert.match(viewModelSource, /THREE\.MathUtils\.lerp\(0\.98, 2\.2, sprintBlend\)/);
 assert.match(controlsSource, /this\.isSprinting \? SPRINT_STEP_DISTANCE : WALK_STEP_DISTANCE/);
 assert.match(controlsSource, /export const GROUND_ACCELERATION = 14/);
 assert.match(controlsSource, /export const AIR_CONTROL = 0\.35/);

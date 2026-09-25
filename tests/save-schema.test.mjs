@@ -33,6 +33,25 @@ test("interaction unlock state survives shared sanitization", () => {
   assert.deepEqual(save.interactions[-1]["hub-door-level-2"], { count: 0, unlocked: true });
 });
 
+test("old stamina saves retain their fill percentage under doubled caps", () => {
+  for (const [timers, oldStamina, newMax] of [
+    [{}, 50, 200],
+    [{ almondWaterTimer: 20 }, 75, 300],
+    [{ superAlmondWaterTimer: 20 }, 125, 500],
+  ]) {
+    const oldSave = gameSave();
+    Object.assign(oldSave.player, timers, { staminaBaseMax: 100, stamina: oldStamina });
+    const player = parseAndSanitizeGameSave(oldSave).player;
+    assert.equal(player.staminaBaseMax, 200);
+    assert.equal(player.staminaMax, newMax);
+    assert.equal(player.stamina, newMax / 2);
+  }
+
+  const newSave = gameSave();
+  Object.assign(newSave.player, { staminaBaseMax: 200, stamina: 125 });
+  assert.equal(parseAndSanitizeGameSave(newSave).player.stamina, 125);
+});
+
 test("cloud envelopes normalize progress and reject malformed saves", () => {
   const envelope = sanitizeCloudSaveEnvelope({
     schemaVersion: CLOUD_SAVE_SCHEMA_VERSION,

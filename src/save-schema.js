@@ -1,3 +1,9 @@
+import {
+  ALMOND_WATER_STAMINA_BONUS,
+  BASE_STAMINA_MAX,
+  SUPER_ALMOND_WATER_STAMINA_MAX,
+} from "./scene/constants.js";
+
 export const SAVE_VERSION = 2;
 export const LEGACY_SAVE_VERSION = 1;
 export const CLOUD_SAVE_SCHEMA_VERSION = 1;
@@ -107,7 +113,18 @@ function sanitizePlayer(raw, legacy = false) {
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) return null;
   const almondWaterTimer = clampNumber(raw.almondWaterTimer, 0);
   const superAlmondWaterTimer = clampNumber(raw.superAlmondWaterTimer, 0);
-  const staminaMax = superAlmondWaterTimer > 0 ? 250 : almondWaterTimer > 0 ? 150 : 100;
+  const staminaMax = superAlmondWaterTimer > 0
+    ? SUPER_ALMOND_WATER_STAMINA_MAX
+    : almondWaterTimer > 0
+      ? BASE_STAMINA_MAX + ALMOND_WATER_STAMINA_BONUS
+      : BASE_STAMINA_MAX;
+  // Older version-2 saves recorded a base cap of 100. Preserve their stamina
+  // percentage when loading into the doubled-cap rules without scaling new saves.
+  const savedBaseMax = clampNumber(raw.staminaBaseMax, 100);
+  const staminaScale = savedBaseMax > 0 && savedBaseMax < BASE_STAMINA_MAX
+    ? BASE_STAMINA_MAX / savedBaseMax
+    : 1;
+  const savedStamina = clampNumber(raw.stamina, staminaMax / staminaScale);
   return {
     level: normalizeLevelId(raw.level ?? 0, legacy),
     position: {
@@ -117,9 +134,9 @@ function sanitizePlayer(raw, legacy = false) {
     },
     yaw: clampNumber(raw.yaw, 0),
     pitch: clampNumber(raw.pitch, -0.025),
-    stamina: Math.max(0, Math.min(clampNumber(raw.stamina, staminaMax), staminaMax)),
+    stamina: Math.max(0, Math.min(savedStamina * staminaScale, staminaMax)),
     staminaMax,
-    staminaBaseMax: 100,
+    staminaBaseMax: BASE_STAMINA_MAX,
     staminaRecoveryDelay: Math.max(0, clampNumber(raw.staminaRecoveryDelay, 0)),
     almondWaterTimer: Math.max(0, almondWaterTimer),
     superAlmondWaterTimer: Math.max(0, superAlmondWaterTimer),

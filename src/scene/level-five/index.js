@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createGameMaterial } from "../common/materials.js";
+import { colliderBlocksAtFeetHeight, getPlatformFloorHeight, resolvePlatformOverlap } from "../common/platform-collision.js";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -296,7 +297,10 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     { id: "level-five-elevator-level-three", targetLevel: 3, targetLabel: "LEVEL 3", label: "SERVICE", kind: "elevator", position: levelFiveCellCenter(37, 5), rotation: Math.PI },
     { id: "level-five-stairs-level-four", targetLevel: 4, targetLabel: "LEVEL 4", label: "STAIRS", kind: "stair", stairModel: true, position: levelFiveCellCenter(7, 5), rotation: 0 },
   ];
-  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
+  // Door colliders join the prop list that isWalkable / getFloorHeight /
+  // resolvePosition already walk. Every pickup above was placed before this
+  // call, so item candidate cells and saved positions are untouched.
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial, { colliders: propColliders });
 
   const LEVEL_FIVE_HOUND_COUNT = 3;
   const savedHoundStates = entityInitial.filter((entity) => entity.type === "hound");
@@ -325,7 +329,7 @@ export function createLevelFiveScene({ initialState = null } = {}) {
 
   let objectiveReached = Boolean(objectiveInitial.reached);
 
-  function isWalkable(x, z, radius = 0.36) {
+  function isWalkable(x, z, radius = 0.36, feetY = 0) {
     const corner = radius * 0.72;
     const samples = [
       [0, 0],
@@ -343,7 +347,17 @@ export function createLevelFiveScene({ initialState = null } = {}) {
       return isLevelFiveOpenCell(cell.col, cell.row);
     });
     if (!isInOpenCells) return false;
-    return !propColliders.some((collider) => collider.active !== false && circleIntersectsAabb(x, z, radius, collider));
+    return !propColliders.some(
+      (collider) => colliderBlocksAtFeetHeight(collider, feetY) && circleIntersectsAabb(x, z, radius, collider),
+    );
+  }
+
+  function getFloorHeight(x, z, feetY) {
+    return getPlatformFloorHeight({ colliders: propColliders, x, z, feetY });
+  }
+
+  function resolvePosition(x, z, radius, feetY, maxCorrection) {
+    return resolvePlatformOverlap({ colliders: propColliders, x, z, radius, feetY, maxCorrection });
   }
 
   function update(delta, elapsed, playerPosition, effects = {}) {
@@ -431,6 +445,8 @@ export function createLevelFiveScene({ initialState = null } = {}) {
     spawn,
     targetPosition,
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     getFootstepSurface,
     decorativeItemSpawns: [
       { id: "hotel-token", position: levelFiveCellCenter(20, 12), grounded: true, rotation: 0.45 },

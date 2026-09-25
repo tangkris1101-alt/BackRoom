@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Level 0 桌子纸张模型验收</title>
+  <style>
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111; color:#fff; font:14px system-ui,sans-serif; }
+    canvas { display:block; width:100%; height:100%; }
+    .controls { position:fixed; left:20px; top:20px; display:flex; gap:8px; align-items:center; padding:10px 12px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
+    button { background:#e8dfb5; color:#182016; border:0; border-radius:4px; padding:8px 13px; cursor:pointer; font-weight:600; }
+    #status { min-width:230px; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button id="wide">桌子全景</button>
+    <button id="close">纸张特写</button>
+    <button id="low">桌腿细节</button>
+    <button id="manila">马尼拉房间</button>
+    <button id="capture">纯画面截图</button>
+    <span id="status">正在加载 Level 0…</span>
+  </div>
+  <script type="module">
+    import * as THREE from "three";
+    import { createLevelZeroScene } from "/src/scene/level-zero/index.js";
+    import { cellCenter } from "/src/scene/level-zero/layout.js";
+
+    const status = document.getElementById("status");
+    document.getElementById("capture").addEventListener("click", () => {
+      document.querySelector(".controls").style.display = "none";
+    });
+    // 与截图同款的房间桌：LEVEL_ZERO_ROOM_TABLE_CELLS 第一个格子。
+    const center = cellCenter(4, 3);
+    const manilaCenter = cellCenter(34 + 2, 26 + 2);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    document.body.append(renderer.domElement);
+    const world = createLevelZeroScene();
+    const views = {
+      wide: { pos: [center.x - 2.9, 1.62, center.z + 1.9], look: [center.x + 0.4, 0.82, center.z - 0.2], label: "Level 0 · 房间桌全景" },
+      close: { pos: [center.x - 1.15, 1.45, center.z + 0.62], look: [center.x - 0.34, 0.89, center.z - 0.14], label: "Level 0 · 纸张特写" },
+      low: { pos: [center.x + 1.7, 0.62, center.z + 1.55], look: [center.x - 0.3, 0.5, center.z - 0.3], label: "Level 0 · 桌腿与横撑" },
+      manila: { pos: [manilaCenter.x - 1.9, 1.66, manilaCenter.z + 1.7], look: [manilaCenter.x + 0.5, 1.0, manilaCenter.z - 0.55], label: "马尼拉房间 · 桌档与座椅" },
+    };
+    function applyView(name) {
+      const view = views[name];
+      world.camera.position.set(...view.pos);
+      world.camera.lookAt(...view.look);
+      world.camera.updateMatrixWorld();
+      status.textContent = view.label;
+    }
+    document.getElementById("wide").addEventListener("click", () => applyView("wide"));
+    document.getElementById("close").addEventListener("click", () => applyView("close"));
+    document.getElementById("low").addEventListener("click", () => applyView("low"));
+    document.getElementById("manila").addEventListener("click", () => applyView("manila"));
+    applyView("wide");
+    let previousFrame = performance.now();
+    let elapsed = 0;
+    function frame(now) {
+      const dt = Math.min(0.05, (now - previousFrame) / 1000);
+      previousFrame = now;
+      elapsed += dt;
+      world.update(elapsed, dt, { x: center.x, y: 1.62, z: center.z + 2 });
+      renderer.render(world.scene, world.camera);
+      requestAnimationFrame(frame);
+    }
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight);
+      world.camera.aspect = innerWidth / innerHeight;
+      world.camera.updateProjectionMatrix();
+    }
+    addEventListener("resize", resize);
+    resize();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

@@ -1,42 +1,80 @@
 import { createSeededRandom, makeTexture, drawSpeckles } from "../common/texture-utils.js";
 
-export function createLevelThreeBrickTexture() {
-  return makeTexture(
-    512,
-    (context, size) => {
-      context.fillStyle = "#514334";
-      context.fillRect(0, 0, size, size);
-      const random = createSeededRandom(0x3e3001);
-      for (let y = 0; y < size; y += 48) {
-        const offset = (y / 48) % 2 === 0 ? 0 : 64;
-        for (let x = -offset; x < size; x += 128) {
-          context.fillStyle = `rgba(${70 + random() * 34},${54 + random() * 24},${38 + random() * 20},0.5)`;
-          context.fillRect(x + 1, y + 1, 126, 46);
-        }
+const BRICK_WIDTH = 128;
+const BRICK_HEIGHT = 64;
+
+function paintBrickwork(context, size, heightOnly, variant) {
+  context.fillStyle = heightOnly ? "#646464" : "#625d52";
+  context.fillRect(0, 0, size, size);
+
+  // Four full bricks per row and eight rows make both axes tile cleanly.
+  // Split bricks at the texture seam reuse the same seeded surface marks.
+  for (let row = 0; row < size / BRICK_HEIGHT; row += 1) {
+    const offset = row % 2 ? BRICK_WIDTH / 2 : 0;
+    for (let column = 0; column < size / BRICK_WIDTH + 1; column += 1) {
+      const x = column * BRICK_WIDTH - offset;
+      const y = row * BRICK_HEIGHT;
+      const wrappedColumn = column % (size / BRICK_WIDTH);
+      const random = createSeededRandom(0x3e3001 + variant * 104729 + row * 97 + wrappedColumn * 701);
+      const shade = (random() - 0.5) * 42;
+      const soot = random() > 0.83 ? 17 : 0;
+      const red = Math.round(139 + shade - soot);
+      const green = Math.round(113 + shade * 0.8 - soot);
+      const blue = Math.round(84 + shade * 0.55 - soot);
+
+      if (heightOnly) {
+        context.fillStyle = "#a0a0a0";
+        context.fillRect(x + 3, y + 3, BRICK_WIDTH - 6, BRICK_HEIGHT - 6);
+        context.fillStyle = "#b9b9b9";
+        context.fillRect(x + 6, y + 6, BRICK_WIDTH - 12, BRICK_HEIGHT - 13);
+        context.fillStyle = "#7f7f7f";
+        context.fillRect(x + 5, y + BRICK_HEIGHT - 8, BRICK_WIDTH - 10, 3);
+      } else {
+        const face = context.createLinearGradient(0, y + 3, 0, y + BRICK_HEIGHT - 3);
+        face.addColorStop(0, `rgb(${red + 10},${green + 10},${blue + 9})`);
+        face.addColorStop(0.27, `rgb(${red},${green},${blue})`);
+        face.addColorStop(1, `rgb(${red - 17},${green - 15},${blue - 12})`);
+        context.fillStyle = face;
+        context.fillRect(x + 3, y + 3, BRICK_WIDTH - 6, BRICK_HEIGHT - 6);
+        context.fillStyle = "rgba(224,207,176,0.14)";
+        context.fillRect(x + 5, y + 5, BRICK_WIDTH - 10, 2);
+        context.fillStyle = "rgba(23,19,15,0.16)";
+        context.fillRect(x + 5, y + BRICK_HEIGHT - 8, BRICK_WIDTH - 10, 3);
       }
-      context.strokeStyle = "rgba(18,16,13,0.42)";
-      context.lineWidth = 3;
-      for (let y = 0; y <= size; y += 48) {
+
+      // Fine aggregate, small chips and uneven soot break up the flat faces.
+      for (let mark = 0; mark < 95; mark += 1) {
+        const px = x + 7 + random() * (BRICK_WIDTH - 14);
+        const py = y + 9 + random() * (BRICK_HEIGHT - 18);
+        const radius = 0.4 + random() * 1.9;
+        const dark = random() > 0.45;
+        context.fillStyle = heightOnly
+          ? dark ? "rgba(55,55,55,0.23)" : "rgba(235,235,235,0.16)"
+          : dark ? "rgba(29,24,19,0.22)" : "rgba(224,199,151,0.16)";
         context.beginPath();
-        context.moveTo(0, y);
-        context.lineTo(size, y);
+        context.arc(px, py, radius, 0, Math.PI * 2);
+        context.fill();
+      }
+      if (random() > 0.72) {
+        context.strokeStyle = heightOnly ? "rgba(84,84,84,0.35)" : "rgba(45,35,27,0.21)";
+        context.lineWidth = 1 + random();
+        context.beginPath();
+        const scratchX = x + 18 + random() * 75;
+        const scratchY = y + 17 + random() * 26;
+        context.moveTo(scratchX, scratchY);
+        context.lineTo(scratchX + 8 + random() * 24, scratchY + (random() - 0.5) * 5);
         context.stroke();
       }
-      for (let y = 0; y < size; y += 48) {
-        const offset = (y / 48) % 2 === 0 ? 0 : 64;
-        for (let x = -offset; x < size; x += 128) {
-          context.beginPath();
-          context.moveTo(x, y);
-          context.lineTo(x, y + 48);
-          context.stroke();
-        }
-      }
-      drawSpeckles(context, size, 900, 0.13, "10,8,6", random);
-      drawSpeckles(context, size, 260, 0.1, "154,102,62", random);
-    },
-    2.8,
-    2.1,
-  );
+    }
+  }
+}
+
+export function createLevelThreeBrickTexture(variant = 0) {
+  return makeTexture(512, (context, size) => paintBrickwork(context, size, false, variant), 3, 2);
+}
+
+export function createLevelThreeBrickBumpTexture(variant = 0) {
+  return makeTexture(512, (context, size) => paintBrickwork(context, size, true, variant), 3, 2);
 }
 
 export function createLevelThreeFloorTexture() {

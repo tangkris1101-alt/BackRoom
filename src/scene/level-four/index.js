@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { createGameMaterial } from "../common/materials.js";
+import { createGameMaterial, isLowQuality } from "../common/materials.js";
+import { colliderBlocksAtFeetHeight, getPlatformFloorHeight, resolvePlatformOverlap } from "../common/platform-collision.js";
 import {
   CELL_SIZE,
   WALL_HEIGHT,
@@ -25,7 +26,7 @@ import {
   levelOneWorldToCell,
 } from "../level-one/layout.js";
 import { createLevelOneLights, collectLevelOneTransforms } from "../level-one/props.js";
-import { createLevelFourCarpetTexture, createLevelFourWallTexture, createLevelFourCeilingTexture } from "./textures.js";
+import { createLevelFourCarpetMaps, createLevelFourWallTexture, createLevelFourCeilingTexture } from "./textures.js";
 import { addLevelFourOfficeDetails } from "./props.js";
 import {
   createAlmondWaterPickup,
@@ -77,11 +78,12 @@ export function createLevelFourScene({ initialState = null } = {}) {
   );
 
   const floorMaterial = createGameMaterial({
-    map: createLevelFourCarpetTexture(),
+    ...createLevelFourCarpetMaps({ includeDetailMaps: !isLowQuality() }),
     color: 0xdfe4d7,
     emissive: 0x596454,
-    emissiveIntensity: 0.18,
-    roughness: 0.97,
+    emissiveIntensity: 0.08,
+    roughness: 1,
+    normalScale: new THREE.Vector2(0.38, 0.38),
   });
   const wallMaterial = createGameMaterial({
     map: createLevelFourWallTexture(),
@@ -167,7 +169,12 @@ export function createLevelFourScene({ initialState = null } = {}) {
     { id: "level-four-stairs-level-six", targetLevel: 6, targetLabel: "LEVEL 6", label: "DARKNESS", kind: "stair", stairModel: true, position: levelOneCellCenter(2, 22), rotation: Math.PI },
     { id: "level-four-elevator-level-three", targetLevel: 3, targetLabel: "LEVEL 3", label: "MAINTENANCE", kind: "elevator", position: levelOneCellCenter(1, 1), rotation: Math.PI / 2 },
   ];
-  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
+  // Door colliders go into their own list first: the pickups below are placed
+  // with `blockedAabbs: propColliders`, so feeding the door footprints in
+  // before they are built would rule out candidate cells and move saved item
+  // positions. They are merged back in once the items exist.
+  const exitColliders = [];
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial, { colliders: exitColliders });
 
   const almondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_ONE_COLS,
@@ -243,6 +250,9 @@ export function createLevelFourScene({ initialState = null } = {}) {
     blockedAabbs: propColliders,
     initialState: pickupInitial["silence-liquid"] ?? null,
   });
+  // The pickups above are placed, so the door colliders can join the list that
+  // isWalkable / getFloorHeight / resolvePosition walk.
+  propColliders.push(...exitColliders);
   const hound = createHoundEntity(scene, {
     spawnPosition:
       chooseBacteriaSpawn({
@@ -265,7 +275,7 @@ export function createLevelFourScene({ initialState = null } = {}) {
 
   let objectiveReached = Boolean(objectiveInitial.reached);
 
-  function isWalkable(x, z, radius = 0.36) {
+  function isWalkable(x, z, radius = 0.36, feetY = 0) {
     const corner = radius * 0.72;
     const samples = [
       [0, 0],
@@ -283,7 +293,17 @@ export function createLevelFourScene({ initialState = null } = {}) {
       return isLevelOneOpenCell(cell.col, cell.row);
     });
     if (!isInOpenCells) return false;
-    return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
+    return !propColliders.some(
+      (collider) => colliderBlocksAtFeetHeight(collider, feetY) && circleIntersectsAabb(x, z, radius, collider),
+    );
+  }
+
+  function getFloorHeight(x, z, feetY) {
+    return getPlatformFloorHeight({ colliders: propColliders, x, z, feetY });
+  }
+
+  function resolvePosition(x, z, radius, feetY, maxCorrection) {
+    return resolvePlatformOverlap({ colliders: propColliders, x, z, radius, feetY, maxCorrection });
   }
 
   function update(delta, elapsed, playerPosition, effects = {}) {
@@ -371,6 +391,8 @@ export function createLevelFourScene({ initialState = null } = {}) {
     spawn,
     targetPosition,
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     decorativeItemSpawns: [
       { id: "office-badge", position: { ...levelOneCellCenter(18, 12), y: 0.08 }, rotation: 0.2, tiltX: 0.04 },
       { id: "empty-can", position: { ...levelOneCellCenter(28, 19), y: 0.2 }, rotation: 1.2, tiltZ: -0.15 },

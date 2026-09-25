@@ -5,7 +5,7 @@ import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
-const SHADOW_CASTER_PATTERN = /entity|lifeform|hound|smiler|faceling|item|pickup|door|table|chair|desk|sofa|cabinet|crate|bed|lamp|fixture|rail|stair|pipe/i;
+const SHADOW_CASTER_PATTERN = /entity|lifeform|hound|smiler|faceling|item|pickup|door|table|chair|desk|sofa|cabinet|crate|shelf|bed|lamp|fixture|rail|stair|pipe/i;
 const SHADOW_RECEIVER_PATTERN = /floor|wall|ceiling|ground|road|pavement|carpet|room|hall|platform/i;
 
 function materialSupportsShadows(material) {
@@ -142,6 +142,49 @@ function createOutdoorShadowRig(world, profile) {
   };
 }
 
+const PREWARM_TEXTURE_SLOTS = [
+  "map",
+  "normalMap",
+  "roughnessMap",
+  "metalnessMap",
+  "aoMap",
+  "alphaMap",
+  "emissiveMap",
+  "bumpMap",
+  "specularMap",
+  "lightMap",
+  "displacementMap",
+  "envMap",
+];
+
+// Textures are uploaded lazily on first draw, so walking into a part of a level
+// that has not been on screen yet costs a decode + upload + mipmap stall right
+// when the player turns around. Pay that cost while the loading overlay is up.
+function uploadSceneTextures(renderer, scene) {
+  if (typeof renderer.initTexture !== "function") return;
+  const uploaded = new WeakSet();
+  scene.traverse((object) => {
+    if (!object.material) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      if (!material) continue;
+      for (const slot of PREWARM_TEXTURE_SLOTS) {
+        const texture = material[slot];
+        if (!texture || !texture.image || uploaded.has(texture)) continue;
+        uploaded.add(texture);
+        try {
+          renderer.initTexture(texture);
+        } catch {
+          // A texture that cannot be uploaded yet is left to the first draw.
+        }
+      }
+    }
+  });
+}
+
+const VIEW_MODEL_NAME = "first-person-baked-hazmat-arms";
+const VIEW_MODEL_WAIT_MS = 6000;
+
 export function createRenderingPipeline(renderer, canvas, profile) {
   let world = null;
   let composer = null;
@@ -264,8 +307,28 @@ export function createRenderingPipeline(renderer, canvas, profile) {
     },
     async prewarm() {
       if (!world) return;
+      // The first-person arms are fetched asynchronously and only then added to
+      // the camera. Without waiting for them their programs compile on the first
+      // frame the hands are visible - i.e. right when the player regains control.
+      const viewModel = world.camera?.getObjectByName?.(VIEW_MODEL_NAME) ?? null;
+      if (viewModel && !viewModel.userData.loaded && viewModel.userData.ready) {
+        await Promise.race([
+          viewModel.userData.ready,
+          new Promise((resolve) => setTimeout(resolve, VIEW_MODEL_WAIT_MS)),
+        ]);
+      }
       await renderer.compileAsync?.(world.scene, world.camera);
       this.render();
+      uploadSceneTextures(renderer, world.scene);
+      // Shadow depth programs and the view model's programs are only created by
+      // an actual draw pass, so force one with the hands visible.
+      const previousVisibility = viewModel?.visible ?? null;
+      if (viewModel) viewModel.visible = true;
+      try {
+        this.render();
+      } finally {
+        if (viewModel && previousVisibility !== null) viewModel.visible = previousVisibility;
+      }
     },
     updateAdaptive(fps) {
       if (!profile.gtao || !Number.isFinite(fps)) {

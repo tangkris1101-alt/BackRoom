@@ -253,8 +253,8 @@ export function createAlmondWaterPickup(
         id: itemId,
         name: isSuper ? "SUPER ALMOND WATER" : "ALMOND WATER",
         effect: isSuper
-          ? "250 STAMINA CAP / STRONG HEALTH REGEN"
-          : "+50 STAMINA CAP / HEALTH REGEN",
+          ? "500 STAMINA CAP / STRONG HEALTH REGEN"
+          : "+100 STAMINA CAP / HEALTH REGEN",
         action: "F / BUTTON PICK UP",
         distance,
         position: { x: group.position.x, y: group.position.y, z: group.position.z },

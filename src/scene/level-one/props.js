@@ -26,6 +26,11 @@ import {
   countLevelOneOpenNeighbors,
   getLevelOneTargetMount,
 } from "./layout.js";
+import {
+  buildDetailedSupplyCrate,
+  buildDetailedSupplyShelf,
+  createLevelOneStorageAssetKit,
+} from "./storage-model.js";
 
 export function createLevelOneLights(scene, fixturePositions, { dynamicPointLights = false } = {}) {
   const fixtures = [];
@@ -256,44 +261,77 @@ export function addLevelOnePipes(scene) {
   });
 }
 
+// Storage props share one procedural material kit per scene: the textures are
+// expensive to draw, and the scene-scoped cache keeps them out of the way of
+// the level's own disposal pass.
+function getLevelOneStorageKit(scene) {
+  if (!scene.userData.levelOneStorageKit) {
+    scene.userData.levelOneStorageKit = createLevelOneStorageAssetKit();
+  }
+  return scene.userData.levelOneStorageKit;
+}
+
+// Colliders follow the visible silhouette: the model's local bounds are
+// rotated onto the instance, so nothing is blocked beyond the boards. The
+// footprint is returned without a top, letting each caller decide whether the
+// prop is a platform (crates) or a solid obstacle (shelving bays).
+function footprintCollider(prototype, positionX, positionZ, rotation) {
+  const bounds = new THREE.Box3().setFromObject(prototype);
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const corners = [
+    [bounds.min.x, bounds.min.z],
+    [bounds.max.x, bounds.min.z],
+    [bounds.max.x, bounds.max.z],
+    [bounds.min.x, bounds.max.z],
+  ].map(([x, z]) => [positionX + x * cos + z * sin, positionZ - x * sin + z * cos]);
+  return {
+    footprint: {
+      minX: Math.min(...corners.map(([x]) => x)),
+      maxX: Math.max(...corners.map(([x]) => x)),
+      minZ: Math.min(...corners.map(([, z]) => z)),
+      maxZ: Math.max(...corners.map(([, z]) => z)),
+    },
+    topY: bounds.max.y,
+  };
+}
+
 export function addLevelOneCrates(scene) {
-  const crateMaterial = new THREE.MeshStandardMaterial({
-    color: 0x6a5840,
-    emissive: 0x21180f,
-    emissiveIntensity: 0.08,
-    roughness: 0.86,
+  const kit = getLevelOneStorageKit(scene);
+  const prototypes = [
+    buildDetailedSupplyCrate({ materials: kit.materials, tone: "light", braced: false, stencil: "meg", seed: 0x11a3 }),
+    buildDetailedSupplyCrate({ materials: kit.materials, tone: "dark", braced: true, stencil: "rations", seed: 0x2b57 }),
+    buildDetailedSupplyCrate({ materials: kit.materials, tone: "light", braced: true, stencil: "rations", seed: 0x43c9 }),
+  ];
+  prototypes.forEach((prototype) => {
+    prototype.name = "level-one-crate";
+    prototype.updateMatrixWorld(true);
   });
-  const darkCrateMaterial = new THREE.MeshStandardMaterial({
-    color: 0x3c413a,
-    emissive: 0x111511,
-    emissiveIntensity: 0.06,
-    roughness: 0.82,
-  });
-  const geometry = new THREE.BoxGeometry(1.25, 0.86, 1.15);
+
   const colliders = [];
   const crates = [
-    { col: 12, row: 8, x: -0.72, z: -0.5, rot: 0.18, dark: false },
-    { col: 14, row: 8, x: 0.45, z: 0.45, rot: -0.12, dark: true },
-    { col: 16, row: 10, x: -0.3, z: 0.65, rot: 0.08, dark: false },
-    { col: 25, row: 18, x: -0.54, z: -0.52, rot: 0.2, dark: true },
-    { col: 27, row: 19, x: 0.58, z: 0.1, rot: -0.26, dark: false },
-    { col: 29, row: 18, x: -0.2, z: 0.4, rot: 0.08, dark: true },
+    { col: 12, row: 8, x: -0.72, z: -0.5, rot: 0.18, variant: 0 },
+    { col: 14, row: 8, x: 0.45, z: 0.45, rot: -0.12, variant: 1 },
+    { col: 16, row: 10, x: -0.3, z: 0.65, rot: 0.08, variant: 2 },
+    { col: 25, row: 18, x: -0.54, z: -0.52, rot: 0.2, variant: 1 },
+    { col: 27, row: 19, x: 0.58, z: 0.1, rot: -0.26, variant: 0 },
+    // Cell (29, 18) also holds a supply shelf, which swallowed 84% of this
+    // crate's footprint (1.23 m^3 of shared volume). One cell west is free and
+    // still inside the same supply zone.
+    { col: 28, row: 18, x: -0.2, z: 0.4, rot: 0.08, variant: 2 },
   ];
 
   crates.forEach((crate) => {
     const center = levelOneCellCenter(crate.col, crate.row);
-    const mesh = new THREE.Mesh(geometry, crate.dark ? darkCrateMaterial : crateMaterial);
-    mesh.position.set(center.x + crate.x, 0.43, center.z + crate.z);
+    const prototype = prototypes[crate.variant];
+    const mesh = prototype.clone();
+    mesh.name = "level-one-crate";
+    mesh.position.set(center.x + crate.x, 0, center.z + crate.z);
     mesh.rotation.y = crate.rot;
     scene.add(mesh);
 
-    const collider = {
-      minX: mesh.position.x - 0.86,
-      maxX: mesh.position.x + 0.86,
-      minZ: mesh.position.z - 0.82,
-      maxZ: mesh.position.z + 0.82,
-      topY: 0.86,
-    };
+    const { footprint, topY } = footprintCollider(prototype, mesh.position.x, mesh.position.z, crate.rot);
+    const collider = { ...footprint, topY };
     mesh.userData.collider = collider;
     colliders.push(collider);
   });
@@ -403,6 +441,7 @@ export function addLevelOneCorridorDetails(scene) {
   workbenches.forEach((entry) => {
     const center = levelOneCellCenter(entry.col, entry.row);
     const group = new THREE.Group();
+    group.name = "level-one-workbench-table";
     group.position.set(center.x, 0, center.z);
     group.rotation.y = entry.rotation;
     const top = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.13, 0.78), benchMaterial);
@@ -444,6 +483,38 @@ export function addLevelOneCorridorDetails(scene) {
       maxZ: center.z + halfZ,
       topY: 0.98,
     });
+
+    // The toolbox and the vice stand on the bench top, so the tabletop collider
+    // alone lets a player stand with their shins inside them. Each tool gets its
+    // own upper layer rather than one slab across the whole bench, so the free
+    // ends of the top stay walkable.
+    const cos = Math.cos(entry.rotation);
+    const sin = Math.sin(entry.rotation);
+    const toWorld = (tool) => {
+      const corners = [
+        [tool.minX, tool.minZ],
+        [tool.maxX, tool.minZ],
+        [tool.minX, tool.maxZ],
+        [tool.maxX, tool.maxZ],
+      ].map(([x, z]) => ({ x: center.x + x * cos + z * sin, z: center.z - x * sin + z * cos }));
+      return {
+        minX: Math.min(...corners.map((corner) => corner.x)),
+        maxX: Math.max(...corners.map((corner) => corner.x)),
+        minZ: Math.min(...corners.map((corner) => corner.z)),
+        maxZ: Math.max(...corners.map((corner) => corner.z)),
+        topY: tool.topY,
+      };
+    };
+    for (const tool of [toolbox, vice]) {
+      const { width, depth, height } = tool.geometry.parameters;
+      colliders.push(toWorld({
+        minX: tool.position.x - width / 2,
+        maxX: tool.position.x + width / 2,
+        minZ: tool.position.z - depth / 2,
+        maxZ: tool.position.z + depth / 2,
+        topY: tool.position.y + height / 2,
+      }));
+    }
   });
 
   return colliders;
@@ -478,71 +549,37 @@ export function addLevelOneWallSigns(scene) {
 }
 
 export function addLevelOneSupplyShelves(scene) {
-  const frameMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2f3935,
-    emissive: 0x0d1411,
-    emissiveIntensity: 0.08,
-    roughness: 0.68,
-    metalness: 0.28,
+  const kit = getLevelOneStorageKit(scene);
+  const prototypes = [
+    buildDetailedSupplyShelf({ materials: kit.materials, seed: 0x31d5, stocked: "cartons", labels: "supply" }),
+    buildDetailedSupplyShelf({ materials: kit.materials, seed: 0x5f27, stocked: "crate", labels: "rations" }),
+  ];
+  prototypes.forEach((prototype) => {
+    prototype.name = "level-one-supply-shelf";
+    prototype.updateMatrixWorld(true);
   });
-  const palletMaterial = new THREE.MeshStandardMaterial({
-    color: 0x6b5637,
-    emissive: 0x1d1308,
-    emissiveIntensity: 0.08,
-    roughness: 0.88,
-  });
-  const boxMaterial = new THREE.MeshStandardMaterial({
-    color: 0x756248,
-    emissive: 0x22180e,
-    emissiveIntensity: 0.06,
-    roughness: 0.86,
-  });
+
   const colliders = [];
   const shelves = [
-    { col: 12, row: 9, rot: 0.04 },
-    { col: 15, row: 8, rot: -0.05 },
-    { col: 26, row: 18, rot: Math.PI / 2 + 0.06 },
-    { col: 29, row: 18, rot: Math.PI / 2 - 0.04 },
+    { col: 12, row: 9, rot: 0.04, variant: 0 },
+    { col: 15, row: 8, rot: -0.05, variant: 1 },
+    { col: 26, row: 18, rot: Math.PI / 2 + 0.06, variant: 0 },
+    { col: 29, row: 18, rot: Math.PI / 2 - 0.04, variant: 1 },
   ];
 
   shelves.forEach((shelf) => {
     const center = levelOneCellCenter(shelf.col, shelf.row);
-    const group = new THREE.Group();
+    const prototype = prototypes[shelf.variant];
+    const group = prototype.clone();
+    group.name = "level-one-supply-shelf";
     group.position.set(center.x, 0, center.z);
     group.rotation.y = shelf.rot;
-
-    const back = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.38, 0.08), frameMaterial);
-    back.position.set(0, 0.78, 0.32);
-    group.add(back);
-
-    for (let level = 0; level < 3; level += 1) {
-      const shelfBoard = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.08, 0.72), frameMaterial);
-      shelfBoard.position.set(0, 0.34 + level * 0.47, 0);
-      group.add(shelfBoard);
-    }
-
-    for (let i = -1; i <= 1; i += 2) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.45, 0.08), frameMaterial);
-      post.position.set(i * 1.12, 0.72, -0.32);
-      group.add(post);
-    }
-
-    const pallet = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.18, 0.72), palletMaterial);
-    pallet.position.set(0, 0.09, -0.72);
-    group.add(pallet);
-
-    const box = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.42, 0.46), boxMaterial);
-    box.position.set(-0.42, 0.59, -0.06);
-    box.rotation.y = 0.08;
-    group.add(box);
-
     scene.add(group);
-    const collider = {
-      minX: center.x - 1.42,
-      maxX: center.x + 1.42,
-      minZ: center.z - 1.05,
-      maxZ: center.z + 1.05,
-    };
+
+    // Shelving bays stay solid columns: their open bays are not a surface the
+    // player is meant to stand on, so no topY is published for them.
+    const { footprint } = footprintCollider(prototype, center.x, center.z, shelf.rot);
+    const collider = { ...footprint };
     group.userData.collider = collider;
     colliders.push(collider);
   });

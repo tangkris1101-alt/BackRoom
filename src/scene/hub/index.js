@@ -1,8 +1,14 @@
 import * as THREE from "three";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createExitNetwork } from "../common/exit-network.js";
-import { HUB_LEVEL } from "../constants.js";
+import {
+  colliderBlocksAtFeetHeight,
+  getPlatformFloorHeight,
+  resolvePlatformOverlap,
+} from "../common/platform-collision.js";
+import { HUB_LEVEL, circleIntersectsAabb } from "../constants.js";
 import { resolveHubEntry } from "./entry.js";
+import { createHubAsphaltMaps, createHubConcreteMaps, createHubWalkwayMaps } from "./textures.js";
 
 const HALF_WIDTH = 17;
 const HALF_LENGTH = 132;
@@ -10,18 +16,44 @@ const WALL_SPRING_HEIGHT = 2.9;
 const CEILING_HEIGHT = 7.8;
 const DOORWAY_WIDTH = 3;
 const DOORWAY_HEIGHT = 2.72;
+// Floor footprints, all measured from the geometry below: the central asphalt
+// slab is 12 wide (|x| <= 6), the raised walkways are 4.85 wide boxes centred on
+// |x| = 10.55 (|x| in [8.125, 12.975]), and the side walls are 0.35 thick with
+// their centres on |x| = 17, so the wall face is at 16.825. The two strips in
+// between - |x| in (6, 8.125) and (12.975, 16.825) - were a hole the walkable
+// clamp still allowed the player to cross; the floor pads built from these
+// constants fill them so every reachable x has a surface under it.
+const CENTRAL_FLOOR_HALF_WIDTH = 6;
+const WALL_THICKNESS = 0.35;
+const WALKWAY_WIDTH = 4.85;
+const WALKWAY_CENTER_X = 10.55;
+const WALKWAY_HEIGHT = 0.14;
+const WALKWAY_BASE_Y = 0.035;
+const WALKWAY_INNER_X = WALKWAY_CENTER_X - WALKWAY_WIDTH / 2;
+const WALKWAY_OUTER_X = WALKWAY_CENTER_X + WALKWAY_WIDTH / 2;
+const WALKWAY_TOP_Y = WALKWAY_BASE_Y + WALKWAY_HEIGHT / 2;
+const FLOOR_PAD_OUTER_X = HALF_WIDTH - WALL_THICKNESS / 2;
 
 function createVaultGeometry(halfWidth, halfLength, segments = 28) {
   const vertices = [];
+  const uvs = [];
   const indices = [];
+  let arcLength = 0;
+  let previousX = -halfWidth;
+  let previousY = WALL_SPRING_HEIGHT;
   for (let zIndex = 0; zIndex <= 1; zIndex += 1) {
     const z = zIndex === 0 ? -halfLength : halfLength;
+    arcLength = 0;
     for (let index = 0; index <= segments; index += 1) {
       const normalizedX = index / segments * 2 - 1;
       const x = normalizedX * halfWidth;
       const arch = 1 - normalizedX * normalizedX;
       const y = WALL_SPRING_HEIGHT + (CEILING_HEIGHT - WALL_SPRING_HEIGHT) * Math.pow(Math.max(0, arch), 0.58);
+      if (index > 0) arcLength += Math.hypot(x - previousX, y - previousY);
       vertices.push(x, y, z);
+      uvs.push(arcLength / 3.2, z / 3.2);
+      previousX = x;
+      previousY = y;
     }
   }
   for (let index = 0; index < segments; index += 1) {
@@ -30,8 +62,26 @@ function createVaultGeometry(halfWidth, halfLength, segments = 28) {
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createTiledBoxGeometry(width, height, depth, tileSize = 3.2) {
+  const geometry = new THREE.BoxGeometry(width, height, depth);
+  const positions = geometry.attributes.position;
+  const normals = geometry.attributes.normal;
+  const uvs = geometry.attributes.uv;
+  for (let index = 0; index < positions.count; index += 1) {
+    const x = positions.getX(index);
+    const y = positions.getY(index);
+    const z = positions.getZ(index);
+    if (Math.abs(normals.getX(index)) > 0.5) uvs.setXY(index, z / tileSize, y / tileSize);
+    else if (Math.abs(normals.getY(index)) > 0.5) uvs.setXY(index, x / tileSize, z / tileSize);
+    else uvs.setXY(index, x / tileSize, y / tileSize);
+  }
+  uvs.needsUpdate = true;
   return geometry;
 }
 
@@ -89,17 +139,28 @@ function addHighLockedDoors(scene) {
 
 function addHubArchitecture(scene, routes) {
   const concrete = new THREE.MeshStandardMaterial({
-    color: 0x605d54,
-    emissive: 0x201b11,
-    emissiveIntensity: 0.22,
-    roughness: 0.94,
+    ...createHubConcreteMaps(),
+    color: 0xd2c7b3,
+    roughness: 0.9,
+    normalScale: new THREE.Vector2(0.35, 0.35),
   });
   const asphalt = new THREE.MeshStandardMaterial({
-    color: 0x24231f,
-    emissive: 0x100d08,
-    emissiveIntensity: 0.12,
+    ...createHubAsphaltMaps(),
+    color: 0xb7a992,
     roughness: 0.98,
+    normalScale: new THREE.Vector2(0.32, 0.32),
   });
+  const walkwayConcrete = new THREE.MeshStandardMaterial({
+    ...createHubWalkwayMaps(),
+    color: 0xb9ab91,
+    roughness: 0.94,
+    normalScale: new THREE.Vector2(0.3, 0.3),
+  });
+  const vaultConcrete = concrete.clone();
+  vaultConcrete.side = THREE.BackSide;
+  vaultConcrete.emissive.set(0x9c8260);
+  vaultConcrete.emissiveMap = concrete.map;
+  vaultConcrete.emissiveIntensity = 0.35;
   const wallSeam = new THREE.MeshBasicMaterial({ color: 0x343126 });
   const lampMaterial = new THREE.MeshStandardMaterial({
     color: 0xffd797,
@@ -108,18 +169,50 @@ function addHubArchitecture(scene, routes) {
     roughness: 0.28,
   });
 
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, HALF_LENGTH * 2), asphalt);
+  const floorGeometry = new THREE.PlaneGeometry(CENTRAL_FLOOR_HALF_WIDTH * 2, HALF_LENGTH * 2);
+  const floorUvs = floorGeometry.attributes.uv;
+  for (let index = 0; index < floorUvs.count; index += 1) {
+    floorUvs.setXY(
+      index,
+      floorUvs.getX(index) * CENTRAL_FLOOR_HALF_WIDTH * 2 / 3.2,
+      floorUvs.getY(index) * HALF_LENGTH * 2 / 3.2,
+    );
+  }
+  const floor = new THREE.Mesh(floorGeometry, asphalt);
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
 
   for (const side of [-1, 1]) {
-    const walkway = new THREE.Mesh(new THREE.BoxGeometry(4.85, 0.14, HALF_LENGTH * 2), concrete);
-    walkway.position.set(side * 10.55, 0.035, 0);
+    const walkway = new THREE.Mesh(createTiledBoxGeometry(WALKWAY_WIDTH, WALKWAY_HEIGHT, HALF_LENGTH * 2), walkwayConcrete);
+    walkway.position.set(side * WALKWAY_CENTER_X, WALKWAY_BASE_Y, 0);
     scene.add(walkway);
   }
 
-  const vault = new THREE.Mesh(createVaultGeometry(HALF_WIDTH, HALF_LENGTH), concrete);
-  vault.material.side = THREE.BackSide;
+  // The walkways are only 4.85 wide, so they leave a 2.125 wide gutter against
+  // the asphalt edge (|x| in [6, 8.125]) and a 3.85 wide one against the wall
+  // face (|x| in [12.975, 16.825]). Both sit inside the walkable clamp, and the
+  // outer one is exactly where the 15 doors at |x| = 17 are opened (|x| >= 13.8)
+  // and entered (|x| >= 15.75), so the player used to cross it over nothing. The
+  // pads reuse the walkway material, height and 3.2 m tiling, so the raised
+  // sidewalk reads as one continuous surface up to the wall with no visible
+  // gutter.
+  const floorPadBands = [
+    { name: "inner", minX: CENTRAL_FLOOR_HALF_WIDTH, maxX: WALKWAY_INNER_X },
+    { name: "outer", minX: WALKWAY_OUTER_X, maxX: FLOOR_PAD_OUTER_X },
+  ];
+  for (const side of [-1, 1]) {
+    for (const band of floorPadBands) {
+      const pad = new THREE.Mesh(
+        createTiledBoxGeometry(band.maxX - band.minX, WALKWAY_HEIGHT, HALF_LENGTH * 2),
+        walkwayConcrete,
+      );
+      pad.name = `hub-floor-pad-${band.name}-${side < 0 ? "west" : "east"}`;
+      pad.position.set(side * (band.minX + band.maxX) / 2, WALKWAY_BASE_Y, 0);
+      scene.add(pad);
+    }
+  }
+
+  const vault = new THREE.Mesh(createVaultGeometry(HALF_WIDTH, HALF_LENGTH), vaultConcrete);
   scene.add(vault);
 
   for (const side of [-1, 1]) {
@@ -132,12 +225,12 @@ function addHubArchitecture(scene, routes) {
       const gapEnd = route.position.z + DOORWAY_WIDTH / 2;
       const segmentLength = gapStart - cursor;
       if (segmentLength > 0.1) {
-        const wall = new THREE.Mesh(new THREE.BoxGeometry(0.35, WALL_SPRING_HEIGHT, segmentLength), concrete);
+        const wall = new THREE.Mesh(createTiledBoxGeometry(0.35, WALL_SPRING_HEIGHT, segmentLength), concrete);
         wall.position.set(side * HALF_WIDTH, WALL_SPRING_HEIGHT / 2, cursor + segmentLength / 2);
         scene.add(wall);
       }
       const lintel = new THREE.Mesh(
-        new THREE.BoxGeometry(0.35, WALL_SPRING_HEIGHT - DOORWAY_HEIGHT, DOORWAY_WIDTH),
+        createTiledBoxGeometry(0.35, WALL_SPRING_HEIGHT - DOORWAY_HEIGHT, DOORWAY_WIDTH),
         concrete,
       );
       lintel.position.set(side * HALF_WIDTH, DOORWAY_HEIGHT + (CEILING_HEIGHT - DOORWAY_HEIGHT) / 2, route.position.z);
@@ -146,13 +239,13 @@ function addHubArchitecture(scene, routes) {
     }
     const tailLength = HALF_LENGTH - cursor;
     if (tailLength > 0.1) {
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.35, WALL_SPRING_HEIGHT, tailLength), concrete);
+      const wall = new THREE.Mesh(createTiledBoxGeometry(0.35, WALL_SPRING_HEIGHT, tailLength), concrete);
       wall.position.set(side * HALF_WIDTH, WALL_SPRING_HEIGHT / 2, cursor + tailLength / 2);
       scene.add(wall);
     }
   }
   for (const end of [-1, 1]) {
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(HALF_WIDTH * 2, WALL_SPRING_HEIGHT, 0.35), concrete);
+    const wall = new THREE.Mesh(createTiledBoxGeometry(HALF_WIDTH * 2, WALL_SPRING_HEIGHT, 0.35), concrete);
     wall.position.set(0, WALL_SPRING_HEIGHT / 2, end * HALF_LENGTH);
     scene.add(wall);
   }
@@ -167,12 +260,12 @@ function addHubArchitecture(scene, routes) {
       lamp.position.set(side * (HALF_WIDTH - 0.36), 2.18, z + (index % 2 === 0 ? 1.7 : -1.15));
       scene.add(lamp);
       if (index % 2 === 0) {
-        const light = new THREE.PointLight(0xffb45c, 4.2, 18, 1.9);
+        const light = new THREE.PointLight(0xffb45c, 4.2, 23, 1.9);
         light.position.set(side * (HALF_WIDTH - 1.05), 2.18, lamp.position.z);
         scene.add(light);
       }
     }
-    const rib = new THREE.Mesh(new THREE.BoxGeometry(HALF_WIDTH * 1.86, 0.16, 0.34), concrete);
+    const rib = new THREE.Mesh(createTiledBoxGeometry(HALF_WIDTH * 1.86, 0.16, 0.34), concrete);
     rib.position.set(0, CEILING_HEIGHT - 0.38, z);
     rib.rotation.z = (index % 2 === 0 ? 1 : -1) * 0.035;
     scene.add(rib);
@@ -188,8 +281,8 @@ export function createHubScene({ initialState = null, entryContext = null } = {}
   const camera = new THREE.PerspectiveCamera(74, 1, 0.05, 320);
   const viewModel = attachFirstPersonViewModel(camera);
   scene.add(camera);
-  scene.add(new THREE.HemisphereLight(0xffdf9d, 0x29251d, 1.2));
-  const fill = new THREE.DirectionalLight(0xffd68a, 0.7);
+  scene.add(new THREE.HemisphereLight(0xffdfae, 0x5a5041, 1.45));
+  const fill = new THREE.DirectionalLight(0xffdba8, 0.78);
   fill.position.set(6, CEILING_HEIGHT - 0.5, 10);
   scene.add(fill);
 
@@ -231,7 +324,40 @@ export function createHubScene({ initialState = null, entryContext = null } = {}
   });
   const spawn = hubEntry.spawn;
   addHubArchitecture(scene, routes);
-  const exitNetwork = createExitNetwork(scene, camera, routes, hubEntry.interactions);
+
+  // One collider per side stands for every raised surface: the walkway plus both
+  // new floor pads, all sharing the 0.105 top face. It spans the central asphalt
+  // edge (6) out to the wall face (16.825), so the platform height is published
+  // across the whole walkable width instead of only the 4.85 m walkway.
+  //
+  // A `topY` of 0.105 together with platform-collision's SIDE_CLEARANCE (0.18)
+  // makes this a floor lift and never a wall: colliderBlocksAtFeetHeight only
+  // blocks while the feet are below 0.105 - 0.18 = -0.075, and no Hub floor sits
+  // below 0. The 10.5 cm step at x = 6 therefore cannot push the player back -
+  // it only raises the ground once the body is fully on top of the platform.
+  //
+  // The exit network pushes one collider per door pose into this same list (the
+  // shut doorway, plus the swinging leaf for the single-door routes), so it has
+  // to exist before the network is built. Nothing else in the Hub reads the list
+  // during construction, so the order is free.
+  const colliders = [
+    {
+      minX: CENTRAL_FLOOR_HALF_WIDTH,
+      maxX: FLOOR_PAD_OUTER_X,
+      minZ: -HALF_LENGTH,
+      maxZ: HALF_LENGTH,
+      topY: WALKWAY_TOP_Y,
+    },
+    {
+      minX: -FLOOR_PAD_OUTER_X,
+      maxX: -CENTRAL_FLOOR_HALF_WIDTH,
+      minZ: -HALF_LENGTH,
+      maxZ: HALF_LENGTH,
+      topY: WALKWAY_TOP_Y,
+    },
+  ];
+
+  const exitNetwork = createExitNetwork(scene, camera, routes, hubEntry.interactions, { colliders });
   const keyMarker = new THREE.Group();
   keyMarker.name = "hub-level-key-door-marker";
   const keyMarkerMaterial = new THREE.MeshBasicMaterial({
@@ -249,8 +375,24 @@ export function createHubScene({ initialState = null, entryContext = null } = {}
   keyMarker.renderOrder = 12;
   scene.add(keyMarker);
 
-  function isWalkable(x, z, radius = 0.36) {
-    return Math.abs(x) <= HALF_WIDTH - 0.45 - radius && Math.abs(z) <= HALF_LENGTH - 0.45 - radius;
+  // The walkable rectangle keeps its full |x| <= HALF_WIDTH - 0.45 - radius
+  // (16.19 at the player radius) and |z| <= 131.19 clamp. Narrowing it to the
+  // visible walkway edge would soft-lock the level: the doors sit at |x| = 17 and
+  // need |x| >= 13.8 to be opened and |x| >= 15.75 to be entered. The pads above
+  // supply the missing ground for that band instead.
+  function isWalkable(x, z, radius = 0.36, feetY = 0) {
+    if (Math.abs(x) > HALF_WIDTH - 0.45 - radius || Math.abs(z) > HALF_LENGTH - 0.45 - radius) return false;
+    return !colliders.some(
+      (collider) => colliderBlocksAtFeetHeight(collider, feetY) && circleIntersectsAabb(x, z, radius, collider),
+    );
+  }
+
+  function getFloorHeight(x, z, feetY) {
+    return getPlatformFloorHeight({ colliders, x, z, feetY });
+  }
+
+  function resolvePosition(x, z, radius, feetY, maxCorrection) {
+    return resolvePlatformOverlap({ colliders, x, z, radius, feetY, maxCorrection });
   }
 
   function setKeyMarker(targetLevel, elapsed = 0) {
@@ -299,6 +441,8 @@ export function createHubScene({ initialState = null, entryContext = null } = {}
     exitMode: "network",
     nextLevel: null,
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     getFootstepSurface: (position) => Math.abs(position.x) <= 6 ? "asphalt" : "concrete",
     update,
     interact: (playerPosition, access) => exitNetwork.interact(playerPosition, access),
@@ -310,10 +454,13 @@ export function createHubScene({ initialState = null, entryContext = null } = {}
     worldItemOptions: {
       minimumLevelKeys: 1,
       levelKeyAnchors: [
-        { position: { x: -7.6, z: -41 } },
-        { position: { x: 6.9, z: -6 } },
-        { position: { x: -6.7, z: 38 } },
-        { position: { x: 7.3, z: 56 } },
+        // Kept inside |x| <= 5.2 so the +/-0.6m spawn jitter never drops a key
+        // onto the raised walkway pads (top 0.105), where the item's fixed
+        // y = 0.08 would bury it under the concrete.
+        { position: { x: -5.2, z: -41 } },
+        { position: { x: 5.2, z: -6 } },
+        { position: { x: -5.2, z: 38 } },
+        { position: { x: 5.2, z: 56 } },
       ],
     },
     getSnapshot() {

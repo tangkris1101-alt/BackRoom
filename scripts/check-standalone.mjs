@@ -19,6 +19,8 @@ assert.doesNotMatch(html, /<(?:script|link|img|audio|source)\b[^>]*(?:src|href)=
 assert.doesNotMatch(html, /<script\b[^>]*\bsrc=/i);
 assert.doesNotMatch(html, /<link\b[^>]*rel=["']stylesheet["']/i);
 assert.doesNotMatch(html, /\bimport\.meta\b/);
+assert.doesNotMatch(html, /new URL\(`[^`]*\.bin`,location\.href\)\.href/);
+assert.match(html, /data:application\/octet-stream;base64,/);
 assert.match(webIndex, /<script\b[^>]*type=["']module["'][^>]*src=["']\.\/assets\//i);
 assert.doesNotMatch(webIndex, /This file inlines all assets/i);
 assert.notEqual(webIndex, html, "the online index must not be overwritten by the standalone artifact");

@@ -6,8 +6,10 @@ const unitScale = new THREE.Vector3(1, 1, 1);
 
 export function addInstancedBoxes(scene, geometry, material, transforms) {
   const mesh = new THREE.InstancedMesh(geometry, material, transforms.length);
-  transforms.forEach((position, index) => {
-    matrix.compose(position, identityQuaternion, unitScale);
+  transforms.forEach((entry, index) => {
+    const position = entry.isVector3 ? entry : entry.position;
+    const scale = entry.isVector3 || !entry.scale ? unitScale : entry.scale;
+    matrix.compose(position, identityQuaternion, scale);
     mesh.setMatrixAt(index, matrix);
   });
   mesh.instanceMatrix.needsUpdate = true;

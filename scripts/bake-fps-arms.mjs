@@ -16,13 +16,23 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const modelDirectory = resolve(projectRoot, "src/assets/models");
 const sourcePath = resolve(modelDirectory, "fps-arms-para.fbx");
 const armOutputs = {
-  L: {
-    binaryPath: resolve(modelDirectory, "fps-arm-para-baked.bin"),
-    base64Path: resolve(modelDirectory, "fps-arm-para-baked.bin.b64"),
+  grip: {
+    L: {
+      binaryPath: resolve(modelDirectory, "fps-arm-para-baked.bin"),
+      base64Path: resolve(modelDirectory, "fps-arm-para-baked.bin.b64"),
+    },
+    R: {
+      binaryPath: resolve(modelDirectory, "fps-arm-para-right-baked.bin"),
+      base64Path: resolve(modelDirectory, "fps-arm-para-right-baked.bin.b64"),
+    },
   },
-  R: {
-    binaryPath: resolve(modelDirectory, "fps-arm-para-right-baked.bin"),
-    base64Path: resolve(modelDirectory, "fps-arm-para-right-baked.bin.b64"),
+  empty: {
+    L: {
+      binaryPath: resolve(modelDirectory, "fps-arm-para-relaxed-baked.bin"),
+    },
+    R: {
+      binaryPath: resolve(modelDirectory, "fps-arm-para-right-relaxed-baked.bin"),
+    },
   },
 };
 const poseTime = 2.025;
@@ -34,7 +44,7 @@ const motionEuler = new THREE.Euler(0, 0, 0, "YXZ");
 const motionQuaternion = new THREE.Quaternion();
 const blendedColor = new THREE.Color();
 
-function alignHandPose(model, suffix) {
+function alignHandPose(model, suffix, pose) {
   const mirrorSign = suffix === "L" ? 1 : -1;
   const hand = model.getObjectByName(`hand${suffix}`);
   const indexTip = model.getObjectByName(`f_index03${suffix}_end`);
@@ -54,14 +64,20 @@ function alignHandPose(model, suffix) {
   const currentNormal = new THREE.Vector3()
     .crossVectors(currentAcross, currentAlong)
     .normalize();
-  const targetAlong = new THREE.Vector3(0.46 * mirrorSign, 0.1, -0.88).normalize();
+  const targetAlong = pose === "empty"
+    ? new THREE.Vector3(-0.12 * mirrorSign, -0.62, -0.78).normalize()
+    : new THREE.Vector3(0.46 * mirrorSign, 0.1, -0.88).normalize();
   // The source right hand is already handed, unlike the old runtime mirror.
   // Reusing the left-hand palm normal turns its palm over around the finger
   // axis, leaving the right hand visibly hanging palm-down. Keep its fingers
   // aimed into the view, but reverse the palm-facing reference for the R rig.
-  const targetNormalHint = suffix === "L"
-    ? new THREE.Vector3(0.86, 0.34, 0.18)
-    : new THREE.Vector3(0.86, -0.34, -0.18);
+  const targetNormalHint = pose === "empty"
+    ? (suffix === "L"
+      ? new THREE.Vector3(0.7, -0.48, 0.2)
+      : new THREE.Vector3(0.7, -0.48, -0.2))
+    : (suffix === "L"
+      ? new THREE.Vector3(0.86, 0.34, 0.18)
+      : new THREE.Vector3(0.86, -0.34, -0.18));
   const targetNormal = targetNormalHint
     .addScaledVector(targetAlong, -targetNormalHint.dot(targetAlong))
     .normalize();
@@ -90,14 +106,21 @@ function rotateBone(model, name, x = 0, y = 0, z = 0) {
   bone.quaternion.multiply(motionQuaternion);
 }
 
-function applyRelaxedFingerPose(model, suffix) {
+function applyFingerPose(model, suffix, pose) {
   const isLeft = suffix === "L";
-  const fingers = {
+  const gripFingers = {
     index: { curl: isLeft ? [0.24, 0.33, 0.18] : [0.4, 0.5, 0.29], spread: isLeft ? -0.05 : 0.018 },
     middle: { curl: isLeft ? [0.22, 0.35, 0.2] : [0.37, 0.53, 0.31], spread: isLeft ? -0.012 : 0.004 },
     ring: { curl: isLeft ? [0.28, 0.39, 0.23] : [0.43, 0.55, 0.34], spread: isLeft ? 0.025 : -0.024 },
     pinky: { curl: isLeft ? [0.34, 0.43, 0.26] : [0.49, 0.58, 0.37], spread: isLeft ? 0.06 : -0.06 },
   };
+  const emptyFingers = {
+    index: { curl: [0.03, 0.08, 0.04], spread: -0.025 * (isLeft ? 1 : -1) },
+    middle: { curl: [0.04, 0.09, 0.05], spread: 0 },
+    ring: { curl: [0.06, 0.11, 0.06], spread: 0.025 * (isLeft ? 1 : -1) },
+    pinky: { curl: [0.08, 0.13, 0.07], spread: 0.05 * (isLeft ? 1 : -1) },
+  };
+  const fingers = pose === "empty" ? emptyFingers : gripFingers;
 
   Object.entries(fingers).forEach(([fingerName, pose]) => {
     pose.curl.forEach((curl, index) => {
@@ -112,9 +135,15 @@ function applyRelaxedFingerPose(model, suffix) {
   });
 
   const thumbSign = isLeft ? 1 : -1;
-  rotateBone(model, `thumb01${suffix}`, isLeft ? 0.12 : 0.25, 0.18 * thumbSign, -0.3 * thumbSign);
-  rotateBone(model, `thumb02${suffix}`, isLeft ? 0.2 : 0.34, 0.06 * thumbSign, -0.1 * thumbSign);
-  rotateBone(model, `thumb03${suffix}`, isLeft ? 0.13 : 0.22, 0.02 * thumbSign, -0.04 * thumbSign);
+  if (pose === "empty") {
+    rotateBone(model, `thumb01${suffix}`, 0.04, 0.24 * thumbSign, -0.12 * thumbSign);
+    rotateBone(model, `thumb02${suffix}`, 0.05, 0.06 * thumbSign, -0.02 * thumbSign);
+    rotateBone(model, `thumb03${suffix}`, 0.03, 0, 0);
+  } else {
+    rotateBone(model, `thumb01${suffix}`, isLeft ? 0.12 : 0.25, 0.18 * thumbSign, -0.3 * thumbSign);
+    rotateBone(model, `thumb02${suffix}`, isLeft ? 0.2 : 0.34, 0.06 * thumbSign, -0.1 * thumbSign);
+    rotateBone(model, `thumb03${suffix}`, isLeft ? 0.13 : 0.22, 0.02 * thumbSign, -0.04 * thumbSign);
+  }
 }
 
 function getVertexSideWeight(mesh, vertex, suffix) {
@@ -328,24 +357,59 @@ const sourceBuffer = sourceBytes.buffer.slice(
   sourceBytes.byteOffset,
   sourceBytes.byteOffset + sourceBytes.byteLength,
 );
-const bakeSide = async (suffix) => {
+// The runtime cannot reach into the baked vertices to find the palm, so each
+// pose exports its grip anchor alongside the geometry. Held props are placed
+// relative to that anchor instead of to hand-tuned camera-space constants, so
+// re-baking the arms can no longer leave items floating beside the hand.
+const armAnchors = { grip: {}, empty: {} };
+
+function measureGripAnchor(model, suffix) {
+  const palm = model.getObjectByName(`hand${suffix}`);
+  const middle = model.getObjectByName(`f_middle03${suffix}_end`);
+  if (!palm || !middle) return null;
+  const palmPosition = palm.getWorldPosition(new THREE.Vector3());
+  const tips = ["f_index03", "f_middle03", "f_ring03", "f_pinky03"]
+    .map((name) => model.getObjectByName(`${name}${suffix}_end`))
+    .filter(Boolean)
+    .map((tip) => tip.getWorldPosition(new THREE.Vector3()));
+  if (tips.length === 0) return null;
+  const tipAverage = tips
+    .reduce((sum, tip) => sum.add(tip), new THREE.Vector3())
+    .multiplyScalar(1 / tips.length);
+  return {
+    position: palmPosition.clone().add(tipAverage).multiplyScalar(0.5).toArray(),
+    palm: palmPosition.toArray(),
+    tips: tipAverage.toArray(),
+  };
+}
+
+const bakeSide = async (suffix, pose) => {
   const model = new FBXLoader().parse(sourceBuffer, "");
   const mixer = new THREE.AnimationMixer(model);
   mixer.clipAction(model.animations[0]).play();
   mixer.setTime(poseTime);
   model.updateMatrixWorld(true);
-  alignHandPose(model, suffix);
-  applyRelaxedFingerPose(model, suffix);
+  alignHandPose(model, suffix, pose);
+  applyFingerPose(model, suffix, pose);
   model.updateMatrixWorld(true);
+  armAnchors[pose][suffix === "L" ? "left" : "right"] = measureGripAnchor(model, suffix);
   const bakedGeometry = bakeArmGeometry(model, suffix);
   const binaryBytes = Buffer.from(createBinaryGeometry(bakedGeometry));
-  const output = armOutputs[suffix];
-  await Promise.all([
-    writeFile(output.binaryPath, binaryBytes),
-    writeFile(output.base64Path, binaryBytes.toString("base64"), "utf8"),
-  ]);
+  const output = armOutputs[pose][suffix];
+  await writeFile(output.binaryPath, binaryBytes);
+  if (output.base64Path) await writeFile(output.base64Path, binaryBytes.toString("base64"), "utf8");
   return bakedGeometry.getAttribute("position").count;
 };
 
-const [leftVertices, rightVertices] = await Promise.all([bakeSide("L"), bakeSide("R")]);
-console.log(`Baked asymmetric FPS arms: left ${leftVertices} vertices, right ${rightVertices} vertices.`);
+for (const pose of ["grip", "empty"]) {
+  const [leftVertices, rightVertices] = await Promise.all([bakeSide("L", pose), bakeSide("R", pose)]);
+  console.log(`Baked ${pose} FPS arms: left ${leftVertices} vertices, right ${rightVertices} vertices.`);
+  if (pose === "empty") {
+    await writeFile(
+      resolve(modelDirectory, "fps-arm-anchors.json"),
+      `${JSON.stringify(armAnchors, null, 2)}\n`,
+      "utf8",
+    );
+    console.log("Grip anchor (right):", JSON.stringify(armAnchors.grip.right?.position));
+  }
+}

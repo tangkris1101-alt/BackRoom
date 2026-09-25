@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Level 0 电梯场景验收</title>
+  <style>
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111; color:#fff; font:14px system-ui,sans-serif; }
+    canvas { display:block; width:100%; height:100%; }
+    .controls { position:fixed; left:20px; top:20px; display:flex; gap:8px; align-items:center; padding:10px 12px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
+    button { background:#e8dfb5; color:#182016; border:0; border-radius:4px; padding:8px 13px; cursor:pointer; font-weight:600; }
+    #status { min-width:230px; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button id="toggle">F 开/关门</button>
+    <button id="detail">材质近景</button>
+    <button id="side">靠墙侧视</button>
+    <button id="enter">步入轿厢并加载 Level 1</button>
+    <button id="capture">纯画面截图</button>
+    <span id="status">正在加载 Level 0…</span>
+  </div>
+  <script type="module">
+    import * as THREE from "three";
+    import { createLevelZeroScene } from "/src/scene/level-zero/index.js";
+    import { createBackroomsScene } from "/src/scene/index.js";
+    import { cellCenter, EXIT_CELL } from "/src/scene/level-zero/layout.js";
+
+    const status = document.getElementById("status");
+    document.getElementById("capture").addEventListener("click", () => {
+      document.querySelector(".controls").style.display = "none";
+    });
+    const center = cellCenter(EXIT_CELL.col, EXIT_CELL.row);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    document.body.append(renderer.domElement);
+    const world = createLevelZeroScene();
+    world.camera.position.set(center.x - 3.8, 1.64, center.z + 0.28);
+    world.camera.lookAt(center.x + 1.95, 1.63, center.z);
+    world.camera.updateMatrixWorld();
+    const actionPosition = { x: center.x + 0.8, y: 1.64, z: center.z };
+    const toggle = document.getElementById("toggle");
+    document.getElementById("detail").addEventListener("click", () => {
+      world.camera.position.set(center.x - 2, 1.68, center.z + 0.1);
+      world.camera.lookAt(center.x + 1.95, 1.64, center.z);
+      world.camera.updateMatrixWorld();
+      status.textContent = "Level 0 · 电梯门板近景";
+    });
+    document.getElementById("side").addEventListener("click", () => {
+      world.camera.position.set(center.x - 1, 1.68, center.z + 4.2);
+      world.camera.lookAt(center.x + 1.95, 1.63, center.z);
+      world.camera.updateMatrixWorld();
+      status.textContent = "Level 0 · 电梯背面贴齐东墙";
+    });
+    toggle.addEventListener("click", () => {
+      const result = world.interact(actionPosition);
+      status.textContent = result.interacted ? (result.count ? "电梯门打开中" : "电梯门关闭中") : "交互失败";
+      status.dataset.interacted = String(Boolean(result.interacted));
+      status.dataset.opened = String(Boolean(result.count));
+    });
+    document.getElementById("enter").addEventListener("click", async () => {
+      const player = { x: center.x + 2.9, y: 1.64, z: center.z };
+      const metrics = world.update(1, 0, player);
+      const passed = metrics.exitReached && metrics.nextLevel === 1 && world.isWalkable(player.x, player.z);
+      if (!passed) {
+        status.textContent = "未触发：门尚未完全打开或入口不可走";
+        status.dataset.transition = "false";
+        return;
+      }
+      const next = await createBackroomsScene(1);
+      status.textContent = `已进入 ${next.levelLabel} · ${next.levelName}`;
+      status.dataset.transition = String(next.level === 1);
+      status.dataset.nextLevel = String(metrics.nextLevel);
+    });
+    let previousFrame = performance.now();
+    let elapsed = 0;
+    function draw() {
+      const now = performance.now();
+      const delta = Math.min((now - previousFrame) / 1000, 0.05);
+      previousFrame = now;
+      elapsed += delta;
+      const width = innerWidth;
+      const height = innerHeight;
+      renderer.setSize(width, height, false);
+      world.camera.aspect = width / height;
+      world.camera.updateProjectionMatrix();
+      const metrics = world.update(delta, elapsed, actionPosition);
+      status.dataset.focusRoute = String(metrics.focusInteraction?.id ?? "");
+      status.dataset.focusAvailable = String(Boolean(metrics.focusInteraction?.available));
+      const thresholdX = world.targetPosition.x + 0.12;
+      status.dataset.centerWalkable = String(world.isWalkable(thresholdX, center.z));
+      status.dataset.edgeWalkable = String(world.isWalkable(thresholdX, center.z + 0.7));
+      status.dataset.shaftBackWalkable = String(world.isWalkable(center.x + 4.5, center.z));
+      status.dataset.shaftSideWalkable = String(world.isWalkable(center.x + 2.9, center.z + 1.6));
+      status.dataset.floorHeight = String(world.getFloorHeight(center.x, center.z, 0));
+      renderer.render(world.scene, world.camera);
+      requestAnimationFrame(draw);
+    }
+    status.textContent = "Level 0 · 电梯入口嵌在东墙，旧落洞已封平";
+    status.dataset.ready = "true";
+    draw();
+  </script>
+</body>
+</html>

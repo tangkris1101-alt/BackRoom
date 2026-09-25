@@ -1,15 +1,24 @@
-import { createSeededRandom, makeTexture, drawSpeckles, clampColor, tileNoise } from "../common/texture-utils.js";
+import { createSeededRandom, makeTexture, drawSpeckles, clampColor, tileNoise, smoothstep } from "../common/texture-utils.js";
 import * as THREE from "three";
 import concreteColorUrl from "../../assets/textures/concrete-floor-worn/diff.jpg?url";
 import concreteNormalUrl from "../../assets/textures/concrete-floor-worn/normal.jpg?url";
 import concreteRoughnessUrl from "../../assets/textures/concrete-floor-worn/roughness.jpg?url";
 import concreteAoUrl from "../../assets/textures/concrete-floor-worn/ao.jpg?url";
 
-const CORRIDOR_FLOOR_SEED = 0x1e1e13;
 const CORRIDOR_WALL_SEED = 0x1e1e14;
-const CORRIDOR_CEILING_SEED = 0x1e1e15;
 
-export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, contrast = 1, { painted = false, corridor = false } = {}) {
+// Level 1 is a working parking level, not a clean room: the paint has
+// yellowed, damp streaks run down from the slab and grime collects along the
+// wall foot, matching the published MEG photographs of the zone.
+const WALL_BASE = [188, 181, 160];
+const CORRIDOR_WALL_BASE = [199, 193, 173];
+const CEILING_BASE = [148, 144, 131];
+
+function dampMask(value, threshold) {
+  return Math.max(0, value - threshold) / (1 - threshold);
+}
+
+export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, contrast = 1, { painted = false, grime = 0 } = {}) {
   const random = createSeededRandom(seed);
   return makeTexture(
     512,
@@ -18,27 +27,51 @@ export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, cont
       const data = image.data;
 
       for (let y = 0; y < size; y += 1) {
+        const vertical = y / size;
+        const runDown = Math.pow(1 - vertical, 1.7);
+        const foot = smoothstep(Math.min(1, Math.max(0, (vertical - 0.87) / 0.13)));
         for (let x = 0; x < size; x += 1) {
           const i = (y * size + x) * 4;
-          const broad = (tileNoise(x, y, size, 4, seed * 0.03) - 0.5) * 24 * contrast;
-          const mid = (tileNoise(x, y, size, 15, seed * 0.07) - 0.5) * 8 * contrast;
-          const fine = (random() - 0.5) * 5 * contrast;
-          // Keep ageing dry and subtle: this is maintained warehouse paint,
-          // not wet or crumbling concrete.
+          const broad = (tileNoise(x, y, size, 4, seed * 0.03) - 0.5) * (painted ? 8 : 24) * contrast;
+          const mid = (tileNoise(x, y, size, 15, seed * 0.07) - 0.5) * (painted ? 10 : 8) * contrast;
+          const fine = (random() - 0.5) * (painted ? 9 : 5) * contrast;
           const settling = Math.max(0, tileNoise(x, y, size, 2, seed * 0.11) - 0.62) * -5 * contrast;
-          const seamPhase = ((y / size) * (corridor ? 3.15 : 2.45) + 0.12) % 1;
-          const seamDistance = Math.min(seamPhase, 1 - seamPhase);
-          const paintJoint = painted
-            ? Math.max(0, 1 - seamDistance / 0.012) * -8 * contrast
-            : 0;
-          const wear = broad + mid + fine + settling + paintJoint;
-          data[i] = clampColor(base[0] + wear);
-          data[i + 1] = clampColor(base[1] + wear * 0.99);
-          data[i + 2] = clampColor(base[2] + wear * 0.97);
+          const wear = broad + mid + fine + settling;
+
+          let stain = 0;
+          if (grime > 0) {
+            const blotch = dampMask(tileNoise(x, y, size, 3, seed * 0.05), 0.52);
+            const depth = 0.45 + dampMask(tileNoise(x, y, size, 8, seed * 0.09), 0.35) * 0.55;
+            // Streaks come in clusters of narrow and wide runs so the wall
+            // never reads as evenly spaced stripes.
+            const cluster = 0.25 + tileNoise(x, y * 0.1, size, 7, seed * 0.19) * 0.95;
+            const streak = dampMask(tileNoise(x, y * 0.35, size, 26, seed * 0.17), 0.55) * cluster * runDown;
+            const wideStreak = dampMask(tileNoise(x, y * 0.18, size, 9, seed * 0.21), 0.61) * 0.45 * runDown;
+            const footNoise = 0.55 + tileNoise(x, y, size, 30, seed * 0.23) * 0.45;
+            stain = Math.min(1.45, blotch * depth * 0.75 + (streak + wideStreak) * 0.72 + foot * footNoise * 0.85);
+          }
+
+          // Damp stains pull the blue channel down first so the grime reads as
+          // the yellow-brown film of a working parking level.
+          data[i] = clampColor(base[0] + wear - stain * 14 * grime);
+          data[i + 1] = clampColor(base[1] + wear * 0.99 - stain * 24 * grime);
+          data[i + 2] = clampColor(base[2] + wear * 0.97 - stain * 38 * grime);
           data[i + 3] = 255;
         }
       }
       context.putImageData(image, 0, 0);
+
+      if (painted) {
+        // Fine dry roller stipple avoids printed seams on long wall runs.
+        for (let i = 0; i < 1700; i += 1) {
+          const x = random() * size;
+          const y = random() * size;
+          context.fillStyle = random() < 0.55
+            ? "rgba(42,51,45,0.06)"
+            : "rgba(244,248,239,0.08)";
+          context.fillRect(x, y, 0.6 + random() * 1.2, 1 + random() * 3);
+        }
+      }
 
       drawSpeckles(context, size, 420, 0.035, "45,47,45", random);
       drawSpeckles(context, size, 80, 0.02, "174,176,171", random);
@@ -48,9 +81,6 @@ export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, cont
   );
 }
 
-export function createLevelOneFloorTexture() {
-  return createLevelOneConcreteTexture(0x1e1e10, 13, 10, [100, 101, 98], 0.78);
-}
 export function createLevelOneFloorPbrMaps({ includeDetailMaps = true } = {}) {
   const loader = new THREE.TextureLoader();
   const configure = (texture, color = false) => {
@@ -72,38 +102,32 @@ export function createLevelOneFloorPbrMaps({ includeDetailMaps = true } = {}) {
 }
 
 export function createLevelOneWallTexture() {
-  // Old, sealed warehouse concrete: varied enough to break up the large wall
-  // planes, but without the damp stains or aggressive damage of a ruin.
-  return createLevelOneConcreteTexture(0x1e1e11, 1.65, 1.05, [210, 216, 209], 0.56, { painted: true });
+  // Aged parking-level paint: flat enough to stay a wall, dirty enough that
+  // the damp streaks and wall-foot grime read from across the hall.
+  return createLevelOneConcreteTexture(0x1e1e11, 1, 1, WALL_BASE, 0.62, { painted: true, grime: 1 });
 }
 
 export function createLevelOneCeilingTexture() {
-  const texture = createLevelOneConcreteTexture(0x1e1e12, 10, 7, [76, 80, 77], 0.82);
+  const texture = createLevelOneConcreteTexture(0x1e1e12, 10, 7, CEILING_BASE, 0.8, { grime: 1.3 });
   texture.needsUpdate = true;
   return texture;
 }
 
-export function createLevelOneCorridorFloorTexture() {
-  return createLevelOneConcreteTexture(CORRIDOR_FLOOR_SEED, 6.2, 5.2, [118, 124, 124], 0.72);
-}
-
 export function createLevelOneCorridorWallTexture() {
-  return createLevelOneConcreteTexture(CORRIDOR_WALL_SEED, 1.82, 1.08, [220, 226, 223], 0.46, { painted: true, corridor: true });
+  return createLevelOneConcreteTexture(CORRIDOR_WALL_SEED, 1, 1, CORRIDOR_WALL_BASE, 0.58, { painted: true, grime: 0.9 });
 }
 
-function getLevelOneWallHeight(x, y, size, seed, corridor) {
-  const broad = (tileNoise(x, y, size, 4, seed * 0.031) - 0.5) * 0.62;
-  const paint = (tileNoise(x, y, size, 17, seed * 0.073) - 0.5) * 0.27;
-  const fine = (tileNoise(x, y, size, 49, seed * 0.119) - 0.5) * 0.12;
-  // Low-amplitude horizontal construction seams make the material read as
-  // painted concrete rather than a featureless, plastic wall.
-  const seamPhase = ((y / size) * (corridor ? 3.15 : 2.45) + 0.12) % 1;
-  const seamDistance = Math.min(seamPhase, 1 - seamPhase);
-  const seam = Math.max(0, 1 - seamDistance / 0.018) * (corridor ? -0.18 : -0.24);
-  return broad + paint + fine + seam;
+function getLevelOneWallHeight(x, y, size, seed) {
+  const broad = (tileNoise(x, y, size, 4, seed * 0.031) - 0.5) * 0.72;
+  const paint = (tileNoise(x, y, size, 17, seed * 0.073) - 0.5) * 0.38;
+  const fine = (tileNoise(x, y, size, 49, seed * 0.119) - 0.5) * 0.18;
+  // The damp film sits slightly proud of the paint and holds a sheen, so it
+  // also has to show up in the roughness and normal maps.
+  const stain = Math.max(0, tileNoise(x, y, size, 3, seed * 0.05) - 0.52) * 1.25;
+  return broad + paint + fine - stain;
 }
 
-function createLevelOneWallDetailTexture(seed, { corridor = false, mode = "normal" } = {}) {
+function createLevelOneWallDetailTexture(seed, { mode = "normal" } = {}) {
   const size = 256;
   const texture = makeTexture(
     size,
@@ -113,17 +137,17 @@ function createLevelOneWallDetailTexture(seed, { corridor = false, mode = "norma
       for (let y = 0; y < size; y += 1) {
         for (let x = 0; x < size; x += 1) {
           const i = (y * size + x) * 4;
-          const height = getLevelOneWallHeight(x, y, size, seed, corridor);
+          const height = getLevelOneWallHeight(x, y, size, seed);
           if (mode === "roughness") {
-            const roughness = 226 + height * 19;
+            const roughness = 214 + height * 42;
             data[i] = clampColor(roughness);
             data[i + 1] = clampColor(roughness);
             data[i + 2] = clampColor(roughness);
           } else {
-            const dx = getLevelOneWallHeight(x + 1, y, size, seed, corridor) - getLevelOneWallHeight(x - 1, y, size, seed, corridor);
-            const dy = getLevelOneWallHeight(x, y + 1, size, seed, corridor) - getLevelOneWallHeight(x, y - 1, size, seed, corridor);
-            data[i] = clampColor(128 - dx * 38);
-            data[i + 1] = clampColor(128 - dy * 38);
+            const dx = getLevelOneWallHeight(x + 1, y, size, seed) - getLevelOneWallHeight(x - 1, y, size, seed);
+            const dy = getLevelOneWallHeight(x, y + 1, size, seed) - getLevelOneWallHeight(x, y - 1, size, seed);
+            data[i] = clampColor(128 - dx * 52);
+            data[i + 1] = clampColor(128 - dy * 52);
             data[i + 2] = 255;
           }
           data[i + 3] = 255;
@@ -144,11 +168,7 @@ export function createLevelOneWallPbrMaps({ corridor = false, includeDetailMaps 
     map: corridor ? createLevelOneCorridorWallTexture() : createLevelOneWallTexture(),
   };
   if (!includeDetailMaps) return maps;
-  maps.normalMap = createLevelOneWallDetailTexture(seed, { corridor, mode: "normal" });
-  maps.roughnessMap = createLevelOneWallDetailTexture(seed, { corridor, mode: "roughness" });
+  maps.normalMap = createLevelOneWallDetailTexture(seed, { mode: "normal" });
+  maps.roughnessMap = createLevelOneWallDetailTexture(seed, { mode: "roughness" });
   return maps;
-}
-
-export function createLevelOneCorridorCeilingTexture() {
-  return createLevelOneConcreteTexture(CORRIDOR_CEILING_SEED, 8.4, 6.4, [181, 190, 193], 0.52);
 }

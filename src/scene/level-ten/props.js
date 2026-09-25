@@ -116,7 +116,12 @@ function addFarmDetails(scene) {
   pond.rotation.x = -Math.PI / 2;
   pond.position.set(pondCenter.x, 0.035, pondCenter.z);
   scene.add(pond);
-  colliders.push({ minX: pondCenter.x - 5.7, maxX: pondCenter.x + 5.7, minZ: pondCenter.z - 5.7, maxZ: pondCenter.z + 5.7 });
+  // The water is a 6.4m disc. Three stacked boxes keep the player out of the
+  // water without the invisible corner a single square would leave at 45
+  // degrees, where the square reached 1.66m past the shoreline.
+  colliders.push({ minX: pondCenter.x - 6.4, maxX: pondCenter.x + 6.4, minZ: pondCenter.z - 2.6, maxZ: pondCenter.z + 2.6 });
+  colliders.push({ minX: pondCenter.x - 4.8, maxX: pondCenter.x + 4.8, minZ: pondCenter.z - 4.8, maxZ: pondCenter.z + 4.8 });
+  colliders.push({ minX: pondCenter.x - 2.6, maxX: pondCenter.x + 2.6, minZ: pondCenter.z - 6.4, maxZ: pondCenter.z + 6.4 });
 
   const hayMaterial = createGameMaterial({ color: 0xc0a148, roughness: 0.95 });
   for (const [col, row, scale] of [[12, 24, 1], [18, 19, 0.82], [10, 20, 0.72]]) {
@@ -125,6 +130,11 @@ function addFarmDetails(scene) {
     bale.rotation.z = Math.PI / 2;
     bale.position.set(center.x, 0.86 * scale, center.z);
     scene.add(bale);
+    // Laid on its side the 0.85s radius disc spans 0.9s on the ground, and the
+    // top of the roll sits 0.86s + 0.85s above the field, which is low enough
+    // for the shortest rolls to be climbed.
+    const half = 0.9 * scale;
+    colliders.push({ minX: center.x - half, maxX: center.x + half, minZ: center.z - half, maxZ: center.z + half, topY: 0.86 * scale + 0.85 * scale });
   }
   const scarecrow = new THREE.Group();
   scarecrow.name = "level-ten-scarecrow";
@@ -143,6 +153,10 @@ function addFarmDetails(scene) {
   const scarecrowCenter = levelTenCellCenter(35, 18);
   scarecrow.position.set(scarecrowCenter.x, 0, scarecrowCenter.z);
   scene.add(scarecrow);
+  // The 3.3m post is the only solid volume at body height; the cross arm and the
+  // coat are flat planes hung above the waist, so the collider wraps the post
+  // and carries no topY.
+  colliders.push({ minX: scarecrowCenter.x - 0.2, maxX: scarecrowCenter.x + 0.2, minZ: scarecrowCenter.z - 0.2, maxZ: scarecrowCenter.z + 0.2 });
   return colliders;
 }
 

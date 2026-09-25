@@ -3,6 +3,7 @@ import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatVi
 import { createExitNetwork } from "../common/exit-network.js";
 import { createLocalRelocationNetwork } from "../common/local-relocation.js";
 import { isLowQuality } from "../common/materials.js";
+import { colliderBlocksAtFeetHeight, getPlatformFloorHeight, resolvePlatformOverlap } from "../common/platform-collision.js";
 import { circleIntersectsAabb } from "../constants.js";
 import { createInteractionSpot, getFocusedEntity, getFocusedItem, getPickupTarget, tryPickupItems } from "../entities/index.js";
 import { createSmilerEntity } from "../entities/index.js";
@@ -74,14 +75,23 @@ export function createLevelThirteenScene({ initialState = null, entryContext = n
 
   const spawn = chooseSpawn(entryContext);
   const props = addLevelThirteenProps(scene);
-  function isWalkable(x, z, radius = 0.36) {
+  function isWalkable(x, z, radius = 0.36, feetY = 0) {
     const corner = radius * 0.72;
     const samples = [[0, 0], [radius, 0], [-radius, 0], [0, radius], [0, -radius], [corner, corner], [-corner, corner], [corner, -corner], [-corner, -corner]];
     if (!samples.every(([dx, dz]) => {
       const cell = levelThirteenWorldToCell(x + dx, z + dz);
       return isLevelThirteenOpenCell(cell.col, cell.row);
     })) return false;
-    return !props.colliders.some((bounds) => bounds.active !== false && circleIntersectsAabb(x, z, radius, bounds));
+    return !props.colliders.some((bounds) =>
+      colliderBlocksAtFeetHeight(bounds, feetY) && circleIntersectsAabb(x, z, radius, bounds));
+  }
+
+  function getFloorHeight(x, z, feetY) {
+    return getPlatformFloorHeight({ colliders: props.colliders, x, z, feetY });
+  }
+
+  function resolvePosition(x, z, radius, feetY, maxCorrection) {
+    return resolvePlatformOverlap({ colliders: props.colliders, x, z, radius, feetY, maxCorrection });
   }
 
   const savedInteractions = initialState?.interactions ?? {};
@@ -244,6 +254,8 @@ export function createLevelThirteenScene({ initialState = null, entryContext = n
     nextLevel: null,
     exitMode: "network",
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     getFootstepSurface(position) {
       const cell = levelThirteenWorldToCell(position.x, position.z);
       if (getLevelThirteenApartment(cell.col, cell.row)) return "wood";

@@ -9,17 +9,41 @@ import {
   LEVEL_TWELVE_STAIR_CELL,
   levelTwelveCellCenter,
 } from "./layout.js";
-import { createLevelTwelveWallMaps } from "./textures.js";
+import { createLevelTwelveWallMaps, createLevelTwelveFurnitureMaps } from "./textures.js";
 
-function addWall(scene, material, x, z, width, depth, colliders) {
+function addWall(scene, material, finish, x, z, width, depth, colliders) {
   const wall = new THREE.Mesh(new THREE.BoxGeometry(width, WALL_HEIGHT, depth), material);
   wall.position.set(x, WALL_HEIGHT / 2, z);
   scene.add(wall);
+  const alongX = width > depth;
+  const skirting = new THREE.Mesh(
+    new THREE.BoxGeometry(width + (alongX ? 0 : 0.035), 0.14, depth + (alongX ? 0.035 : 0)),
+    finish.skirting,
+  );
+  skirting.position.set(x, 0.07, z);
+  scene.add(skirting);
+  const length = alongX ? width : depth;
+  for (let offset = -length / 2 + 2.5; offset < length / 2 - 0.7; offset += 2.5) {
+    for (const side of [-1, 1]) {
+      const seam = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.012, WALL_HEIGHT - 0.24),
+        finish.seam,
+      );
+      if (alongX) {
+        seam.position.set(x + offset, WALL_HEIGHT / 2 + 0.06, z + side * (depth / 2 + 0.003));
+        if (side < 0) seam.rotation.y = Math.PI;
+      } else {
+        seam.position.set(x + side * (width / 2 + 0.003), WALL_HEIGHT / 2 + 0.06, z + offset);
+        seam.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
+      }
+      scene.add(seam);
+    }
+  }
   colliders.push({ minX: x - width / 2, maxX: x + width / 2, minZ: z - depth / 2, maxZ: z + depth / 2 });
   return wall;
 }
 
-function addCoreRoom(scene, wallMaterial, colliders) {
+function addCoreRoom(scene, wallMaterial, wallFinish, colliders) {
   const coreCell = levelTwelveCellCenter(20, 28);
   const core = { x: coreCell.x, z: coreCell.z + CELL_SIZE / 2 };
   const width = CELL_SIZE * 3;
@@ -29,15 +53,27 @@ function addCoreRoom(scene, wallMaterial, colliders) {
   const doorwayWidth = 2.2;
   const northSegmentWidth = (width - doorwayWidth) / 2;
   const northOffset = doorwayWidth / 2 + northSegmentWidth / 2;
-  addWall(scene, wallMaterial, core.x - northOffset, northZ, northSegmentWidth, WALL_THICKNESS, colliders);
-  addWall(scene, wallMaterial, core.x + northOffset, northZ, northSegmentWidth, WALL_THICKNESS, colliders);
-  addWall(scene, wallMaterial, core.x, southZ, width + WALL_THICKNESS, WALL_THICKNESS, colliders);
+  addWall(scene, wallMaterial, wallFinish, core.x - northOffset, northZ, northSegmentWidth, WALL_THICKNESS, colliders);
+  addWall(scene, wallMaterial, wallFinish, core.x + northOffset, northZ, northSegmentWidth, WALL_THICKNESS, colliders);
+  addWall(scene, wallMaterial, wallFinish, core.x, southZ, width + WALL_THICKNESS, WALL_THICKNESS, colliders);
+  // Each side of the room is walled from the north/south corners inwards but
+  // stops 2m short of core.z, leaving a 4m opening in the middle of both side
+  // walls. That gap is deliberate and must stay: the spawn point is inside this
+  // room while the original door starts locked (the progression first needs the
+  // chair observation and then the copycat door, which sits outside), so the
+  // side openings are the only way out. Closing them seals the player in at
+  // spawn with no way to reach the copycat door, i.e. an immediate soft lock.
   for (const side of [-1, 1]) {
-    addWall(scene, wallMaterial, core.x + side * width / 2, core.z - 5, WALL_THICKNESS, 6, colliders);
-    addWall(scene, wallMaterial, core.x + side * width / 2, core.z + 5, WALL_THICKNESS, 6, colliders);
+    addWall(scene, wallMaterial, wallFinish, core.x + side * width / 2, core.z - 5, WALL_THICKNESS, 6, colliders);
+    addWall(scene, wallMaterial, wallFinish, core.x + side * width / 2, core.z + 5, WALL_THICKNESS, 6, colliders);
   }
 
-  const wood = createGameMaterial({ color: 0x77716a, roughness: 0.9 });
+  const wood = createGameMaterial({
+    ...createLevelTwelveFurnitureMaps("original", !isLowQuality()),
+    color: 0xe0d7ce,
+    roughness: 0.78,
+    normalScale: new THREE.Vector2(0.24, 0.24),
+  });
   const table = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.18, 1.25), wood);
   table.name = "level-twelve-original-table";
   table.position.set(core.x, 0.82, coreCell.z);
@@ -90,10 +126,15 @@ function addCoreRoom(scene, wallMaterial, colliders) {
   };
 }
 
-function addFurnitureField(scene, count) {
+function addFurnitureField(scene, count, colliders) {
   const random = createSeededRandom(1213);
-  const wood = createGameMaterial({ color: 0xaaa7a0, roughness: 0.96 });
-  const metal = createGameMaterial({ color: 0xc9c9c7, roughness: 0.72, metalness: 0.16 });
+  const wood = createGameMaterial({
+    ...createLevelTwelveFurnitureMaps("field", !isLowQuality()),
+    color: 0xc8c4be,
+    roughness: 0.86,
+    normalScale: new THREE.Vector2(0.22, 0.22),
+  });
+  const metal = createGameMaterial({ color: 0x9faaa9, roughness: 0.63, metalness: 0.32 });
   const topGeometry = new THREE.BoxGeometry(1.65, 0.16, 0.9);
   const seatGeometry = new THREE.BoxGeometry(0.68, 0.12, 0.68);
   const drawerGeometry = new THREE.BoxGeometry(0.9, 1.05, 0.72);
@@ -104,6 +145,35 @@ function addFurnitureField(scene, count) {
   chairs.name = "level-twelve-void-chairs";
   drawers.name = "level-twelve-void-drawers";
   const transform = new THREE.Object3D();
+  const tableBounds = new THREE.Box3().setFromBufferAttribute(topGeometry.attributes.position);
+  const chairBounds = new THREE.Box3().setFromBufferAttribute(seatGeometry.attributes.position);
+  const drawerBounds = new THREE.Box3().setFromBufferAttribute(drawerGeometry.attributes.position);
+  const instanceBounds = new THREE.Box3();
+  // Instances are scattered and sunk by design, so clamp each collider to the
+  // geometry actually drawn and only solidify the pieces within reach. The
+  // furniture parked above head height or buried under the floor stays scenery.
+  // Four drawers (indices 10, 40, 97, 126) do pass this filter: they hang
+  // 0.65-0.83m off the floor with tops at 1.29-1.45m, above the 1.15m jump apex,
+  // so for a walking player they behave like a full-height obstacle. They are
+  // the drawn 0.55-0.69 x 0.46-0.70m cabinet body rather than an invisible wall,
+  // and its top can never carry the player (narrower than the 0.72m body, so
+  // getPlatformFloorHeight never reports it as a floor) - only two of the four
+  // even clear the 0.18m side-clearance band at the apex. Nothing else covers
+  // them either: the table drawn next to the same index floats 1.16-1.31m off
+  // the floor and is dropped by this very filter. Left as is; tightening the
+  // rule to "body fully above head height" (min.y > 1.75) would solidify many
+  // more of the 140 instances, which belongs in its own pass rather than here.
+  const addInstanceCollider = (geometryBounds) => {
+    instanceBounds.copy(geometryBounds).applyMatrix4(transform.matrix);
+    if (instanceBounds.min.y > 0.9 || instanceBounds.max.y < 0.25) return;
+    colliders.push({
+      minX: instanceBounds.min.x,
+      maxX: instanceBounds.max.x,
+      minZ: instanceBounds.min.z,
+      maxZ: instanceBounds.max.z,
+      topY: instanceBounds.max.y,
+    });
+  };
   for (let index = 0; index < count; index += 1) {
     let col;
     let row;
@@ -119,17 +189,20 @@ function addFurnitureField(scene, count) {
     transform.scale.setScalar(0.78 + random() * 0.42);
     transform.updateMatrix();
     tables.setMatrixAt(index, transform.matrix);
+    addInstanceCollider(tableBounds);
     transform.position.y = 0.45 + sink;
     transform.position.x += Math.cos(rotation) * 1.15;
     transform.position.z += Math.sin(rotation) * 1.15;
     transform.updateMatrix();
     chairs.setMatrixAt(index, transform.matrix);
+    addInstanceCollider(chairBounds);
     transform.position.y = 0.5 + sink;
     transform.position.x -= Math.cos(rotation) * 2.2;
     transform.position.z -= Math.sin(rotation) * 2.2;
     transform.scale.multiplyScalar(0.72);
     transform.updateMatrix();
     drawers.setMatrixAt(index, transform.matrix);
+    addInstanceCollider(drawerBounds);
   }
   tables.instanceMatrix.needsUpdate = true;
   chairs.instanceMatrix.needsUpdate = true;
@@ -137,7 +210,7 @@ function addFurnitureField(scene, count) {
   scene.add(tables, chairs, drawers);
 }
 
-function addCopycatDoor(scene) {
+function addCopycatDoor(scene, colliders) {
   const position = levelTwelveCellCenter(LEVEL_TWELVE_COPYCAT_CELL.col, LEVEL_TWELVE_COPYCAT_CELL.row);
   const frame = new THREE.Mesh(
     new THREE.BoxGeometry(2.1, 3.2, 0.28),
@@ -146,6 +219,14 @@ function addCopycatDoor(scene) {
   frame.name = "level-twelve-copycat-door-model";
   frame.position.set(position.x, 1.6, position.z);
   scene.add(frame);
+  // The slab carries the F prompt but had no body, so the player could walk
+  // through the door they were being asked to open.
+  colliders.push({
+    minX: position.x - 1.05,
+    maxX: position.x + 1.05,
+    minZ: position.z - 0.14,
+    maxZ: position.z + 0.14,
+  });
   const inset = new THREE.Mesh(
     new THREE.PlaneGeometry(1.55, 2.65),
     new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
@@ -155,13 +236,43 @@ function addCopycatDoor(scene) {
   return position;
 }
 
-function addWhiteStair(scene) {
+function addWhiteStair(scene, colliders) {
   const position = levelTwelveCellCenter(LEVEL_TWELVE_STAIR_CELL.col, LEVEL_TWELVE_STAIR_CELL.row);
   const material = createGameMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.15, roughness: 0.86 });
-  for (let index = 0; index < 10; index += 1) {
-    const step = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.24, 0.8), material);
-    step.position.set(position.x, 0.12 + index * 0.22, position.z + 3.2 - index * 0.7);
+  const stepCount = 10;
+  const stepWidth = 3.2;
+  const stepHeight = 0.24;
+  const stepDepth = 0.8;
+  const stepRise = 0.22;
+  const stepRun = 0.7;
+  // The flight is laid out from its front face, 0.9 cells in front of the cell
+  // centre, and climbs away from the entrance as z decreases.
+  const frontFaceZ = position.z + CELL_SIZE * 0.9;
+  const deepestZ = frontFaceZ - stepDepth - (stepCount - 1) * stepRun;
+  const minX = position.x - stepWidth / 2;
+  const maxX = position.x + stepWidth / 2;
+  for (let index = 0; index < stepCount; index += 1) {
+    const centerZ = frontFaceZ - stepDepth / 2 - index * stepRun;
+    const topY = stepHeight + index * stepRise;
+    const step = new THREE.Mesh(new THREE.BoxGeometry(stepWidth, stepHeight, stepDepth), material);
+    step.position.set(position.x, topY - stepHeight / 2, centerZ);
     scene.add(step);
+    // The flight used to be scenery only, so the player walked straight through
+    // it. Each collider is a wedge: solid from its own riser back to the deepest
+    // tread, so the stacked tops reproduce exactly the visible stair surface
+    // (the highest topY at any z is the step drawn there) and the space under
+    // the treads stays filled instead of leaving 0.22m holes between steps.
+    // Together with the trigger that now sits at the foot of the flight
+    // (entryPosition in index.js): a 0.22m rise beats the 0.18m landing/side
+    // clearance and a 0.7m tread is narrower than the 0.72m body, so the stairs
+    // are a solid block that can only be jumped, never walked up.
+    colliders.push({
+      minX,
+      maxX,
+      minZ: deepestZ,
+      maxZ: centerZ + stepDepth / 2,
+      topY,
+    });
   }
   const glow = new THREE.PointLight(0xffffff, 1.5, 14, 2.1);
   glow.position.set(position.x, 3.1, position.z - 1.4);
@@ -175,14 +286,19 @@ export function addLevelTwelveProps(scene) {
     ...createLevelTwelveWallMaps(2.5, 1.2, !low),
     color: 0xffffff,
     emissive: 0xffffff,
-    emissiveIntensity: 0.42,
+    emissiveIntensity: 0.08,
     roughness: 0.94,
-    normalScale: new THREE.Vector2(0.18, 0.18),
+    normalScale: new THREE.Vector2(0.38, 0.38),
+    aoMapIntensity: 1.15,
   });
+  const wallFinish = {
+    skirting: createGameMaterial({ color: 0xd8d6cf, roughness: 0.91 }),
+    seam: new THREE.MeshBasicMaterial({ color: 0x625f5a, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }),
+  };
   const colliders = [];
-  const core = addCoreRoom(scene, wallMaterial, colliders);
-  addFurnitureField(scene, low || window.matchMedia?.("(pointer: coarse), (max-width: 800px)").matches ? 60 : 140);
-  const copycatPosition = addCopycatDoor(scene);
-  const stairPosition = addWhiteStair(scene);
+  const core = addCoreRoom(scene, wallMaterial, wallFinish, colliders);
+  addFurnitureField(scene, low || window.matchMedia?.("(pointer: coarse), (max-width: 800px)").matches ? 60 : 140, colliders);
+  const copycatPosition = addCopycatDoor(scene, colliders);
+  const stairPosition = addWhiteStair(scene, colliders);
   return { colliders, ...core, copycatPosition, stairPosition };
 }

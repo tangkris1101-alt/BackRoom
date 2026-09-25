@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Level 0 凸墙角验收</title>
+  <style>
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111; color:#fff; font:14px system-ui,sans-serif; }
+    canvas { display:block; width:100%; height:100%; }
+    .controls { position:fixed; left:20px; top:20px; display:flex; gap:8px; align-items:center; padding:10px 12px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
+    button { background:#e8dfb5; color:#182016; border:0; border-radius:4px; padding:8px 13px; cursor:pointer; font-weight:600; }
+    #status { min-width:230px; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button id="fps">玩家视角（复现凹陷）</button>
+    <button id="close">贴近墙脚</button>
+    <button id="top">俯视构造</button>
+    <button id="capture">纯画面截图</button>
+    <span id="status">正在加载 Level 0…</span>
+  </div>
+  <script type="module">
+    import * as THREE from "three";
+    import { createLevelZeroScene } from "/src/scene/level-zero/index.js";
+    import { cellCenter } from "/src/scene/level-zero/layout.js";
+
+    const status = document.getElementById("status");
+    document.getElementById("capture").addEventListener("click", () => {
+      document.querySelector(".controls").style.display = "none";
+    });
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    document.body.append(renderer.domElement);
+
+    const world = createLevelZeroScene();
+
+    // Pillar at grid [13,12] inside the room (col 10-18, row 10-15) gives a
+    // clean convex corner: three open cells meet one closed cell. The notch
+    // faces diagonal cell (12,11).
+    const pillar = cellCenter(13, 12);
+    const corner = { x: pillar.x - 2, z: pillar.z - 2 }; // NW corner vertex
+
+    const views = {
+      // Mirrors the reported screenshot: standing ~1.5m from the corner,
+      // eye height, looking slightly down at the skirting line.
+      fps: { pos: [corner.x - 1.06, 1.6, corner.z - 1.06], look: [corner.x, 0.95, corner.z] },
+      close: { pos: [corner.x - 0.62, 0.72, corner.z - 0.62], look: [corner.x, 0.12, corner.z] },
+      top: { pos: [corner.x - 0.9, 3.4, corner.z - 0.9], look: [corner.x, 0, corner.z] },
+    };
+    function applyView(view) {
+      world.camera.position.set(...view.pos);
+      world.camera.lookAt(...view.look);
+      world.camera.updateMatrixWorld();
+    }
+    document.getElementById("fps").addEventListener("click", () => applyView(views.fps));
+    document.getElementById("close").addEventListener("click", () => applyView(views.close));
+    document.getElementById("top").addEventListener("click", () => applyView(views.top));
+    applyView(views.fps);
+
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight);
+      world.camera.aspect = innerWidth / innerHeight;
+      world.camera.updateProjectionMatrix();
+    }
+    addEventListener("resize", resize);
+    resize();
+
+    let previousFrame = performance.now();
+    let elapsed = 0;
+    const playerPosition = new THREE.Vector3(corner.x - 1.06, 0, corner.z - 1.06);
+    function frame(now) {
+      const delta = Math.min((now - previousFrame) / 1000, 0.05);
+      previousFrame = now;
+      elapsed += delta;
+      world.update(delta, elapsed, playerPosition);
+      renderer.render(world.scene, world.camera);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    status.textContent = "Level 0 · 柱体凸墙角（cell 13,12）";
+  </script>
+</body>
+</html>

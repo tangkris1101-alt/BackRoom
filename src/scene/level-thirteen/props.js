@@ -117,10 +117,21 @@ function addArchitecture(scene, colliders) {
     const rows = [6, 9, 16, 22, 31, 35];
     rows.forEach((row, index) => {
       const side = index % 2 ? 1 : -1;
-      const center = levelThirteenCellCenter(floor.centerCol + side * 2, row);
+      const col = floor.centerCol + side * 2;
+      const center = levelThirteenCellCenter(col, row);
       const door = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.85, 0.16), doorMaterial);
       door.position.set(center.x, 1.425, center.z);
       scene.add(door);
+      // Only the doors standing in walkable cells need a body; the rest sit
+      // inside wall-only cells the grid already refuses.
+      if (isLevelThirteenOpenCell(col, row)) {
+        colliders.push({
+          minX: center.x - 0.9,
+          maxX: center.x + 0.9,
+          minZ: center.z - 0.1,
+          maxZ: center.z + 0.1,
+        });
+      }
       const number = new THREE.Mesh(
         new THREE.PlaneGeometry(0.72, 0.34),
         new THREE.MeshBasicMaterial({ map: createDoorNumberTexture(`${floor.id}${index + 1}0${index + 2}`) }),
@@ -166,7 +177,10 @@ function addApartmentFurniture(scene, colliders) {
     scene.add(sofa);
     colliders.push({ minX: sofa.position.x - 1.4, maxX: sofa.position.x + 1.4, minZ: sofa.position.z - 0.55, maxZ: sofa.position.z + 0.55, topY: 0.8 });
     const bed = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.58, 3.6), fabric);
-    bed.position.set(center.x + 2.2, 0.32, center.z + 2.1);
+    // The bed must stay on the west side of the partition: east of it the 2.25 x
+    // 3.6m footprint covered the partition doorway (71304/28312 sealed outright,
+    // 00004 down to a 0.53m slit) and the mesh straddled the wall itself.
+    bed.position.set(center.x - 2.6, 0.32, center.z + 2.1);
     scene.add(bed);
     colliders.push({ minX: bed.position.x - 1.13, maxX: bed.position.x + 1.13, minZ: bed.position.z - 1.8, maxZ: bed.position.z + 1.8, topY: 0.64 });
     const counter = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.02, 0.72), wood);
@@ -176,6 +190,13 @@ function addApartmentFurniture(scene, colliders) {
     const bathroom = new THREE.Mesh(new THREE.BoxGeometry(2.7, 2.6, 0.12), tile);
     bathroom.position.set(center.x + 3.1, 1.3, center.z - 3.2);
     scene.add(bathroom);
+    // The tiled screen is drawn as a full-height slab but had no collider.
+    colliders.push({
+      minX: bathroom.position.x - 1.35,
+      maxX: bathroom.position.x + 1.35,
+      minZ: bathroom.position.z - 0.06,
+      maxZ: bathroom.position.z + 0.06,
+    });
   }
 }
 
@@ -230,7 +251,9 @@ function addLobbyAndFaceling(scene, colliders) {
   head.position.y = 1.95;
   head.scale.z = 0.82;
   faceling.add(torso, head);
-  faceling.position.set(lobbyCenter.x, 0, lobbyCenter.z - 3.55);
+  // Stand the faceling 1.9m west of the floor 0 spawn: at the old spot it sat
+  // 0.45m from the spawn point, i.e. 0.19m inside the player's capsule.
+  faceling.position.set(lobbyCenter.x - 1.9, 0, lobbyCenter.z - 3.55);
   scene.add(faceling);
   return { faceling, facelingPosition: { x: faceling.position.x, z: faceling.position.z } };
 }
@@ -251,7 +274,7 @@ function addWindows(scene) {
   return windows;
 }
 
-function addRustyPipeExit(scene) {
+function addRustyPipeExit(scene, colliders) {
   const position = levelThirteenCellCenter(18, 7);
   const material = createGameMaterial({
     ...createLevelThirteenRustMaps(2, 2, !isLowQuality()),
@@ -265,6 +288,15 @@ function addRustyPipeExit(scene) {
   pipe.position.set(position.x, 1.55, position.z);
   pipe.rotation.z = Math.PI / 2;
   scene.add(pipe);
+  // Open-ended cylinder laid along X: 3.1m long (half 1.55), radius 0.58, so the
+  // body is a 3.1 x 1.16 x 1.16 obstacle with its top at y = 2.13.
+  colliders.push({
+    minX: pipe.position.x - 1.55,
+    maxX: pipe.position.x + 1.55,
+    minZ: pipe.position.z - 0.58,
+    maxZ: pipe.position.z + 0.58,
+    topY: pipe.position.y + 0.58,
+  });
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.1, 8, 18), material);
   ring.position.set(position.x - 1.55, 1.55, position.z);
   ring.rotation.y = Math.PI / 2;
@@ -272,7 +304,7 @@ function addRustyPipeExit(scene) {
   return position;
 }
 
-function addTransitionProps(scene) {
+function addTransitionProps(scene, colliders) {
   const cells = [[11, 37], [35, 37], [35, 4], [59, 4]];
   const stairMaterial = createGameMaterial({ color: 0xaaa295, roughness: 0.95 });
   cells.forEach(([col, row]) => {
@@ -282,6 +314,18 @@ function addTransitionProps(scene) {
       step.position.set(position.x, 0.09 + index * 0.16, position.z + 1.6 - index * 0.5);
       scene.add(step);
     }
+    // These stairs are the only walking route between the three apartment
+    // modules, so the steps themselves must stay non-solid (a collider would
+    // leave the 1.25m teleport trigger 1.56m out of reach). Only the side rails
+    // are solid: they span the 3.12m step footprint but keep a 1.68m aisle.
+    for (const offset of [-1.325, 1.325]) {
+      colliders.push({
+        minX: position.x + offset - 0.125,
+        maxX: position.x + offset + 0.125,
+        minZ: position.z - 1.21,
+        maxZ: position.z + 1.91,
+      });
+    }
   });
   const elevatorMaterial = createGameMaterial({ color: 0x4f5354, roughness: 0.72, metalness: 0.58 });
   for (const floor of LEVEL_THIRTEEN_FLOORS) {
@@ -289,6 +333,14 @@ function addTransitionProps(scene) {
     const elevator = new THREE.Mesh(new THREE.BoxGeometry(2.8, 3.1, 0.18), elevatorMaterial);
     elevator.position.set(position.x, 1.55, position.z - 1.9);
     scene.add(elevator);
+    // Full-height 2.8 x 0.18 panel (no topY, like the partition walls). It sits
+    // 1.81m behind the corridor's north loop trigger, so nothing is cut off.
+    colliders.push({
+      minX: elevator.position.x - 1.4,
+      maxX: elevator.position.x + 1.4,
+      minZ: elevator.position.z - 0.09,
+      maxZ: elevator.position.z + 0.09,
+    });
   }
 }
 
@@ -299,8 +351,8 @@ export function addLevelThirteenProps(scene) {
   addApartmentFurniture(scene, colliders);
   const lobby = addLobbyAndFaceling(scene, colliders);
   const windows = addWindows(scene);
-  const pipeExitPosition = addRustyPipeExit(scene);
-  addTransitionProps(scene);
+  const pipeExitPosition = addRustyPipeExit(scene, colliders);
+  addTransitionProps(scene, colliders);
   return {
     colliders,
     ...architecture,

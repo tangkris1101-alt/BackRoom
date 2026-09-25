@@ -1,4 +1,9 @@
 import * as THREE from "three";
+import {
+  colliderBlocksAtFeetHeight,
+  getPlatformFloorHeight,
+  resolvePlatformOverlap,
+} from "../common/platform-collision.js";
 import { createGameMaterial } from "../common/materials.js";
 import {
   CELL_SIZE,
@@ -30,10 +35,14 @@ import {
   levelThreeCellCenter,
   levelThreeWorldToCell,
   countLevelThreeOpenNeighbors,
-  getLevelThreeTargetMount,
 } from "./layout.js";
 import { collectLevelTransforms, createLayoutLights, addLayoutDarkPockets } from "../level-two/props.js";
-import { createLevelThreeFloorTexture, createLevelThreeCeilingTexture, createLevelThreeBrickTexture } from "./textures.js";
+import {
+  createLevelThreeFloorTexture,
+  createLevelThreeCeilingTexture,
+  createLevelThreeBrickTexture,
+  createLevelThreeBrickBumpTexture,
+} from "./textures.js";
 import {
   addLevelThreeElectricalDetails,
   addLevelThreeBlackSludgePipes,
@@ -99,6 +108,10 @@ export function createLevelThreeScene({ initialState = null } = {}) {
 
   let propColliders = addLevelThreeElectricalDetails(scene);
   propColliders = propColliders.concat(addLevelThreeSanctumStatue(scene));
+  // Assembly Line (belts + crates) and Boiler Room (drum) props return their
+  // colliders too, so they join the set before pickups and entities are placed.
+  propColliders = propColliders.concat(addLevelThreeAssemblyLineEquipment(scene));
+  propColliders = propColliders.concat(addLevelThreeBoilerRoomPipe(scene));
 
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
@@ -139,8 +152,12 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     }),
   );
   floor.rotation.x = -Math.PI / 2;
+  // Centre the floor on the grid, exactly like the ceiling below: the map is
+  // built from LEVEL_THREE_ORIGIN_X/Z, which is not the world origin, so a
+  // plane parked at (0, 0, 0) covered x[-98, 98] z[-62, 62] and left 115
+  // walkable cells (east wing, vertical corridor, row 27-28 rooms) floating
+  // over fog. Size and UV repeat are untouched — only the alignment moves.
   floor.position.set(LEVEL_THREE_CENTER_X, 0, LEVEL_THREE_CENTER_Z);
-  floor.position.set(0, 0, 0);
   scene.add(floor);
 
   const ceiling = new THREE.Mesh(
@@ -155,26 +172,28 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   ceiling.position.set(LEVEL_THREE_CENTER_X, CEILING_Y, LEVEL_THREE_CENTER_Z);
   scene.add(ceiling);
 
-  const wallMaterial = createGameMaterial({
-    map: createLevelThreeBrickTexture(),
-    color: 0xffffff,
-    roughness: 0.88,
-  });
-  addInstancedBoxes(
-    scene,
-    new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS),
-    wallMaterial,
-    northSouth,
-  );
-  addInstancedBoxes(
-    scene,
-    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE),
-    wallMaterial,
-    eastWest,
-  );
+  // Neighbouring wall sections have independent weathering instead of all
+  // restarting the exact same brick stains at each four-metre module.
+  const northSouthGeometry = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS);
+  const eastWestGeometry = new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE);
+  const wallVariant = (position) =>
+    Math.abs(Math.round(position.x * 2) * 17 + Math.round(position.z * 2) * 31) % 3;
+  for (let variant = 0; variant < 3; variant += 1) {
+    const material = createGameMaterial({
+      map: createLevelThreeBrickTexture(variant),
+      bumpMap: createLevelThreeBrickBumpTexture(variant),
+      bumpScale: 0.055,
+      color: 0xffffff,
+      roughness: 0.94,
+    });
+    const northSouthGroup = northSouth.filter((position) => wallVariant(position) === variant);
+    const eastWestGroup = eastWest.filter((position) => wallVariant(position) === variant);
+    if (northSouthGroup.length) addInstancedBoxes(scene, northSouthGeometry, material, northSouthGroup);
+    if (eastWestGroup.length) addInstancedBoxes(scene, eastWestGeometry, material, eastWestGroup);
+  }
 
-  scene.add(new THREE.HemisphereLight(0xffe0aa, 0x20251f, 0.72));
-  const fill = new THREE.DirectionalLight(0xffb86e, 0.12);
+  scene.add(new THREE.HemisphereLight(0xffe5bc, 0x30322b, 0.98));
+  const fill = new THREE.DirectionalLight(0xffc795, 0.18);
   fill.position.set(-8, CEILING_Y - 0.4, 12);
   scene.add(fill);
 
@@ -194,8 +213,6 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   });
   addLevelThreeBlackSludgePipes(scene);
   addLevelThreeIndestructibleBars(scene);
-  addLevelThreeAssemblyLineEquipment(scene);
-  addLevelThreeBoilerRoomPipe(scene);
   addLevelThreeNotebookPapers(scene);
   addLevelThreeMural(scene);
   addLevelThreePurpificationSpots(scene);
@@ -282,7 +299,10 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     { id: "level-three-elevator-level-four", targetLevel: 4, targetLabel: "LEVEL 4", label: "OFFICE", kind: "elevator", position: targetPosition, rotation: 0 },
     { id: "level-three-elevator-level-five", targetLevel: 5, targetLabel: "LEVEL 5", label: "HOTEL", kind: "elevator", position: levelThreeCellCenter(15, 18), rotation: Math.PI },
   ];
-  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
+  // Door colliders join the prop list that isWalkable / getFloorHeight /
+  // resolvePosition already walk. Every pickup above was placed before this
+  // call, so item candidate cells and saved positions are untouched.
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial, { colliders: propColliders });
   const bacteriaSpawns = pickBacteriaSpawnPositions({
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
@@ -349,7 +369,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
 
   let objectiveReached = Boolean(objectiveInitial.reached);
 
-  function isWalkable(x, z, radius = 0.36) {
+  function isWalkable(x, z, radius = 0.36, feetY = 0) {
     const corner = radius * 0.72;
     const samples = [
       [0, 0],
@@ -367,7 +387,17 @@ export function createLevelThreeScene({ initialState = null } = {}) {
       return isLevelThreeOpenCell(cell.col, cell.row);
     });
     if (!isInOpenCells) return false;
-    return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
+    return !propColliders.some((collider) =>
+      colliderBlocksAtFeetHeight(collider, feetY) && circleIntersectsAabb(x, z, radius, collider),
+    );
+  }
+
+  function getFloorHeight(x, z, feetY) {
+    return getPlatformFloorHeight({ colliders: propColliders, x, z, feetY });
+  }
+
+  function resolvePosition(x, z, radius, feetY, maxCorrection) {
+    return resolvePlatformOverlap({ colliders: propColliders, x, z, radius, feetY, maxCorrection });
   }
 
   function update(delta, elapsed, playerPosition, effects = {}) {
@@ -440,6 +470,10 @@ export function createLevelThreeScene({ initialState = null } = {}) {
 
   return {
     level: 3,
+    presentation: {
+      exposure: 0.9,
+      post: { aoIntensity: 0.64, vignette: 0.2 },
+    },
     levelLabel: "LEVEL 3",
     levelName: "ELECTRICAL STATION",
     get viewModelName() {
@@ -453,6 +487,8 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     spawn,
     targetPosition,
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     decorativeItemSpawns: [
       { id: "wire-spool", position: { ...levelThreeCellCenter(8, 9), y: 0.2 }, rotation: 0.9, tiltZ: 0.18 },
     ],

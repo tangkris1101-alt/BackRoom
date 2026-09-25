@@ -24,22 +24,20 @@ import {
   LEVEL_ONE_CENTER_X,
   LEVEL_ONE_CENTER_Z,
   LEVEL_ONE_CORRIDOR_BOUNDS,
+  LEVEL_ONE_ARRIVAL_LOBBY_CELL,
+  LEVEL_ONE_ARRIVAL_SHAFT_CELL,
   isLevelOneOpenCell,
   levelOneCellCenter,
   levelOneWorldToCell,
   getLevelOneTargetMount,
 } from "./layout.js";
 import {
-  createLevelOneFloorTexture,
   createLevelOneFloorPbrMaps,
-  createLevelOneWallTexture,
   createLevelOneWallPbrMaps,
   createLevelOneCeilingTexture,
-  createLevelOneCorridorFloorTexture,
-  createLevelOneCorridorWallTexture,
-  createLevelOneCorridorCeilingTexture,
 } from "./textures.js";
 import { enableAoUv } from "../common/texture-utils.js";
+import { collapseWallRuns, createWorldMappedWallGeometry } from "./wall-geometry.js";
 import {
   createLevelOneLights,
   addLevelOnePipes,
@@ -72,10 +70,12 @@ import {
 } from "../entities/index.js";
 import { snapEntityStates } from "../common/snap.js";
 import { createExitNetwork } from "../common/exit-network.js";
+import { createElevatorCab, getElevatorCabOrigin } from "../level-zero/elevator.js";
 
 const LEVEL_ONE_DOORWAY_WIDTH = 2.7;
 const LEVEL_ONE_DOORWAY_HEIGHT = 2.56;
 const LEVEL_ONE_EXIT_ACTIVITY_RADIUS = CELL_SIZE * 6;
+const LEVEL_ONE_ARRIVAL_ELEVATOR_ID = "level-one-arrival-elevator";
 
 function createLevelOneLightField(fixturePositions, { includeTexture = true } = {}) {
   const size = 512;
@@ -218,6 +218,15 @@ function addLevelOneDoorwayWall(scene, mount, material) {
   scene.add(lintel);
 }
 
+function addLevelOneWorldMappedWalls(scene, northSouth, eastWest, materials) {
+  const geometry = createWorldMappedWallGeometry([
+    ...collapseWallRuns(northSouth, "x", CELL_SIZE, WALL_THICKNESS),
+    ...collapseWallRuns(eastWest, "z", CELL_SIZE, WALL_THICKNESS),
+  ], WALL_HEIGHT);
+  scene.add(new THREE.Mesh(geometry.wall, materials[0]));
+  scene.add(new THREE.Mesh(geometry.caps, materials[2]));
+}
+
 function getEntryPosition(mount) {
   const rotation = mount.rotation ?? 0;
   return {
@@ -226,7 +235,7 @@ function getEntryPosition(mount) {
   };
 }
 
-export function createLevelOneScene({ initialState = null } = {}) {
+export function createLevelOneScene({ initialState = null, entryContext = null } = {}) {
   const scene = new THREE.Scene();
   const FOG_COLOR = 0x555b57;
   scene.background = new THREE.Color(FOG_COLOR);
@@ -238,9 +247,16 @@ export function createLevelOneScene({ initialState = null } = {}) {
   const viewModel = attachFirstPersonViewModel(camera);
   scene.add(camera);
   const spawnCell = levelOneCellCenter(LEVEL_ONE_START_CELL.col, LEVEL_ONE_START_CELL.row);
-  const spawn = { x: spawnCell.x, z: spawnCell.z, yaw: LEVEL_ONE_START_CELL.yaw };
   const targetPosition = levelOneCellCenter(LEVEL_ONE_TARGET_CELL.col, LEVEL_ONE_TARGET_CELL.row);
   const elevatorMount = getLevelOneTargetMount(targetPosition);
+  const arrivalLobbyCenter = levelOneCellCenter(LEVEL_ONE_ARRIVAL_LOBBY_CELL.col, LEVEL_ONE_ARRIVAL_LOBBY_CELL.row);
+  const arrivalDoorPlane = { x: arrivalLobbyCenter.x, z: arrivalLobbyCenter.z - CELL_SIZE / 2 };
+  const arrivalMount = { ...arrivalDoorPlane, rotation: 0 };
+  const arrivalCabOrigin = getElevatorCabOrigin(arrivalDoorPlane, arrivalMount.rotation);
+  const arrivedFromLevelZero = entryContext?.type === "route" && entryContext.sourceLevel === 0;
+  const spawn = arrivedFromLevelZero
+    ? { x: arrivalCabOrigin.x, z: arrivalCabOrigin.z, yaw: Math.PI }
+    : { x: spawnCell.x, z: spawnCell.z, yaw: LEVEL_ONE_START_CELL.yaw };
 
   let propColliders = addLevelOneCrates(scene);
   propColliders = propColliders.concat(addLevelOneSupplyShelves(scene));
@@ -253,10 +269,18 @@ export function createLevelOneScene({ initialState = null } = {}) {
     isWalkable,
   );
   const { northSouth, eastWest, corridorNorthSouth, corridorEastWest, fixturePositions } = collectLevelOneTransforms({
-    openings: [elevatorMount],
+    openings: [elevatorMount, arrivalMount],
   });
   const lowQuality = isLowQuality();
   const lightField = createLevelOneLightField(fixturePositions, { includeTexture: !lowQuality });
+  if (lowQuality) {
+    // Low mode skips the baked fixture light-field shader. Keep enough soft
+    // reflected light to read the dry concrete without changing high mode.
+    scene.add(new THREE.HemisphereLight(0xc7d4c9, 0x364138, 0.65));
+    const lowFloorFill = new THREE.DirectionalLight(0xb8c5b9, 0.7);
+    lowFloorFill.position.set(0, 12, 0);
+    scene.add(lowFloorFill);
+  }
 
   const floorMaterial = createGameMaterial(({ lowQuality: useLowQuality }) => ({
     ...createLevelOneFloorPbrMaps({ includeDetailMaps: !useLowQuality }),
@@ -264,8 +288,8 @@ export function createLevelOneScene({ initialState = null } = {}) {
     emissive: 0x3b463d,
     emissiveIntensity: 0.32,
     roughness: 0.96,
-    normalScale: new THREE.Vector2(0.42, 0.42),
-    aoMapIntensity: 0.58,
+    normalScale: new THREE.Vector2(0.56, 0.56),
+    aoMapIntensity: 0.72,
   }));
   const wallMaterial = createGameMaterial(({ lowQuality: useLowQuality }) => ({
     ...createLevelOneWallPbrMaps({ includeDetailMaps: !useLowQuality }),
@@ -273,7 +297,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
     emissive: 0x000000,
     emissiveIntensity: 0,
     roughness: 0.91,
-    normalScale: new THREE.Vector2(0.22, 0.22),
+    normalScale: new THREE.Vector2(0.42, 0.42),
   }));
   const corridorWallMaterial = createGameMaterial(({ lowQuality: useLowQuality }) => ({
     ...createLevelOneWallPbrMaps({ corridor: true, includeDetailMaps: !useLowQuality }),
@@ -281,13 +305,16 @@ export function createLevelOneScene({ initialState = null } = {}) {
     emissive: 0x000000,
     emissiveIntensity: 0,
     roughness: 0.87,
-    normalScale: new THREE.Vector2(0.17, 0.17),
+    normalScale: new THREE.Vector2(0.36, 0.36),
   }));
   const ceilingMaterial = createGameMaterial({
-    color: 0xcfd1cc,
+    // The slab carries the same damp staining as the walls; without it the
+    // untextured plane reads as an empty white void overhead.
+    map: createLevelOneCeilingTexture(),
+    color: 0xffffff,
     emissive: 0x000000,
     emissiveIntensity: 0,
-    roughness: 0.9,
+    roughness: 0.92,
   });
   const wallCapMaterial = createGameMaterial({
     color: 0x747976,
@@ -312,10 +339,12 @@ export function createLevelOneScene({ initialState = null } = {}) {
     corridorWallMaterial,
   ];
   applyLevelOneLightFieldSafe(floorMaterial, lightField, 3.05);
-  applyLevelOneLightFieldSafe(wallMaterial, lightField, 2.35);
-  applyLevelOneLightFieldSafe(corridorWallMaterial, lightField, 2.2);
-  applyLevelOneLightFieldSafe(ceilingMaterial, lightField, 2.1);
-  applyLevelOneLightFieldSafe(wallCapMaterial, lightField, 2.15);
+  // Level 1 keeps its bright fixtures, but the wall and slab gains stay low
+  // enough that the stained texture is not washed back to flat white.
+  applyLevelOneLightFieldSafe(wallMaterial, lightField, 1.95);
+  applyLevelOneLightFieldSafe(corridorWallMaterial, lightField, 1.85);
+  applyLevelOneLightFieldSafe(ceilingMaterial, lightField, 1.65);
+  applyLevelOneLightFieldSafe(wallCapMaterial, lightField, 1.85);
 
   const floor = new THREE.Mesh(
     enableAoUv(new THREE.PlaneGeometry(LEVEL_ONE_COLS * CELL_SIZE, LEVEL_ONE_ROWS * CELL_SIZE)),
@@ -333,31 +362,26 @@ export function createLevelOneScene({ initialState = null } = {}) {
   ceiling.position.set(LEVEL_ONE_CENTER_X, CEILING_Y, LEVEL_ONE_CENTER_Z);
   scene.add(ceiling);
 
-  addInstancedBoxes(
-    scene,
-    new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS),
-    wallMaterials,
-    northSouth,
-  );
-  addInstancedBoxes(
-    scene,
-    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE),
-    wallMaterials,
-    eastWest,
-  );
-  addInstancedBoxes(
-    scene,
-    new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS),
-    corridorWallMaterials,
-    corridorNorthSouth,
-  );
-  addInstancedBoxes(
-    scene,
-    new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE),
-    corridorWallMaterials,
-    corridorEastWest,
-  );
+  addLevelOneWorldMappedWalls(scene, northSouth, eastWest, wallMaterials);
+  addLevelOneWorldMappedWalls(scene, corridorNorthSouth, corridorEastWest, corridorWallMaterials);
+  // A low concrete kick plate gives the maintained wall a readable ground
+  // junction without adding stains or broadly brightening the warehouse.
+  const skirtingMaterial = createGameMaterial({
+    color: 0x7a857d,
+    emissive: 0x253028,
+    emissiveIntensity: 0.18,
+    roughness: 0.94,
+  });
+  applyLevelOneLightFieldSafe(skirtingMaterial, lightField, 1.5);
+  const atFloor = (transforms) => transforms.map(({ x, z }) => new THREE.Vector3(x, 0.075, z));
+  const northSouthSkirting = new THREE.BoxGeometry(CELL_SIZE, 0.15, WALL_THICKNESS + 0.035);
+  const eastWestSkirting = new THREE.BoxGeometry(WALL_THICKNESS + 0.035, 0.15, CELL_SIZE);
+  addInstancedBoxes(scene, northSouthSkirting, skirtingMaterial, atFloor(northSouth));
+  addInstancedBoxes(scene, eastWestSkirting, skirtingMaterial, atFloor(eastWest));
+  addInstancedBoxes(scene, northSouthSkirting, skirtingMaterial, atFloor(corridorNorthSouth));
+  addInstancedBoxes(scene, eastWestSkirting, skirtingMaterial, atFloor(corridorEastWest));
   addLevelOneDoorwayWall(scene, elevatorMount, wallMaterials);
+  addLevelOneDoorwayWall(scene, arrivalMount, wallMaterials);
 
   const fixtures = createLevelOneLights(scene, fixturePositions, { dynamicPointLights: true });
   const updateLightState = createStableLightState("HUM", {
@@ -449,7 +473,19 @@ export function createLevelOneScene({ initialState = null } = {}) {
       rotation: elevatorMount.rotation,
     },
   ];
-  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
+  // Door colliders join the prop list that isWalkable / getFloorHeight /
+  // resolvePosition already walk. Every pickup above was placed before this
+  // call, so item candidate cells and saved positions are untouched.
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial, { colliders: propColliders });
+  const arrivalElevator = createElevatorCab(scene, arrivalCabOrigin, interactionInitial[LEVEL_ONE_ARRIVAL_ELEVATOR_ID] ?? null, {
+    id: LEVEL_ONE_ARRIVAL_ELEVATOR_ID,
+    name: "level-one-arrival-elevator",
+    rotation: 0,
+    signText: "LEVEL 1",
+    registerExitRoute: false,
+    arrival: true,
+    arriveOpen: arrivedFromLevelZero,
+  });
   const bacteriaSpawn = chooseBacteriaSpawn({
     cols: LEVEL_ONE_COLS,
     rows: LEVEL_ONE_ROWS,
@@ -496,7 +532,12 @@ export function createLevelOneScene({ initialState = null } = {}) {
 
     const isInOpenCells = samples.every(([offsetX, offsetZ]) => {
       const cell = levelOneWorldToCell(x + offsetX, z + offsetZ);
-      return isLevelOneOpenCell(cell.col, cell.row);
+      const inArrivalShaft =
+        cell.col === LEVEL_ONE_ARRIVAL_SHAFT_CELL.col && cell.row === LEVEL_ONE_ARRIVAL_SHAFT_CELL.row;
+      return (
+        (isLevelOneOpenCell(cell.col, cell.row) || inArrivalShaft) &&
+        !arrivalElevator.blocksMovement(x + offsetX, z + offsetZ)
+      );
     });
     if (!isInOpenCells) return false;
 
@@ -527,6 +568,7 @@ export function createLevelOneScene({ initialState = null } = {}) {
 
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.76;
     const enteredExit = exitNetwork.update(delta, playerPosition);
+    arrivalElevator.update(delta, playerPosition);
     const exitDistance = Math.min(...routes.map((route) => Math.hypot(
       playerPosition.x - route.position.x,
       playerPosition.z - route.position.z,
@@ -540,9 +582,9 @@ export function createLevelOneScene({ initialState = null } = {}) {
       skyColor: 0xe6efdf,
       groundColor: 0x31463c,
     });
-    // Level 1 intentionally avoids a global ambient light. Its baked light
-    // field makes the warehouse readable but cannot illuminate camera-child
-    // hands, so give only the view model a soft, fixture-driven key light.
+    // High quality avoids a global ambient light. Its baked light field makes
+    // the warehouse readable but cannot illuminate camera-child hands, so
+    // give only the view model a soft, fixture-driven key light.
     setFirstPersonViewModelKeyLight(viewModel, {
       intensity: (3.2 + localExposure * 1.2) * (0.78 + flicker * 0.22),
       color: 0xe7f1df,
@@ -653,7 +695,10 @@ export function createLevelOneScene({ initialState = null } = {}) {
           "almond-water": almondWater.getState(),
           "super-almond-water": superAlmondWater.getState(),
         },
-        interactions: exitNetwork.getState(),
+        interactions: {
+          ...exitNetwork.getState(),
+          [LEVEL_ONE_ARRIVAL_ELEVATOR_ID]: arrivalElevator.getState(),
+        },
         objectives: { reached: objectiveReached },
         entities: [bacteria.getState()],
       };

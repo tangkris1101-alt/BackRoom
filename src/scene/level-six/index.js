@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { colliderBlocksAtFeetHeight, getPlatformFloorHeight, resolvePlatformOverlap } from "../common/platform-collision.js";
 import { createGameMaterial } from "../common/materials.js";
 import {
   CELL_SIZE,
@@ -139,6 +140,19 @@ function addLevelSixDetails(scene, interactionInitial = {}) {
     scene.add(mesh);
   });
 
+  // The DESCENT stairwell model (createStairwellModel) on the Level 7 route
+  // stands in walkable cells with no collision of its own, so the player used to
+  // walk straight through its concrete. It gets no `topY`: the shaft walls reach
+  // 2.48m and its tallest tread 1.75m, far above the 1.15m jump apex. The
+  // COLD POOL doorway to Level 8 is a regular door, so the shared exit network
+  // publishes its frame collider and toggles it with the door instead.
+  colliders.push(
+    // Cell (33,20), world (62,28), rotation 0: the local shaft/back-wall/tread/
+    // jamb boxes put the whole model at x 60.05..63.95, z 22.83..28.16; the
+    // level wall at z 26 only hides its far half, leaving the five lowest treads
+    // and both 2.48m shaft walls exposed in the cell.
+    { minX: 60.05, maxX: 63.95, minZ: 22.83, maxZ: 28.16 },
+  );
   const cableGeometry = new THREE.CylinderGeometry(0.045, 0.045, CELL_SIZE * 5.6, 10);
   [
     { col: 7, row: 13, axis: "x" },
@@ -273,7 +287,12 @@ export function createLevelSixScene({ initialState = null } = {}) {
     { id: "level-six-return-level-five", targetLevel: 5, targetLabel: "LEVEL 5", label: "RETURN", kind: "door", position: levelSixCellCenter(4, 15), rotation: Math.PI },
     { id: "level-six-pool-level-eight", targetLevel: 8, targetLabel: "LEVEL 8", label: "COLD POOL", kind: "stair", position: levelSixCellCenter(18, 7), rotation: Math.PI / 2 },
   ];
-  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial);
+  // The pickups below are placed with `blockedAabbs: propColliders`, so the door
+  // colliders are collected separately and merged only after every item exists:
+  // that keeps the candidate cells (and therefore saved item positions) exactly
+  // as they were before doors became solid.
+  const exitColliders = [];
+  const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial, { colliders: exitColliders });
 
   const almondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_SIX_COLS,
@@ -335,6 +354,9 @@ export function createLevelSixScene({ initialState = null } = {}) {
     initialState: pickupInitial["silence-liquid"] ?? null,
   });
 
+  // Every pickup is placed, so the door colliders can join the list that
+  // isWalkable / getFloorHeight / resolvePosition walk.
+  propColliders.push(...exitColliders);
   const smiler = createSmilerEntity(scene, {
     id: "smiler-level-six",
     spawnPosition: levelSixCellCenter(29, 20),
@@ -350,7 +372,7 @@ export function createLevelSixScene({ initialState = null } = {}) {
 
   let objectiveReached = Boolean(objectiveInitial.reached);
 
-  function isWalkable(x, z, radius = 0.34) {
+  function isWalkable(x, z, radius = 0.34, feetY = 0) {
     const corner = radius * 0.72;
     const samples = [
       [0, 0],
@@ -368,7 +390,17 @@ export function createLevelSixScene({ initialState = null } = {}) {
       return isLevelSixOpenCell(cell.col, cell.row);
     });
     if (!isInOpenCells) return false;
-    return !propColliders.some((collider) => circleIntersectsAabb(x, z, radius, collider));
+    return !propColliders.some((collider) =>
+      colliderBlocksAtFeetHeight(collider, feetY) && circleIntersectsAabb(x, z, radius, collider),
+    );
+  }
+
+  function getFloorHeight(x, z, feetY) {
+    return getPlatformFloorHeight({ colliders: propColliders, x, z, feetY });
+  }
+
+  function resolvePosition(x, z, radius, feetY, maxCorrection) {
+    return resolvePlatformOverlap({ colliders: propColliders, x, z, radius, feetY, maxCorrection });
   }
 
   function update(delta, elapsed, playerPosition, effects = {}) {
@@ -437,6 +469,8 @@ export function createLevelSixScene({ initialState = null } = {}) {
     spawn,
     targetPosition,
     isWalkable,
+    getFloorHeight,
+    resolvePosition,
     decorativeItemSpawns: [
       { id: "concrete-chip", position: { ...levelSixCellCenter(10, 10), y: 0.18 }, rotation: 0.7, tiltX: 0.14 },
     ],

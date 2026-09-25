@@ -401,39 +401,3 @@ export function countLevelTwoOpenNeighbors(col, row) {
     [1, 0],
   ].filter(([dc, dr]) => isLevelTwoOpenCell(col + dc, row + dr)).length;
 }
-
-export function getLevelTwoTargetMount(position) {
-  const cell = levelTwoWorldToCell(position.x, position.z);
-  const options = [
-    {
-      col: cell.col,
-      row: cell.row - 1,
-      x: position.x,
-      z: position.z - CELL_SIZE / 2 + WALL_THICKNESS * 0.7,
-      rotation: 0,
-    },
-    {
-      col: cell.col,
-      row: cell.row + 1,
-      x: position.x,
-      z: position.z + CELL_SIZE / 2 - WALL_THICKNESS * 0.7,
-      rotation: Math.PI,
-    },
-    {
-      col: cell.col - 1,
-      row: cell.row,
-      x: position.x - CELL_SIZE / 2 + WALL_THICKNESS * 0.7,
-      z: position.z,
-      rotation: Math.PI / 2,
-    },
-    {
-      col: cell.col + 1,
-      row: cell.row,
-      x: position.x + CELL_SIZE / 2 - WALL_THICKNESS * 0.7,
-      z: position.z,
-      rotation: -Math.PI / 2,
-    },
-  ];
-
-  return options.find((option) => !isLevelTwoOpenCell(option.col, option.row)) ?? options[0];
-}

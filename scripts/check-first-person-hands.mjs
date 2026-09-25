@@ -6,17 +6,27 @@ const levelOneSourceUrl = new URL("../src/scene/level-one/index.js", import.meta
 const source = await readFile(sourceUrl, "utf8");
 const levelOneSource = await readFile(levelOneSourceUrl, "utf8");
 const bakedArms = [
-  new URL("../src/assets/models/fps-arm-para-baked.bin.b64", import.meta.url),
-  new URL("../src/assets/models/fps-arm-para-right-baked.bin.b64", import.meta.url),
+  ["left", "fps-arm-para-baked.bin.b64", "fps-arm-para-relaxed-baked.bin"],
+  ["right", "fps-arm-para-right-baked.bin.b64", "fps-arm-para-right-relaxed-baked.bin"],
 ];
 
-for (const bakedArm of bakedArms) {
-  await access(bakedArm);
-  assert.ok((await stat(bakedArm)).size > 1_000, `${bakedArm.pathname} must contain baked geometry`);
+for (const [side, gripName, relaxedName] of bakedArms) {
+  const gripUrl = new URL(`../src/assets/models/${gripName}`, import.meta.url);
+  const relaxedUrl = new URL(`../src/assets/models/${relaxedName}`, import.meta.url);
+  await access(gripUrl);
+  await access(relaxedUrl);
+  assert.ok((await stat(gripUrl)).size > 1_000, `${gripName} must contain baked geometry`);
+  assert.ok((await stat(relaxedUrl)).size > 1_000, `${relaxedName} must contain baked geometry`);
+  const grip = Buffer.from((await readFile(gripUrl, "utf8")).trim(), "base64");
+  const relaxed = await readFile(relaxedUrl);
+  assert.equal(grip.readUInt32LE(0), relaxed.readUInt32LE(0), `${side} arm poses must share a vertex count`);
+  assert.notDeepEqual(grip, relaxed, `${side} relaxed fingers must differ from the grip pose`);
 }
 
 assert.match(source, /bakedLeftArmBase64/);
 assert.match(source, /bakedRightArmBase64/);
+assert.match(source, /relaxedLeftArmUrl/);
+assert.match(source, /relaxedRightArmUrl/);
 assert.match(source, /surfaceRoughness/);
 assert.match(source, /skinSurface/);
 assert.match(source, /nailSurface/);
@@ -29,8 +39,50 @@ assert.match(source, /const fillLight = viewModel\.userData\.fillLight/);
 assert.match(source, /fillLight\?\.layers\.set\(VIEW_MODEL_LIGHT_LAYER\)/);
 assert.match(levelOneSource, /setFirstPersonViewModelKeyLight\(viewModel/);
 assert.match(levelOneSource, /intensity: \(3\.2 \+ localExposure \* 1\.2\)/);
-assert.match(source, /const cadence = isLeft \? 0\.94 : 1\.06/);
+assert.match(source, /setArmPoseGeometry\(arms, targetId \? "grip" : "empty"\)/);
+assert.match(source, /updateArmPoseTransition\(viewModel, motionDelta\)/);
+assert.match(source, /restPosition\.y \+ returnSwing \* 0\.085/);
 assert.match(source, /const heldDamping = holdingItem && !isLeft \? 0\.36 : 1/);
 assert.doesNotMatch(source, /mesh\.scale\.set\(mirrorSign, 1, 1\)/);
+
+// Held props are anchored to the baked grip centre and parented to the right
+// hand, so the placement can never drift back into camera-space constants.
+const anchorUrl = new URL("../src/assets/models/fps-arm-anchors.json", import.meta.url);
+await access(anchorUrl);
+const anchors = JSON.parse(await readFile(anchorUrl, "utf8"));
+for (const pose of ["grip", "empty"]) {
+  for (const side of ["left", "right"]) {
+    const entry = anchors?.[pose]?.[side];
+    assert.ok(entry, `fps-arm-anchors.json must describe the ${pose} ${side} grip anchor`);
+    for (const key of ["position", "palm", "tips"]) {
+      assert.ok(Array.isArray(entry[key]) && entry[key].length === 3, `${pose}.${side}.${key} must be a 3-vector`);
+      assert.ok(entry[key].every((value) => Number.isFinite(value)), `${pose}.${side}.${key} must be finite`);
+    }
+  }
+}
+const gripCentre = anchors.grip.right.position;
+const palmToTips = anchors.grip.right.tips.map((value, index) => value - anchors.grip.right.palm[index]);
+assert.ok(Math.hypot(...palmToTips) > 0.5, "the grip anchor must sit between the palm root and the fingertips");
+
+assert.match(source, /import armAnchors from "\.\.\/\.\.\/assets\/models\/fps-arm-anchors\.json"/);
+assert.match(source, /mount\.scale\.setScalar\(1 \/ ARMS_SCALE\)/);
+assert.match(source, /mesh\.add\(mount\)/);
+assert.match(source, /mount\.add\(heldItem\)/);
+assert.match(source, /mount\.position\.copy\(getGripAnchor\(arms, "right"\)\)/);
+assert.match(source, /previous\.removeFromParent\(\)/);
+assert.doesNotMatch(source, /viewModel\.add\(heldItem\)/);
+assert.doesNotMatch(source, /userData\.gripPosition/);
+assert.match(source, /item\.scale\.multiplyScalar/);
+assert.doesNotMatch(source, /item\.scale\.setScalar/);
+
+// Every authored offset is a small grip-relative nudge, not a camera-space
+// position: anything beyond 20 cm would push props off the hand again.
+for (const match of source.matchAll(/item\.position\.set\(([^)]+)\)/g)) {
+  const values = match[1].split(",").map((value) => Number(value.trim()));
+  assert.equal(values.length, 3, `unexpected item position: ${match[1]}`);
+  assert.ok(values.every((value) => Number.isFinite(value)), `non-numeric item position: ${match[1]}`);
+  assert.ok(Math.hypot(...values) <= 0.2, `held item offset ${match[1]} is too far from the grip anchor`);
+}
+assert.ok(Math.hypot(...gripCentre) > 2, "the exported grip anchor must be expressed in the arm rig's own units");
 
 console.log("first-person hand realism checks passed");

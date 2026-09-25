@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Level 0 电梯提示验收</title>
+</head>
+<body>
+  <button id="start">在无存档测试地址打开电梯旁的游戏画面</button>
+  <p id="status"></p>
+  <script type="module">
+    import { cellCenter, EXIT_CELL } from "/src/scene/level-zero/layout.js";
+    import { hasSavedGame, replaceSave } from "/src/save.js";
+
+    const status = document.querySelector("#status");
+    document.querySelector("#start").addEventListener("click", () => {
+      if (hasSavedGame()) {
+        status.textContent = "此地址已有游戏存档；未修改。请使用全新的测试端口。";
+        return;
+      }
+      const center = cellCenter(EXIT_CELL.col, EXIT_CELL.row);
+      const saved = replaceSave({
+        version: 2,
+        player: {
+          level: 0,
+          position: { x: center.x + 0.4, y: 1.64, z: center.z },
+          yaw: -Math.PI / 2,
+          pitch: -0.025,
+        },
+      });
+      if (!saved) {
+        status.textContent = "测试存档准备失败。";
+        return;
+      }
+      window.location.assign("/app.html");
+    });
+  </script>
+</body>
+</html>
