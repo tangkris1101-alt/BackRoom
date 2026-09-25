@@ -137,8 +137,6 @@ export const MAP_CENTER = {
 export const START_CELL = { col: 3, row: 23, yaw: -Math.PI * 0.48 };
 // The lift is installed in the eastern wall of this open cell.
 export const EXIT_CELL = { col: 28, row: 3 };
-export const EXIT_HOLE_RADIUS = CELL_SIZE * 0.4;
-export const EXIT_FALL_TRIGGER_Y = 0.58;
 
 export function isOpenCell(col, row) {
   return row >= 0 && row < ROWS && col >= 0 && col < COLS && MAP[row][col] === ".";

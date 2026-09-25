@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createGameMaterial } from "../common/materials.js";
-import { clampColor, createSeededRandom, drawSpeckles } from "../common/texture-utils.js";
+import { createSeededRandom, drawSpeckles } from "../common/texture-utils.js";
 import { createWideSignTexture } from "../common/textures.js";
 
 // The content-expansion check imports these props in Node, where no canvas
@@ -304,7 +304,11 @@ function createStencilMap(layout) {
 }
 
 function mergeParts(geometries) {
-  return mergeGeometries(geometries.map((geometry) => geometry.toNonIndexed()), false);
+  // RoundedBoxGeometry is already non-indexed, so converting it only warns.
+  return mergeGeometries(
+    geometries.map((geometry) => (geometry.index ? geometry.toNonIndexed() : geometry)),
+    false,
+  );
 }
 
 function rotateUvQuarterTurn(geometry) {

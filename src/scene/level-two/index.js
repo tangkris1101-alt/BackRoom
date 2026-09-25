@@ -204,7 +204,7 @@ export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, orig
   let diagWallIdx = 0;
   let fillIdx = 0;
 
-  function pushQuad(positions, normals, uvs, indices, v0, v1, v2, v3, uv0, uv1, uv2, uv3, normal) {
+  function pushQuad(positions, normals, uvs, indices, v0, v1, v2, v3, uv0, uv1, uv2, uv3) {
     const base = positions.length / 3;
     positions.push(v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z, v3.x, v3.y, v3.z);
     // The old cardinal-wall normals faced away from the lit corridor.
@@ -242,18 +242,12 @@ export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, orig
     for (let i = 0; i < poly.length; i += 1) {
       const a = poly[i];
       const b = poly[(i + 1) % poly.length];
-      const dx = b.x - a.x;
-      const dz = b.z - a.z;
-      const nx = dz;
-      const nz = -dx;
-      const len = Math.hypot(nx, nz) || 1;
-      const normal = { x: nx / len, y: 0, z: nz / len };
 
       const v0 = { x: a.x, y: y0, z: a.z };
       const v1 = { x: b.x, y: y0, z: b.z };
       const v2 = { x: b.x, y: y1, z: b.z };
       const v3 = { x: a.x, y: y1, z: a.z };
-      pushQuad(positions, normals, uvs, indices, v0, v1, v2, v3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+      pushQuad(positions, normals, uvs, indices, v0, v1, v2, v3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 });
     }
   }
 
@@ -310,8 +304,7 @@ export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, orig
           const w1 = { x: cellMinX + S, y: 0, z: cellMinZ };
           const w2 = { x: cellMinX + S, y: H, z: cellMinZ };
           const w3 = { x: cellMinX, y: H, z: cellMinZ };
-          const normal = { x: 0, y: 0, z: -1 };
-          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 });
           wallMaterials.push(0);
         }
         if (!southOpen) {
@@ -319,8 +312,7 @@ export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, orig
           const w1 = { x: cellMinX, y: 0, z: cellMinZ + S };
           const w2 = { x: cellMinX, y: H, z: cellMinZ + S };
           const w3 = { x: cellMinX + S, y: H, z: cellMinZ + S };
-          const normal = { x: 0, y: 0, z: 1 };
-          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 });
           wallMaterials.push(0);
         }
         if (!westOpen) {
@@ -328,8 +320,7 @@ export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, orig
           const w1 = { x: cellMinX, y: 0, z: cellMinZ };
           const w2 = { x: cellMinX, y: H, z: cellMinZ };
           const w3 = { x: cellMinX, y: H, z: cellMinZ + S };
-          const normal = { x: -1, y: 0, z: 0 };
-          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 });
           wallMaterials.push(0);
         }
         if (!eastOpen) {
@@ -337,8 +328,7 @@ export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, orig
           const w1 = { x: cellMinX + S, y: 0, z: cellMinZ + S };
           const w2 = { x: cellMinX + S, y: H, z: cellMinZ + S };
           const w3 = { x: cellMinX + S, y: H, z: cellMinZ };
-          const normal = { x: 1, y: 0, z: 0 };
-          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 });
           wallMaterials.push(0);
         }
       } else if (DIAGONAL_TYPES.has(ch)) {
@@ -375,13 +365,6 @@ export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, orig
         // For all diagonal types, the divider is the line from walkablePoly[1] to walkablePoly[2]
         // The divider runs along this line in 3D from y=0 to y=H.
         // Inner wall has two sides: one facing walkable, one facing fill.
-        const dx = innerEnd.x - innerStart.x;
-        const dz = innerEnd.z - innerStart.z;
-        const len = Math.hypot(dx, dz) || 1;
-        const perpX = dz / len;
-        const perpZ = -dx / len;
-        // Two sides of the wall: walkable-side (negative perp) and fill-side (positive perp)
-        // We'll merge both into the wall geometry.
 
         // Walkable-side face
         {
@@ -389,8 +372,7 @@ export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, orig
           const w1 = { x: innerEnd.x, y: 0, z: innerEnd.z };
           const w2 = { x: innerEnd.x, y: H, z: innerEnd.z };
           const w3 = { x: innerStart.x, y: H, z: innerStart.z };
-          const normal = { x: -perpX, y: 0, z: -perpZ };
-          pushQuad(diagWallPositions, diagWallNormals, diagWallUvs, diagWallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(diagWallPositions, diagWallNormals, diagWallUvs, diagWallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 });
         }
         // Fill-side face
         {
@@ -398,8 +380,7 @@ export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, orig
           const w1 = { x: innerStart.x, y: 0, z: innerStart.z };
           const w2 = { x: innerStart.x, y: H, z: innerStart.z };
           const w3 = { x: innerEnd.x, y: H, z: innerEnd.z };
-          const normal = { x: perpX, y: 0, z: perpZ };
-          pushQuad(diagWallPositions, diagWallNormals, diagWallUvs, diagWallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+          pushQuad(diagWallPositions, diagWallNormals, diagWallUvs, diagWallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 });
         }
 
         // Cell-edge walls on walkable side only
@@ -442,15 +423,11 @@ export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, orig
             const neighborWalkable = isLevelTwoWalkableCell(neighborCol, neighborRow);
             if (neighborWalkable) continue;
             // Add wall along this edge
-            const len = Math.hypot(dx, dz) || 1;
-            const nx = dz / len;
-            const nz = -dx / len;
-            const normal = { x: nx, y: 0, z: nz };
             const w0 = { x: edge.from.x, y: 0, z: edge.from.z };
             const w1 = { x: edge.to.x, y: 0, z: edge.to.z };
             const w2 = { x: edge.to.x, y: H, z: edge.to.z };
             const w3 = { x: edge.from.x, y: H, z: edge.from.z };
-            pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+            pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 });
             wallMaterials.push(0);
           }
 
@@ -493,15 +470,11 @@ export function buildLevelTwoMergedGeometry(map, meta, cols, rows, originX, orig
                 else if (a.z === cellMinZ + S) neighborRow += 1;
               }
               if (isLevelTwoWalkableCell(neighborCol, neighborRow)) continue;
-              const len = Math.hypot(dx, dz) || 1;
-              const nx = dz / len;
-              const nz = -dx / len;
-              const normal = { x: nx, y: 0, z: nz };
               const w0 = { x: a.x, y: 0, z: a.z };
               const w1 = { x: b.x, y: 0, z: b.z };
               const w2 = { x: b.x, y: H, z: b.z };
               const w3 = { x: a.x, y: H, z: a.z };
-              pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, normal);
+              pushQuad(wallPositions, wallNormals, wallUvs, wallIndices, w0, w1, w2, w3, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 });
               wallMaterials.push(0);
             }
           }

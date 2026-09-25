@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { createGameMaterial } from "../common/materials.js";
+import { createGameMaterial, isLowQuality } from "../common/materials.js";
 import { CELL_SIZE } from "../constants.js";
 import { createStableLightState } from "../common/lighting.js";
 import {
@@ -73,7 +73,7 @@ export function createLevelNineScene({ initialState = null } = {}) {
     map: createLevelNineGrassTexture(), color: 0x496b51, emissive: 0x08120c, emissiveIntensity: 0.34, roughness: 0.95,
   });
   const roadMaterial = createGameMaterial({
-    ...createLevelNineAsphaltMaps(), color: 0xb9c0c4, normalScale: new THREE.Vector2(0.52, 0.52),
+    ...createLevelNineAsphaltMaps(!isLowQuality()), color: 0xb9c0c4, normalScale: new THREE.Vector2(0.52, 0.52),
     roughness: 0.94, metalness: 0, aoMapIntensity: 0.85,
   });
   const floor = new THREE.Mesh(enableAoUv(new THREE.PlaneGeometry(LEVEL_NINE_COLS * CELL_SIZE, LEVEL_NINE_ROWS * CELL_SIZE)), grassMaterial);
