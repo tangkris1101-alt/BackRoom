@@ -15,3 +15,10 @@ dev.log
 server/migrations/*.local.sql
 .DS_Store
 Thumbs.db
+
+# Verification media stays local; only the text reports under outputs/ are committed.
+outputs/**/*.png
+outputs/**/*.jpg
+outputs/**/*.jpeg
+outputs/**/*.mp4
+outputs/**/*.webm

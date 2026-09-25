@@ -1,0 +1,202 @@
+
+> three-backrooms@1.0.0 prebuild
+> node scripts/check-encoding.mjs src app.html
+
+checked 121 text files, no BOM found.
+
+> three-backrooms@1.0.0 build
+> npm run build:web && npm run build:standalone && node scripts/check-web-build.mjs
+
+
+> three-backrooms@1.0.0 build:web
+> vite build && node scripts/prepare-web-build.mjs
+
+vite v8.0.16 building client environment for production...
+[2K
+transforming...✓ 196 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/diffuse-CpItZr5F.jpg                              13.17 kB
+dist/assets/normal-C4RIPnhU.jpg                               18.46 kB
+dist/assets/diffuse-DtUkMEno.jpg                              25.19 kB
+dist/assets/arm-pwlN2fOu.jpg                                  32.00 kB
+dist/assets/arm-I7az4nK1.jpg                                  33.14 kB
+dist/assets/roughness-DhoVry7j.jpg                            41.41 kB
+dist/app.html                                                 45.87 kB │ gzip:   9.92 kB
+dist/assets/breathing-tired-C0NBdn3t.ogg                      46.10 kB
+dist/assets/normal-D8aXvcoR.jpg                               52.84 kB
+dist/assets/ao-BKnRcYxH.jpg                                   75.65 kB
+dist/assets/diffuse-B3XmQ2qn.jpg                              79.00 kB
+dist/assets/diffuse-D3I0jZrR.jpg                              79.65 kB
+dist/assets/roughness-av2zz4tl.jpg                            80.97 kB
+dist/assets/arm-DdnKqbtI.jpg                                  84.22 kB
+dist/assets/normal-DZxtjqXO.jpg                               87.28 kB
+dist/assets/roughness-MmzPP25P.jpg                            91.84 kB
+dist/assets/normal-wu6wGiwE.jpg                               92.50 kB
+dist/assets/diffuse-0lr37fJY.jpg                             100.03 kB
+dist/assets/diffuse-DWig4RMF.jpg                             101.56 kB
+dist/assets/diffuse-B4RUNOPx.jpg                             104.07 kB
+dist/assets/arm-BfJhyOo5.jpg                                 106.48 kB
+dist/assets/normal--_Xwqkx-.jpg                              110.23 kB
+dist/assets/normal-CXvJtMJ2.jpg                              110.90 kB
+dist/assets/arm-w6OqWXk_.jpg                                 117.55 kB
+dist/assets/diff-5XU0sVYe.jpg                                118.80 kB
+dist/assets/arm-D9uzDsT6.jpg                                 121.82 kB
+dist/assets/ao-DSBkF4ti.jpg                                  124.98 kB
+dist/assets/normal-BMxZZK5X.jpg                              126.06 kB
+dist/assets/diffuse-CphBU1ql.jpg                             134.39 kB
+dist/assets/arm-Cb9h1xpg.jpg                                 141.32 kB
+dist/assets/diffuse-UOg9Bk-c.jpg                             176.17 kB
+dist/assets/arm-C3yRDRCE.jpg                                 176.46 kB
+dist/assets/roughness-BYlVzqU9.jpg                           181.94 kB
+dist/assets/normal-L6FDIf5p.jpg                              201.39 kB
+dist/assets/normal-C2yWzCaY.jpg                              227.71 kB
+dist/assets/Rock027_1K-JPG_AmbientOcclusion-Buor92z0.jpg     228.06 kB
+dist/assets/ao-BTmkGoKz.jpg                                  230.12 kB
+dist/assets/normal-Dj0VYq2u.jpg                              230.89 kB
+dist/assets/Rock027_1K-JPG_Roughness-D3ak7UyZ.jpg            243.31 kB
+dist/assets/level-zero-menu-D35OpJA0.png                     265.28 kB
+dist/assets/normal-By4kv4OI.jpg                              270.26 kB
+dist/assets/diffuse-CWAsTVxY.jpg                             305.02 kB
+dist/assets/normal-D-m4NUJh.jpg                              332.81 kB
+dist/assets/normal-ZRvgzaxH.jpg                              344.33 kB
+dist/assets/roughness-6ldeFEs4.jpg                           430.64 kB
+dist/assets/roughness-BStEGPzs.jpg                           491.26 kB
+dist/assets/ao-Dr5qMGQ7.jpg                                  497.07 kB
+dist/assets/roughness-UIbHI7mJ.jpg                           574.41 kB
+dist/assets/fps-arm-para-relaxed-baked-BBbPKFLT.bin          586.94 kB
+dist/assets/fps-arm-para-right-relaxed-baked-CPQm2BPG.bin    586.94 kB
+dist/assets/normal-BO5LME4d.jpg                              594.09 kB
+dist/assets/diff-DGupk__f.jpg                                619.64 kB
+dist/assets/Rock027_1K-JPG_Color-BgXdYdaF.jpg                619.76 kB
+dist/assets/normal-eDJgiGar.jpg                              651.00 kB
+dist/assets/diffuse-BPPEoOE4.jpg                             754.75 kB
+dist/assets/diffuse-DTZEb7DG.jpg                             815.15 kB
+dist/assets/Rock027_1K-JPG_NormalGL-CpgCDOAL.jpg           1,055.41 kB
+dist/assets/level-five-jazz-improv-Bf12VrmM.mp3            3,168.46 kB
+dist/assets/app-I_WStXEj.css                                  65.42 kB │ gzip:  13.86 kB
+dist/assets/ao-O8rwq0-6.js                                     0.07 kB │ gzip:   0.09 kB
+dist/assets/diffuse-DlaUDwzS.js                                0.07 kB │ gzip:   0.09 kB
+dist/assets/arm-DXiEr7UF.js                                    0.13 kB │ gzip:   0.11 kB
+dist/assets/roughness-BWgRLWcp.js                              0.13 kB │ gzip:   0.12 kB
+dist/assets/layout-D8Q9YgKr.js                                 0.14 kB │ gzip:   0.12 kB
+dist/assets/arm-BJs4rg7k.js                                    0.20 kB │ gzip:   0.14 kB
+dist/assets/roughness-C1xtU2LM.js                              0.20 kB │ gzip:   0.14 kB
+dist/assets/roughness-DdczMqJd.js                              0.20 kB │ gzip:   0.14 kB
+dist/assets/roughness-zzXg8Lxs.js                              0.20 kB │ gzip:   0.14 kB
+dist/assets/ao-IYY49KaX.js                                     0.26 kB │ gzip:   0.16 kB
+dist/assets/textures-Cp2DhiEi.js                               0.56 kB │ gzip:   0.39 kB
+dist/assets/lighting-D3IJtkWw.js                               0.80 kB │ gzip:   0.48 kB
+dist/assets/snap-BvKFfi9O.js                                   1.04 kB │ gzip:   0.54 kB
+dist/assets/platform-collision-BZb_jBm9.js                     1.13 kB │ gzip:   0.56 kB
+dist/assets/arm-D0qEdAOJ.js                                    1.74 kB │ gzip:   0.86 kB
+dist/assets/grid-world-C4vwAa_O.js                             1.83 kB │ gzip:   0.87 kB
+dist/assets/interactions-DbpkuN2a.js                           2.37 kB │ gzip:   1.05 kB
+dist/assets/level-thirty-seven-9LI3V5qS.js                     6.10 kB │ gzip:   3.03 kB
+dist/assets/level-eight-qvrD-D6t.js                            7.02 kB │ gzip:   3.45 kB
+dist/assets/hub-DmaZJhMP.js                                    7.73 kB │ gzip:   3.44 kB
+dist/assets/level-ten-DgJzjnxH.js                              9.89 kB │ gzip:   4.38 kB
+dist/assets/level-six-DDpA434P.js                              9.90 kB │ gzip:   4.02 kB
+dist/assets/level-four-g7-aexLN.js                            11.01 kB │ gzip:   4.57 kB
+dist/assets/level-nine-DzFnaFfx.js                            11.29 kB │ gzip:   5.10 kB
+dist/assets/props-DNpWNb_c.js                                 11.65 kB │ gzip:   4.65 kB
+dist/assets/level-two-CafE2_mc.js                             12.28 kB │ gzip:   4.74 kB
+dist/assets/level-eleven-CWAPYkXU.js                          12.42 kB │ gzip:   5.24 kB
+dist/assets/level-twelve-Du-euIWT.js                          12.54 kB │ gzip:   5.49 kB
+dist/assets/exit-network-BuXg1ay9.js                          13.39 kB │ gzip:   5.20 kB
+dist/assets/level-one-CwovJUDI.js                             13.54 kB │ gzip:   5.83 kB
+dist/assets/level-thirteen-C1Ob1K9X.js                        14.33 kB │ gzip:   6.07 kB
+dist/assets/level-seven-gaLRSd3k.js                           15.01 kB │ gzip:   6.30 kB
+dist/assets/props-pUS-y2mP.js                                 16.59 kB │ gzip:   6.30 kB
+dist/assets/entities-BycKogcY.js                              18.41 kB │ gzip:   7.24 kB
+dist/assets/level-three-wplRP8ur.js                           19.19 kB │ gzip:   7.03 kB
+dist/assets/level-five-ChlmL2OP.js                            20.03 kB │ gzip:   7.80 kB
+dist/assets/level-zero-C5oiV3J4.js                            42.70 kB │ gzip:  16.49 kB
+dist/assets/three-DZcZryMR.js                                595.72 kB │ gzip: 149.15 kB
+dist/assets/app-BnR1UIRn.js                                1,815.52 kB │ gzip: 444.14 kB
+
+✓ built in 526ms
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 900 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+Prepared dist/index.html for online deployment
+> three-backrooms@1.0.0 build:standalone
+> vite build --mode standalone && node scripts/make-standalone.mjs && node scripts/check-standalone.mjs
+
+vite v8.0.16 building client environment for standalone...
+[2K
+transforming...✓ 196 modules transformed.
+rendering chunks...
+computing gzip size...
+.standalone-dist/assets/diffuse-CpItZr5F.jpg                              13.17 kB
+.standalone-dist/assets/normal-C4RIPnhU.jpg                               18.46 kB
+.standalone-dist/assets/diffuse-DtUkMEno.jpg                              25.19 kB
+.standalone-dist/assets/arm-pwlN2fOu.jpg                                  32.00 kB
+.standalone-dist/assets/arm-I7az4nK1.jpg                                  33.14 kB
+.standalone-dist/assets/roughness-DhoVry7j.jpg                            41.41 kB
+.standalone-dist/app.html                                                 45.79 kB │ gzip:   9.90 kB
+.standalone-dist/assets/breathing-tired-C0NBdn3t.ogg                      46.10 kB
+.standalone-dist/assets/normal-D8aXvcoR.jpg                               52.84 kB
+.standalone-dist/assets/ao-BKnRcYxH.jpg                                   75.65 kB
+.standalone-dist/assets/diffuse-B3XmQ2qn.jpg                              79.00 kB
+.standalone-dist/assets/diffuse-D3I0jZrR.jpg                              79.65 kB
+.standalone-dist/assets/roughness-av2zz4tl.jpg                            80.97 kB
+.standalone-dist/assets/arm-DdnKqbtI.jpg                                  84.22 kB
+.standalone-dist/assets/normal-DZxtjqXO.jpg                               87.28 kB
+.standalone-dist/assets/roughness-MmzPP25P.jpg                            91.84 kB
+.standalone-dist/assets/normal-wu6wGiwE.jpg                               92.50 kB
+.standalone-dist/assets/diffuse-0lr37fJY.jpg                             100.03 kB
+.standalone-dist/assets/diffuse-DWig4RMF.jpg                             101.56 kB
+.standalone-dist/assets/diffuse-B4RUNOPx.jpg                             104.07 kB
+.standalone-dist/assets/arm-BfJhyOo5.jpg                                 106.48 kB
+.standalone-dist/assets/normal--_Xwqkx-.jpg                              110.23 kB
+.standalone-dist/assets/normal-CXvJtMJ2.jpg                              110.90 kB
+.standalone-dist/assets/arm-w6OqWXk_.jpg                                 117.55 kB
+.standalone-dist/assets/diff-5XU0sVYe.jpg                                118.80 kB
+.standalone-dist/assets/arm-D9uzDsT6.jpg                                 121.82 kB
+.standalone-dist/assets/ao-DSBkF4ti.jpg                                  124.98 kB
+.standalone-dist/assets/normal-BMxZZK5X.jpg                              126.06 kB
+.standalone-dist/assets/diffuse-CphBU1ql.jpg                             134.39 kB
+.standalone-dist/assets/arm-Cb9h1xpg.jpg                                 141.32 kB
+.standalone-dist/assets/diffuse-UOg9Bk-c.jpg                             176.17 kB
+.standalone-dist/assets/arm-C3yRDRCE.jpg                                 176.46 kB
+.standalone-dist/assets/roughness-BYlVzqU9.jpg                           181.94 kB
+.standalone-dist/assets/normal-L6FDIf5p.jpg                              201.39 kB
+.standalone-dist/assets/normal-C2yWzCaY.jpg                              227.71 kB
+.standalone-dist/assets/Rock027_1K-JPG_AmbientOcclusion-Buor92z0.jpg     228.06 kB
+.standalone-dist/assets/ao-BTmkGoKz.jpg                                  230.12 kB
+.standalone-dist/assets/normal-Dj0VYq2u.jpg                              230.89 kB
+.standalone-dist/assets/Rock027_1K-JPG_Roughness-D3ak7UyZ.jpg            243.31 kB
+.standalone-dist/assets/level-zero-menu-D35OpJA0.png                     265.28 kB
+.standalone-dist/assets/normal-By4kv4OI.jpg                              270.26 kB
+.standalone-dist/assets/diffuse-CWAsTVxY.jpg                             305.02 kB
+.standalone-dist/assets/normal-D-m4NUJh.jpg                              332.81 kB
+.standalone-dist/assets/normal-ZRvgzaxH.jpg                              344.33 kB
+.standalone-dist/assets/roughness-6ldeFEs4.jpg                           430.64 kB
+.standalone-dist/assets/roughness-BStEGPzs.jpg                           491.26 kB
+.standalone-dist/assets/ao-Dr5qMGQ7.jpg                                  497.07 kB
+.standalone-dist/assets/roughness-UIbHI7mJ.jpg                           574.41 kB
+.standalone-dist/assets/fps-arm-para-relaxed-baked-BBbPKFLT.bin          586.94 kB
+.standalone-dist/assets/fps-arm-para-right-relaxed-baked-CPQm2BPG.bin    586.94 kB
+.standalone-dist/assets/normal-BO5LME4d.jpg                              594.09 kB
+.standalone-dist/assets/diff-DGupk__f.jpg                                619.64 kB
+.standalone-dist/assets/Rock027_1K-JPG_Color-BgXdYdaF.jpg                619.76 kB
+.standalone-dist/assets/normal-eDJgiGar.jpg                              651.00 kB
+.standalone-dist/assets/diffuse-BPPEoOE4.jpg                             754.75 kB
+.standalone-dist/assets/diffuse-DTZEb7DG.jpg                             815.15 kB
+.standalone-dist/assets/Rock027_1K-JPG_NormalGL-CpgCDOAL.jpg           1,055.41 kB
+.standalone-dist/assets/level-five-jazz-improv-Bf12VrmM.mp3            3,168.46 kB
+.standalone-dist/assets/app-I_WStXEj.css                                  65.42 kB │ gzip:  13.86 kB
+.standalone-dist/assets/app-D_ADXIq-.js                                2,702.24 kB │ gzip: 690.25 kB
+
+✓ built in 607ms
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 1800 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+Created standalone Backrooms build 7f3851ad6e6b
+standalone checks passed (24.69 MiB)
+web build checks passed (44.8 KiB HTML, 1773.0 KiB entry JS / 432.3 KiB gzip, 39 JS chunks)
