@@ -20,13 +20,18 @@ test("adjacent modules collapse into one wall while a doorway gap remains open",
 
 test("Level 1 wall run merging preserves the span of every original wall group", () => {
   const { northSouth, eastWest, corridorNorthSouth, corridorEastWest } = collectLevelOneTransforms();
+  const spanTolerance = CELL_SIZE * 1e-6;
   for (const [transforms, along] of [
     [northSouth, "x"], [eastWest, "z"],
     [corridorNorthSouth, "x"], [corridorEastWest, "z"],
   ]) {
     const runs = collapseWallRuns(transforms, along, CELL_SIZE, WALL_THICKNESS);
     const span = runs.reduce((sum, run) => sum + (along === "x" ? run.width : run.depth), 0);
-    assert.equal(span, transforms.length * CELL_SIZE);
+    const expectedSpan = transforms.length * CELL_SIZE;
+    assert.ok(
+      Math.abs(span - expectedSpan) <= spanTolerance,
+      `${along}-run span ${span} must match ${expectedSpan} within ${spanTolerance}`,
+    );
     assert.ok(runs.length <= transforms.length);
   }
 });

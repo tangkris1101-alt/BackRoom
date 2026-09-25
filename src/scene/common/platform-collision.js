@@ -1,9 +1,9 @@
-const DEFAULT_PLAYER_RADIUS = 0.36;
-const LANDING_TOLERANCE = 0.18;
+export const DEFAULT_PLAYER_RADIUS = 0.36;
+export const LANDING_TOLERANCE = 0.18;
 // Use the same forgiveness at the table edge as for landing. Previously the
 // player could land from 0.18m below a platform top but remained blocked by
 // its side until 0.04m below it, which made a close jump feel like a pushback.
-const SIDE_CLEARANCE = LANDING_TOLERANCE;
+export const SIDE_CLEARANCE = LANDING_TOLERANCE;
 
 export function colliderBlocksAtFeetHeight(collider, feetY = 0) {
   if (collider?.active === false) return false;

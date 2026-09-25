@@ -1,14 +1,15 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
+  DEFAULT_PLAYER_RADIUS,
+  LANDING_TOLERANCE,
+  SIDE_CLEARANCE,
   colliderBlocksAtFeetHeight,
   getPlatformFloorHeight,
   resolvePlatformOverlap,
 } from "../src/scene/common/platform-collision.js";
 import { getManilaRoomFurniture } from "../src/scene/level-zero/manila-room.js";
 import { MANILA_ROOM, cellCenter } from "../src/scene/level-zero/layout.js";
-
-const PLAYER_RADIUS = 0.36;
 
 // Level 0's M.E.G. documentation room keeps a chair in front of the table. It
 // used to be scenery only: the seat and the backrest had no collider, so the
@@ -27,10 +28,10 @@ const blocks = (x, z, feetY = 0) =>
   colliders.some(
     (collider) =>
       colliderBlocksAtFeetHeight(collider, feetY) &&
-      x + PLAYER_RADIUS > collider.minX &&
-      x - PLAYER_RADIUS < collider.maxX &&
-      z + PLAYER_RADIUS > collider.minZ &&
-      z - PLAYER_RADIUS < collider.maxZ,
+      x + DEFAULT_PLAYER_RADIUS > collider.minX &&
+      x - DEFAULT_PLAYER_RADIUS < collider.maxX &&
+      z + DEFAULT_PLAYER_RADIUS > collider.minZ &&
+      z - DEFAULT_PLAYER_RADIUS < collider.maxZ,
   );
 
 assert.equal(blocks(chairX, chairZ - 0.1), true, "the chair seat blocks a walking player");
@@ -39,15 +40,36 @@ assert.equal(blocks(chairX, chairZ + 1.2), false, "the aisle behind the chair st
 assert.equal(blocks(tableX, tableZ), true, "the documentation table still blocks");
 
 // The seat is low enough to clear midway through a jump, while the backrest
-// keeps blocking, so the chair reads as a solid object rather than a wall.
+// keeps blocking, so the chair reads as a solid object rather than a wall. The
+// clearing height is derived from the engine's own side clearance so this check
+// tracks the constant instead of a hand-copied approximation of it.
+const seatClearsAt = seat.topY - SIDE_CLEARANCE;
 assert.equal(colliderBlocksAtFeetHeight(seat, 0), true);
-assert.equal(colliderBlocksAtFeetHeight(seat, 0.46), false);
-assert.equal(colliderBlocksAtFeetHeight(back, 1), true);
+assert.equal(
+  colliderBlocksAtFeetHeight(seat, seatClearsAt - 1e-3),
+  true,
+  "the seat must keep blocking a player whose feet are below its side clearance",
+);
+assert.equal(
+  colliderBlocksAtFeetHeight(seat, seatClearsAt),
+  false,
+  "the seat must clear once the player's feet reach its side clearance",
+);
+assert.equal(
+  colliderBlocksAtFeetHeight(back, seatClearsAt),
+  true,
+  "the backrest must keep blocking once the seat is already cleared",
+);
 
 // The chair is too small to be fully supported by the player's radius, so it
 // stays an obstacle instead of an unintended standing surface.
-assert.equal(getPlatformFloorHeight({ colliders, x: chairX, z: chairZ, feetY: 1.1 }), 0);
-assert.equal(getPlatformFloorHeight({ colliders, x: tableX, z: tableZ, feetY: 1.1 }), 1.11);
+assert.equal(getPlatformFloorHeight({ colliders, x: chairX, z: chairZ, feetY: seat.topY }), 0);
+assert.equal(getPlatformFloorHeight({ colliders, x: tableX, z: tableZ, feetY: table.topY }), table.topY);
+assert.equal(
+  getPlatformFloorHeight({ colliders, x: tableX, z: tableZ, feetY: table.topY - LANDING_TOLERANCE - 1e-3 }),
+  0,
+  "the table must not become a landing surface below the landing tolerance",
+);
 
 const escaped = resolvePlatformOverlap({ colliders, x: chairX, z: chairZ, feetY: 0 });
 assert.equal(
@@ -59,7 +81,16 @@ assert.equal(
 // Every playable level wires its prop colliders through the shared height-aware
 // helpers, so a prop with a `topY` can be jumped over or stood on instead of
 // acting as an invisible full-height wall, and a player who ends up inside one
-// is pushed out again.
+// is pushed out again. The patterns below describe real call syntax inside
+// comment-free code: a level that only mentions the helpers in prose, or leaves
+// the call commented out, must not satisfy them.
+const HEIGHT_FILTER_CALL = /colliderBlocksAtFeetHeight\(\s*[A-Za-z_$][\w$]*\s*,\s*[A-Za-z_$][\w$]*\s*\)/;
+const GRID_COLLIDER_CALL = /createGridCollision\(\s*\{[\s\S]{0,600}?colliders\s*[:,]/;
+const PUBLISHED_GET_FLOOR_HEIGHT = /\bgetFloorHeight\s*[,:}]/;
+const PUBLISHED_RESOLVE_POSITION = /\bresolvePosition\s*[,:}]/;
+const stripComments = (source) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+
 const LEVEL_DIRECTORIES = [
   "zero",
   "one",
@@ -78,25 +109,26 @@ const LEVEL_DIRECTORIES = [
   "thirty-seven",
 ];
 for (const level of LEVEL_DIRECTORIES) {
-  const source = await readFile(new URL(`../src/scene/level-${level}/index.js`, import.meta.url), "utf8");
-  assert.match(
-    source,
-    /colliderBlocksAtFeetHeight\(|createGridCollision\(/,
+  const code = stripComments(
+    await readFile(new URL(`../src/scene/level-${level}/index.js`, import.meta.url), "utf8"),
+  );
+  assert.ok(
+    HEIGHT_FILTER_CALL.test(code) || GRID_COLLIDER_CALL.test(code),
     `level ${level} must filter prop colliders by feet height`,
   );
-  assert.match(source, /getFloorHeight/, `level ${level} must publish getFloorHeight`);
-  assert.match(source, /resolvePosition/, `level ${level} must publish resolvePosition`);
+  assert.match(code, PUBLISHED_GET_FLOOR_HEIGHT, `level ${level} must publish getFloorHeight`);
+  assert.match(code, PUBLISHED_RESOLVE_POSITION, `level ${level} must publish resolvePosition`);
 }
 
 // The hub used to have no floor height at all: the 10.5cm raised walkways were
 // walked through, and the only reason its fifteen doors could still be reached
 // was a missing floor strip that the walkable clamp silently treated as ground.
-const hubSource = await readFile(new URL("../src/scene/hub/index.js", import.meta.url), "utf8");
-assert.match(hubSource, /colliderBlocksAtFeetHeight\(/, "the hub must filter its walkway colliders by feet height");
-assert.match(hubSource, /getFloorHeight,/, "the hub must publish getFloorHeight");
-assert.match(hubSource, /resolvePosition,/, "the hub must publish resolvePosition");
-assert.match(hubSource, /hub-floor-pad-/, "the hub must pave the strip its doors are reached from");
-assert.match(hubSource, /FLOOR_PAD_OUTER_X/, "the hub floor pads must reach the wall face");
+const hubCode = stripComments(await readFile(new URL("../src/scene/hub/index.js", import.meta.url), "utf8"));
+assert.match(hubCode, HEIGHT_FILTER_CALL, "the hub must filter its walkway colliders by feet height");
+assert.match(hubCode, PUBLISHED_GET_FLOOR_HEIGHT, "the hub must publish getFloorHeight");
+assert.match(hubCode, PUBLISHED_RESOLVE_POSITION, "the hub must publish resolvePosition");
+assert.match(hubCode, /hub-floor-pad-/, "the hub must pave the strip its doors are reached from");
+assert.match(hubCode, /FLOOR_PAD_OUTER_X/, "the hub floor pads must reach the wall face");
 
 // Door leaves are solid while closed and, for single doors, swing into the
 // corridor once opened. Both states are published as toggled colliders.

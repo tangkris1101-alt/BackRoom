@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { after } from "node:test";
 import * as THREE from "three";
 import {
   ALMOND_WATER_STAMINA_BONUS,
@@ -7,8 +7,21 @@ import {
   SUPER_ALMOND_WATER_STAMINA_MAX,
 } from "../src/scene/constants.js";
 
+const previousWindow = globalThis.window;
+const previousDocument = globalThis.document;
+
 globalThis.window = { addEventListener: () => {} };
 globalThis.document = { addEventListener: () => {} };
+
+// Restore in a hook, not in the test body, so a failing import cannot leak the stubs
+// into whatever test file shares this process.
+after(() => {
+  if (previousWindow === undefined) delete globalThis.window;
+  else globalThis.window = previousWindow;
+  if (previousDocument === undefined) delete globalThis.document;
+  else globalThis.document = previousDocument;
+});
+
 const { FirstPersonControls } = await import("../src/first-person-controls.js");
 
 test("base and almond-water stamina caps are doubled without changing fill behavior", () => {

@@ -64,6 +64,26 @@ const gripCentre = anchors.grip.right.position;
 const palmToTips = anchors.grip.right.tips.map((value, index) => value - anchors.grip.right.palm[index]);
 assert.ok(Math.hypot(...palmToTips) > 0.5, "the grip anchor must sit between the palm root and the fingertips");
 
+// view-model.js carries a hand-written fallback for a missing or stale anchor
+// file, so the two sources of truth must not drift apart unnoticed. The fallback
+// is written with three decimals, hence the small tolerance.
+const FALLBACK_GRIP_ANCHOR_TOLERANCE = 1e-3;
+const fallbackMatch = source.match(/const FALLBACK_GRIP_ANCHOR = new THREE\.Vector3\(([^)]+)\)/);
+assert.ok(fallbackMatch, "view-model.js must keep a fallback grip anchor for a missing anchor file");
+const fallbackAnchor = fallbackMatch[1].split(",").map((value) => Number(value.trim()));
+assert.equal(fallbackAnchor.length, 3, `unexpected fallback grip anchor: ${fallbackMatch[1]}`);
+assert.ok(
+  fallbackAnchor.every((value) => Number.isFinite(value)),
+  `non-numeric fallback grip anchor: ${fallbackMatch[1]}`,
+);
+const fallbackDrift = Math.max(
+  ...fallbackAnchor.map((value, index) => Math.abs(value - gripCentre[index])),
+);
+assert.ok(
+  fallbackDrift <= FALLBACK_GRIP_ANCHOR_TOLERANCE,
+  `the fallback grip anchor drifted ${fallbackDrift} away from the baked grip anchor`,
+);
+
 assert.match(source, /import armAnchors from "\.\.\/\.\.\/assets\/models\/fps-arm-anchors\.json"/);
 assert.match(source, /mount\.scale\.setScalar\(1 \/ ARMS_SCALE\)/);
 assert.match(source, /mesh\.add\(mount\)/);
@@ -76,8 +96,15 @@ assert.match(source, /item\.scale\.multiplyScalar/);
 assert.doesNotMatch(source, /item\.scale\.setScalar/);
 
 // Every authored offset is a small grip-relative nudge, not a camera-space
-// position: anything beyond 20 cm would push props off the hand again.
-for (const match of source.matchAll(/item\.position\.set\(([^)]+)\)/g)) {
+// position: anything beyond 20 cm would push props off the hand again. The match
+// count is asserted as well, otherwise renaming the call site would quietly turn
+// this loop into a check that never runs.
+const itemOffsets = [...source.matchAll(/item\.position\.set\(([^)]+)\)/g)];
+assert.ok(
+  itemOffsets.length > 0,
+  "held items must still be nudged from the grip anchor with item.position.set(...)",
+);
+for (const match of itemOffsets) {
   const values = match[1].split(",").map((value) => Number(value.trim()));
   assert.equal(values.length, 3, `unexpected item position: ${match[1]}`);
   assert.ok(values.every((value) => Number.isFinite(value)), `non-numeric item position: ${match[1]}`);

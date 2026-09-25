@@ -40,9 +40,6 @@ const sleeveColor = new THREE.Color(0.19, 0.15, 0.1);
 const skinColor = new THREE.Color(0.52, 0.2, 0.12);
 const fingertipColor = new THREE.Color(0.46, 0.055, 0.035);
 const nailColor = new THREE.Color(0.78, 0.43, 0.33);
-const motionEuler = new THREE.Euler(0, 0, 0, "YXZ");
-const motionQuaternion = new THREE.Quaternion();
-const blendedColor = new THREE.Color();
 
 function alignHandPose(model, suffix, pose) {
   const mirrorSign = suffix === "L" ? 1 : -1;
@@ -101,8 +98,10 @@ function alignHandPose(model, suffix, pose) {
 function rotateBone(model, name, x = 0, y = 0, z = 0) {
   const bone = model.getObjectByName(name);
   if (!bone) return;
-  motionEuler.set(x, y, z);
-  motionQuaternion.setFromEuler(motionEuler);
+  // Per-call scratch: both hands bake concurrently, so module-level temporaries
+  // would let one hand's rotation leak into the other.
+  const motionEuler = new THREE.Euler(x, y, z, "YXZ");
+  const motionQuaternion = new THREE.Quaternion().setFromEuler(motionEuler);
   bone.quaternion.multiply(motionQuaternion);
 }
 
@@ -231,6 +230,9 @@ function bakeArmGeometry(model, suffix) {
   const skinByPosition = new Map();
   const nailByPosition = new Map();
   const position = new THREE.Vector3();
+  // Per-call scratch for the same reason as rotateBone: the hands bake in
+  // parallel and must not blend into each other.
+  const blendedColor = new THREE.Color();
   keptVertices.forEach((sourceVertex, targetVertex) => {
     position.fromBufferAttribute(positionAttribute, sourceVertex);
     mesh.applyBoneTransform(sourceVertex, position).applyMatrix4(mesh.matrixWorld);
@@ -404,12 +406,19 @@ const bakeSide = async (suffix, pose) => {
 for (const pose of ["grip", "empty"]) {
   const [leftVertices, rightVertices] = await Promise.all([bakeSide("L", pose), bakeSide("R", pose)]);
   console.log(`Baked ${pose} FPS arms: left ${leftVertices} vertices, right ${rightVertices} vertices.`);
-  if (pose === "empty") {
-    await writeFile(
-      resolve(modelDirectory, "fps-arm-anchors.json"),
-      `${JSON.stringify(armAnchors, null, 2)}\n`,
-      "utf8",
-    );
-    console.log("Grip anchor (right):", JSON.stringify(armAnchors.grip.right?.position));
+}
+
+// The anchor file is written once, after every pose has been baked. Writing it
+// from inside a single pose's iteration left it half-filled whenever the pose
+// order changed or only one pose ran.
+for (const pose of ["grip", "empty"]) {
+  for (const side of ["left", "right"]) {
+    if (!armAnchors[pose][side]) throw new Error(`Missing the ${pose} ${side} grip anchor.`);
   }
 }
+await writeFile(
+  resolve(modelDirectory, "fps-arm-anchors.json"),
+  `${JSON.stringify(armAnchors, null, 2)}\n`,
+  "utf8",
+);
+console.log("Grip anchor (right):", JSON.stringify(armAnchors.grip.right?.position));
