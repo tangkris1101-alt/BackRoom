@@ -39,6 +39,9 @@ jobs:
       - name: Test account API and save schema
         run: npm run test:accounts
 
+      - name: Test scene and gameplay units
+        run: npm run test:scene
+
       - name: Build production artifacts
         run: npm run build
 

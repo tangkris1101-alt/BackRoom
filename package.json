@@ -18,6 +18,7 @@
     "changelog:sync": "node scripts/sync-changelog.mjs",
     "changelog:check": "node scripts/sync-changelog.mjs --check",
     "test:accounts": "node --test tests/account-api.test.mjs tests/account-ui.test.mjs tests/save-schema.test.mjs tests/server-config.test.mjs",
+    "test:scene": "node --test tests/level-one-wall-uv.test.mjs tests/level-two-geometry.test.mjs tests/level-zero-elevator-wall-mount.test.mjs tests/opening-stand-motion.test.mjs tests/stamina-cap.test.mjs",
     "test:build": "node --test tests/build-output.test.mjs",
     "write:utf8": "node scripts/write-utf8.mjs",
     "preview": "vite preview --host 127.0.0.1"
