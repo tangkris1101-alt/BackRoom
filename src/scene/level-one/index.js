@@ -264,10 +264,6 @@ export function createLevelOneScene({ initialState = null, entryContext = null }
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
-  const entityInitial = snapEntityStates(
-    Array.isArray(initialState?.entities) ? initialState.entities : [],
-    isWalkable,
-  );
   const { northSouth, eastWest, corridorNorthSouth, corridorEastWest, fixturePositions } = collectLevelOneTransforms({
     openings: [elevatorMount, arrivalMount],
   });
@@ -391,7 +387,9 @@ export function createLevelOneScene({ initialState = null, entryContext = null }
   addLevelOnePipes(scene);
   addLevelOnePuddles(scene);
   addLevelOneWallSigns(scene);
-  propColliders = propColliders.concat(addLevelOneCorridorDetails(scene));
+  const corridorProps = addLevelOneCorridorDetails(scene, interactionInitial);
+  propColliders = propColliders.concat(corridorProps.colliders);
+  const workbenches = corridorProps.workbenches;
   const almondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_ONE_COLS,
     rows: LEVEL_ONE_ROWS,
@@ -486,6 +484,12 @@ export function createLevelOneScene({ initialState = null, entryContext = null }
     arrival: true,
     arriveOpen: arrivedFromLevelZero,
   });
+  // Snapping a saved entity position runs isWalkable, which samples the arrival
+  // cabin, so it has to wait until the cabin above exists.
+  const entityInitial = snapEntityStates(
+    Array.isArray(initialState?.entities) ? initialState.entities : [],
+    isWalkable,
+  );
   const bacteriaSpawn = chooseBacteriaSpawn({
     cols: LEVEL_ONE_COLS,
     rows: LEVEL_ONE_ROWS,
@@ -554,6 +558,15 @@ export function createLevelOneScene({ initialState = null, entryContext = null }
     return resolvePlatformOverlap({ colliders: propColliders, x, z, radius, feetY, maxCorrection });
   }
 
+  // Bench drawers and the exit network both offer interactions: whichever the
+  // camera is aimed at wins, and a door wins a near-tie.
+  function resolveInteractionFocus(playerPosition) {
+    const door = exitNetwork.inspect(playerPosition);
+    const drawer = workbenches.inspect(camera, playerPosition);
+    if (drawer && (!door || drawer.score > (door.score ?? 0) + 0.03)) return drawer;
+    return door;
+  }
+
   function update(delta, elapsed, playerPosition, effects = {}) {
     let lightTotal = 0;
     fixtures.forEach((fixture) => {
@@ -569,6 +582,7 @@ export function createLevelOneScene({ initialState = null, entryContext = null }
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.76;
     const enteredExit = exitNetwork.update(delta, playerPosition);
     arrivalElevator.update(delta, playerPosition);
+    workbenches.update(delta);
     const exitDistance = Math.min(...routes.map((route) => Math.hypot(
       playerPosition.x - route.position.x,
       playerPosition.z - route.position.z,
@@ -630,7 +644,7 @@ export function createLevelOneScene({ initialState = null, entryContext = null }
       pickups,
       entities,
       focusEntity: getFocusedEntity(camera, entities),
-      focusInteraction: exitNetwork.inspect(playerPosition),
+      focusInteraction: resolveInteractionFocus(playerPosition),
       focusItem: getFocusedItem(
         almondWater.inspect(camera),
         firesalt.inspect(camera),
@@ -683,7 +697,11 @@ export function createLevelOneScene({ initialState = null, entryContext = null }
       getPickupTarget(playerPosition, firesalt, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
     tryPickup: (playerPosition) =>
       tryPickupItems(playerPosition, firesalt, detector, silenceLiquid, superAlmondWater, compass, flashlight, almondWater),
-    interact: (playerPosition, access) => exitNetwork.interact(playerPosition, access),
+    interact: (playerPosition, access) => {
+      const focus = resolveInteractionFocus(playerPosition);
+      if (focus?.workbenchDrawer) return workbenches.interact(playerPosition, focus.id);
+      return exitNetwork.interact(playerPosition, access);
+    },
     getSnapshot() {
       return {
         pickups: {
@@ -697,6 +715,7 @@ export function createLevelOneScene({ initialState = null, entryContext = null }
         },
         interactions: {
           ...exitNetwork.getState(),
+          ...workbenches.getState(),
           [LEVEL_ONE_ARRIVAL_ELEVATOR_ID]: arrivalElevator.getState(),
         },
         objectives: { reached: objectiveReached },

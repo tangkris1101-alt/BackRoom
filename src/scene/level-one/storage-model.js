@@ -303,7 +303,9 @@ function createStencilMap(layout) {
   };
 }
 
-function mergeParts(geometries) {
+// Shared with the workshop props, which build their benches from the same
+// merged-part helpers and the same material kit.
+export function mergeParts(geometries) {
   // RoundedBoxGeometry is already non-indexed, so converting it only warns.
   return mergeGeometries(
     geometries.map((geometry) => (geometry.index ? geometry.toNonIndexed() : geometry)),
@@ -332,7 +334,7 @@ function boardPart(length, thickness, depth, x, y, z) {
   return new THREE.BoxGeometry(length, thickness, depth).translate(x, y, z);
 }
 
-function nailGeometry(x, y, z, { axis = "z", length = 0.014, radius = 0.0085 } = {}) {
+export function nailGeometry(x, y, z, { axis = "z", length = 0.014, radius = 0.0085 } = {}) {
   const geometry = new THREE.CylinderGeometry(radius, radius * 0.82, length, 6);
   if (axis === "z") geometry.rotateX(Math.PI / 2);
   else if (axis === "x") geometry.rotateZ(Math.PI / 2);
@@ -340,7 +342,7 @@ function nailGeometry(x, y, z, { axis = "z", length = 0.014, radius = 0.0085 } =
   return geometry;
 }
 
-function addMesh(group, name, parts, material) {
+export function addMesh(group, name, parts, material) {
   if (parts.length === 0) return null;
   const mesh = new THREE.Mesh(mergeParts(parts), material);
   mesh.name = name;
@@ -413,6 +415,14 @@ export function createLevelOneStorageAssetKit({
         roughness: 0.62,
         metalness: 0.55,
         emissive: 0x0f100c,
+        emissiveIntensity: 0.05,
+      }),
+      // Drawer liners, tray inserts and the dark gaps behind moving parts.
+      liner: createGameMaterial({
+        color: 0x2b2e27,
+        roughness: 0.95,
+        metalness: 0.04,
+        emissive: 0x0d0f0b,
         emissiveIntensity: 0.05,
       }),
       steel: createGameMaterial(({ lowQuality }) => ({

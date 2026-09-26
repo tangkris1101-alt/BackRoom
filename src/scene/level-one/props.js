@@ -31,6 +31,7 @@ import {
   buildDetailedSupplyShelf,
   createLevelOneStorageAssetKit,
 } from "./storage-model.js";
+import { createLevelOneWorkbenches } from "./workbench-model.js";
 
 export function createLevelOneLights(scene, fixturePositions, { dynamicPointLights = false } = {}) {
   const fixtures = [];
@@ -114,9 +115,13 @@ export function createLevelOneLights(scene, fixturePositions, { dynamicPointLigh
   });
 
   if (dynamicPointLights) {
+    // The pool deliberately keeps a fixed number of lights in the scene at all
+    // times. three.js bakes the point-light count into every material's program,
+    // so toggling a pool light's visibility recompiles the whole level's shaders
+    // (tens of programs, hundreds of ms each) whenever the ranking or a fixture
+    // pulse changes. Intensity alone does the work; unlit slots fade to zero.
     const lightPool = Array.from({ length: LEVEL_ONE_MAX_POINT_LIGHTS }, () => {
       const light = new THREE.PointLight(0xffffff, 0, 1, 2);
-      light.visible = false;
       scene.add(light);
       return light;
     });
@@ -138,7 +143,6 @@ export function createLevelOneLights(scene, fixturePositions, { dynamicPointLigh
           light.color.set(source.color);
           light.distance = source.range * 1.22;
           light.position.set(source.x, source.lightY, source.z);
-          light.visible = true;
         });
         nextAssignmentAt = elapsed + 0.26;
       }
@@ -147,7 +151,6 @@ export function createLevelOneLights(scene, fixturePositions, { dynamicPointLigh
         const source = light.userData.source;
         const target = source ? source.pulse * source.baseIntensity * 3.25 : 0;
         light.intensity = THREE.MathUtils.lerp(light.intensity, target, blend);
-        light.visible = light.intensity > 0.012;
       });
     };
   }
@@ -369,7 +372,7 @@ export function addLevelOnePuddles(scene) {
   });
 }
 
-export function addLevelOneCorridorDetails(scene) {
+export function addLevelOneCorridorDetails(scene, interactionState = {}) {
   const colliders = [];
   const doorMaterial = new THREE.MeshStandardMaterial({
     color: 0x364047,
@@ -384,13 +387,6 @@ export function addLevelOneCorridorDetails(scene) {
     emissiveIntensity: 0.16,
     roughness: 0.82,
     metalness: 0.1,
-  });
-  const benchMaterial = new THREE.MeshStandardMaterial({
-    color: 0x677178,
-    emissive: 0x20292d,
-    emissiveIntensity: 0.12,
-    roughness: 0.86,
-    metalness: 0.18,
   });
   const doorGeometry = new THREE.BoxGeometry(2.18, 2.26, 0.07);
   const frameGeometry = new THREE.BoxGeometry(2.46, 2.54, 0.08);
@@ -434,62 +430,25 @@ export function addLevelOneCorridorDetails(scene) {
     scene.add(sign);
   });
 
-  const workbenches = [
-    { col: 5, row: 8, rotation: Math.PI / 2 },
-    { col: 7, row: 12, rotation: 0 },
+  const workbenchPlacements = [
+    { col: 5, row: 8, rotation: Math.PI / 2, slot: "a" },
+    { col: 7, row: 12, rotation: 0, slot: "b" },
   ];
-  workbenches.forEach((entry) => {
-    const center = levelOneCellCenter(entry.col, entry.row);
-    const group = new THREE.Group();
-    group.name = "level-one-workbench-table";
-    group.position.set(center.x, 0, center.z);
-    group.rotation.y = entry.rotation;
-    const top = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.13, 0.78), benchMaterial);
-    top.position.y = 0.91;
-    group.add(top);
-    const lowerShelf = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.07, 0.62), benchMaterial);
-    lowerShelf.position.y = 0.28;
-    group.add(lowerShelf);
-    for (const x of [-0.82, 0.82]) {
-      for (const z of [-0.3, 0.3]) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.88, 0.1), benchMaterial);
-        leg.position.set(x, 0.44, z);
-        group.add(leg);
-      }
-    }
-    for (let drawerIndex = -1; drawerIndex <= 1; drawerIndex += 1) {
-      const drawer = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.2, 0.06), frameMaterial);
-      drawer.position.set(drawerIndex * 0.53, 0.64, 0.4);
-      group.add(drawer);
-      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.035, 0.04), doorMaterial);
-      handle.position.set(drawerIndex * 0.53, 0.64, 0.45);
-      group.add(handle);
-    }
-    const toolbox = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.24, 0.34), doorMaterial);
-    toolbox.position.set(-0.42, 1.1, 0.02);
-    group.add(toolbox);
-    const vice = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.2), frameMaterial);
-    vice.position.set(0.58, 1.08, -0.08);
-    group.add(vice);
-    scene.add(group);
+  const workbenches = createLevelOneWorkbenches(scene, {
+    kit: getLevelOneStorageKit(scene),
+    initialState: interactionState,
+    placements: workbenchPlacements,
+  });
+  colliders.push(...workbenches.colliders);
 
-    const rotated = Math.abs(Math.sin(entry.rotation)) > 0.5;
-    const halfX = (rotated ? 0.78 : 1.9) / 2;
-    const halfZ = (rotated ? 1.9 : 0.78) / 2;
-    colliders.push({
-      minX: center.x - halfX,
-      maxX: center.x + halfX,
-      minZ: center.z - halfZ,
-      maxZ: center.z + halfZ,
-      topY: 0.98,
-    });
-
-    // The toolbox and the vice stand on the bench top, so the tabletop collider
-    // alone lets a player stand with their shins inside them. Each tool gets its
-    // own upper layer rather than one slab across the whole bench, so the free
-    // ends of the top stay walkable.
-    const cos = Math.cos(entry.rotation);
-    const sin = Math.sin(entry.rotation);
+  workbenchPlacements.forEach((placement) => {
+    const center = levelOneCellCenter(placement.col, placement.row);
+    // The tool chest and the bench vise stand on the top, so the tabletop
+    // collider alone lets a player stand with their shins inside them. Each
+    // tool gets its own upper layer rather than one slab across the whole
+    // bench, so the free ends of the top stay walkable.
+    const cos = Math.cos(placement.rotation);
+    const sin = Math.sin(placement.rotation);
     const toWorld = (tool) => {
       const corners = [
         [tool.minX, tool.minZ],
@@ -505,19 +464,13 @@ export function addLevelOneCorridorDetails(scene) {
         topY: tool.topY,
       };
     };
-    for (const tool of [toolbox, vice]) {
-      const { width, depth, height } = tool.geometry.parameters;
-      colliders.push(toWorld({
-        minX: tool.position.x - width / 2,
-        maxX: tool.position.x + width / 2,
-        minZ: tool.position.z - depth / 2,
-        maxZ: tool.position.z + depth / 2,
-        topY: tool.position.y + height / 2,
-      }));
-    }
+    // Local footprints: the tool chest (-0.56, 0) with its lid, and the vise
+    // (0.6, 0.04) with its jaws.
+    colliders.push(toWorld({ minX: -0.8, maxX: -0.32, minZ: -0.17, maxZ: 0.17, topY: 1.3 }));
+    colliders.push(toWorld({ minX: 0.5, maxX: 0.7, minZ: -0.06, maxZ: 0.16, topY: 1.16 }));
   });
 
-  return colliders;
+  return { colliders, workbenches };
 }
 
 

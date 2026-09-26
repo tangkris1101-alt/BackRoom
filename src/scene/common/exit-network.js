@@ -697,6 +697,7 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
         exitRoute: true,
         targetLevel: route.targetLevel,
         distance,
+        score,
         available: (!route.opened && !locked && distance <= INTERACT_RADIUS) || canClose,
         locked,
         opened: route.opened,

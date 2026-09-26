@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Level 1 箱子货柜模型验收</title>
+  <title>Level 1 箱子货柜工作台验收</title>
   <style>
     html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111; color:#fff; font:14px system-ui,sans-serif; }
     canvas { display:block; width:100%; height:100%; }
-    .controls { position:fixed; left:20px; top:20px; display:flex; gap:8px; align-items:center; padding:10px 12px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
+    .controls { position:fixed; left:20px; top:20px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; max-width:calc(100% - 40px); padding:10px 12px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
     button { background:#e8dfb5; color:#182016; border:0; border-radius:4px; padding:8px 13px; cursor:pointer; font-weight:600; }
-    #status { min-width:320px; }
+    #status { min-width:520px; flex:1; }
   </style>
 </head>
 <body>
@@ -19,6 +19,11 @@
     <button id="shelf">货架特写</button>
     <button id="meg">M.E.G. 储物区</button>
     <button id="supply">补给区全景</button>
+    <button id="bench">工作台</button>
+    <button id="drawers">抽屉特写</button>
+    <button id="drawer-left">左抽屉</button>
+    <button id="drawer-right">右抽屉</button>
+    <button id="pull">F / 推拉抽屉</button>
     <button id="capture">纯画面截图</button>
     <span id="status">正在加载 Level 1…</span>
   </div>
@@ -39,12 +44,13 @@
     document.body.append(renderer.domElement);
 
     const world = createLevelOneScene({});
-    // 箱子 (12,8)-0.72/-0.5、斜撑箱 (14,8)+0.45/+0.45、货架 (26,18)、(12,9)。
+    // 箱子 (12,8)-0.72/-0.5、斜撑箱 (14,8)+0.45/+0.45、货架 (26,18)、(12,9)、工作台 (7,12)。
     const crateA = levelOneCellCenter(12, 8);
     const crateB = levelOneCellCenter(14, 8);
     const shelfA = levelOneCellCenter(12, 9);
     const shelfB = levelOneCellCenter(26, 18);
     const supply = levelOneCellCenter(27, 18);
+    const bench = levelOneCellCenter(7, 12);
 
     const views = {
       crate: {
@@ -55,7 +61,7 @@
       "crate-braced": {
         pos: [crateB.x + 0.45 - 1.45, 1.15, crateB.z + 0.45 + 1.25],
         look: [crateB.x + 0.45, 0.5, crateB.z + 0.45],
-        label: "斜撑箱 · 深色木料 + 对角撑",
+        label: "斜撑箱 · 深色木料 + 端面对角撑",
       },
       shelf: {
         pos: [shelfB.x - 2.45, 1.5, shelfB.z + 0.4],
@@ -72,28 +78,70 @@
         look: [shelfB.x + 3.2, 0.95, shelfB.z - 0.8],
         label: "补给区全景 · 两排货架 + 托盘木箱",
       },
+      bench: {
+        pos: [bench.x + 1.5, 1.45, bench.z + 2.5],
+        look: [bench.x - 0.1, 0.85, bench.z + 0.2],
+        label: "工作台 · 台面/台钳/工具箱/下搁板",
+      },
+      drawers: {
+        pos: [bench.x + 0.15, 1.2, bench.z + 1.25],
+        look: [bench.x - 0.02, 0.61, bench.z + 0.38],
+        label: "抽屉特写 · 对准中间抽屉，可按键推拉",
+      },
+      "drawer-left": {
+        pos: [bench.x - 0.53 + 0.15, 1.2, bench.z + 1.25],
+        look: [bench.x - 0.53, 0.61, bench.z + 0.38],
+        label: "左抽屉（工具）",
+      },
+      "drawer-right": {
+        pos: [bench.x + 0.68, 1.2, bench.z + 1.25],
+        look: [bench.x + 0.53, 0.61, bench.z + 0.38],
+        label: "右抽屉（耗材）",
+      },
     };
+
+    let lastFocusId = "-";
+    let currentLabel = views.crate.label;
+    function drawerStates() {
+      const interactions = world.getSnapshot().interactions;
+      return Object.entries(interactions)
+        .filter(([id]) => id.includes("workbench"))
+        .map(([id, state]) => `${id.replace("level-one-workbench-", "")}=${state.count ? "开" : "关"}`)
+        .join(" ");
+    }
     function applyView(name) {
       const view = views[name];
       world.camera.position.set(...view.pos);
       world.camera.lookAt(...view.look);
       world.camera.updateMatrixWorld();
+      updateStatus(view.label);
+    }
+    function updateStatus(label) {
+      currentLabel = label ?? currentLabel;
       const walkable = [
         `箱心=${world.isWalkable(crateA.x - 0.72, crateA.z - 0.5)}`,
         `箱侧1.3m=${world.isWalkable(crateA.x - 0.72 + 1.3, crateA.z - 0.5)}`,
         `柜心=${world.isWalkable(shelfB.x, shelfB.z)}`,
-        `柜前1.4m=${world.isWalkable(shelfB.x - 1.4, shelfB.z)}`,
+        // 工作台正前方 0.9m：抽屉拉出后这里应当变成不可走。
+        `台前0.9m=${world.isWalkable(bench.x, bench.z + 0.9)}`,
       ].join(" ");
-      const crateTop = world.getFloorHeight(crateA.x - 0.72, crateA.z - 0.5, 1.0);
-      status.textContent = `${view.label} | ${walkable} 箱顶高度=${crateTop.toFixed(2)}`;
+      status.textContent = `${currentLabel} | ${walkable} | 最近交互=${lastFocusId} | ${drawerStates()}`;
     }
-    for (const name of ["crate", "crate-braced", "shelf", "meg", "supply"]) {
+
+    for (const name of Object.keys(views)) {
       document.getElementById(name).addEventListener("click", () => applyView(name));
     }
+    document.getElementById("pull").addEventListener("click", () => {
+      const result = world.interact(world.camera.position, {});
+      lastFocusId = result?.id ? `${result.id}（${result.count ? "拉出" : "推回"}）` : "无可用抽屉";
+      updateStatus(views.drawers.label);
+    });
+
     applyView("crate");
 
     let previousFrame = performance.now();
     let elapsed = 0;
+    let nextStatusAt = 0;
     function frame(now) {
       const dt = Math.min(0.05, (now - previousFrame) / 1000);
       previousFrame = now;
@@ -101,6 +149,10 @@
       const camera = world.camera.position;
       world.update(dt, elapsed, { x: camera.x, y: camera.y, z: camera.z });
       renderer.render(world.scene, world.camera);
+      if (elapsed >= nextStatusAt) {
+        nextStatusAt = elapsed + 0.25;
+        updateStatus();
+      }
       requestAnimationFrame(frame);
     }
     function resize() {

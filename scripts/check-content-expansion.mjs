@@ -403,9 +403,21 @@ assert.equal(elevatorModel?.getObjectByName("exit-header-light-lit-elevator")?.i
 assert.equal(cabinetModel?.getObjectByName("exit-header-light-lit-cabinet")?.isPointLight, true);
 assert.equal(elevatorModel?.getObjectByName("exit-portal-lit-elevator"), undefined);
 
-for (const level of ["one", "two", "three", "four", "five", "six", "seven"]) {
+// Levels two to seven hand the use key straight to the exit network. Level one
+// resolves its focus first, because the workbench drawers are interaction spots
+// too: whichever the camera is aimed at is the one the exit network or the
+// drawer bank receives the key.
+for (const level of ["two", "three", "four", "five", "six", "seven"]) {
   const source = await readFile(new URL(`../src/scene/level-${level}/index.js`, import.meta.url), "utf8");
   assert.match(source, /interact:\s*\(playerPosition, access\)\s*=>\s*exitNetwork\.interact\(playerPosition, access\)/);
+}
+{
+  const source = await readFile(new URL("../src/scene/level-one/index.js", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /interact:\s*\(playerPosition, access\)\s*=>\s*\{[\s\S]{0,400}?exitNetwork\.interact\(playerPosition, access\)/,
+    "level one must still hand the use key to the exit network for its doors",
+  );
 }
 const levelEightSource = await readFile(new URL("../src/scene/level-eight/index.js", import.meta.url), "utf8");
 const sceneIndexSource = await readFile(new URL("../src/scene/index.js", import.meta.url), "utf8");
