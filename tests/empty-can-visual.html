@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>空罐头模型验收</title>
+  <style>
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111; color:#fff; font:14px system-ui,sans-serif; }
+    canvas { display:block; width:100%; height:100%; }
+    .controls { position:fixed; left:20px; top:20px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 12px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
+    button { background:#e8dfb5; color:#182016; border:0; border-radius:4px; padding:8px 13px; cursor:pointer; font-weight:600; }
+    #status { min-width:360px; flex:1; }
+    /* 背包图标验收：与游戏内 inventory-slot 同底色，按实际尺寸与放大尺寸并排。 */
+    .icon-strip { position:fixed; left:20px; bottom:20px; display:flex; gap:14px; align-items:flex-end; padding:12px 14px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
+    .icon-slot { background:#23262c; border:1px solid #3a3e46; border-radius:10px; }
+    .icon-slot svg { width:100%; height:100%; display:block; }
+    .icon-slot.i32 { width:32px; height:32px; }
+    .icon-slot.i56 { width:56px; height:56px; }
+    .icon-slot.i96 { width:96px; height:96px; }
+    .icon-slot.i160 { width:160px; height:160px; }
+    #icon-status { max-width:320px; font-size:12px; line-height:1.5; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button id="three-quarter">三分之四视角</button>
+    <button id="label">标签面</button>
+    <button id="open">开口与内壁</button>
+    <button id="rim">卷边与凹底</button>
+    <button id="spawn">Level 1 出生摆位</button>
+    <button id="capture">纯画面截图</button>
+    <span id="status">正在加载…</span>
+  </div>
+  <div class="icon-strip">
+    <div class="icon-slot i32"><svg viewBox="0 0 100 100" data-can-icon></svg></div>
+    <div class="icon-slot i56"><svg viewBox="0 0 100 100" data-can-icon></svg></div>
+    <div class="icon-slot i96"><svg viewBox="0 0 100 100" data-can-icon></svg></div>
+    <div class="icon-slot i160"><svg viewBox="0 0 100 100" data-can-icon></svg></div>
+    <span id="icon-status">图标：读取中…</span>
+  </div>
+  <script type="module">
+    import * as THREE from "three";
+    import { createEmptyCanModel } from "/src/scene/items/empty-can.js";
+    import { createWorldItemManager, createWorldItemModel } from "/src/scene/common/world-items.js";
+
+    // 图标直接取自 main.js 的真实字符串，避免验收页里再抄一份走样。
+    const iconStatus = document.getElementById("icon-status");
+    fetch("/src/main.js")
+      .then((response) => response.text())
+      .then((source) => {
+        const match = source.match(/"empty-can":\s*`([\s\S]*?)`/);
+        if (!match) {
+          iconStatus.textContent = "图标：未在 main.js 中找到 empty-can 图标";
+          return;
+        }
+        document.querySelectorAll("[data-can-icon]").forEach((svg) => {
+          svg.innerHTML = match[1];
+        });
+        const hasLabel = /4d5b3c/.test(match[1]);
+        const hasTab = /6d7871/.test(match[1]);
+        iconStatus.textContent =
+          `图标：取自 src/main.js（${match[1].trim().length} 字符）` +
+          ` 标签色带=${hasLabel ? "有" : "无"} 拉环=${hasTab ? "有" : "无"}`;
+      })
+      .catch((error) => {
+        iconStatus.textContent = `图标读取失败：${error?.message ?? error}`;
+      });
+
+    const status = document.getElementById("status");
+    document.getElementById("capture").addEventListener("click", () => {
+      document.querySelector(".controls").style.display = "none";
+    });
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    document.body.append(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x2b322c);
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 60);
+
+    scene.add(new THREE.HemisphereLight(0xdfe8dc, 0x2c332c, 1.1));
+    const key = new THREE.DirectionalLight(0xfff3dc, 2.1);
+    key.position.set(1.4, 2.4, 1.6);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xbcd0c4, 0.8);
+    fill.position.set(-1.6, 0.9, -1.2);
+    scene.add(fill);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x5c635c, roughness: 0.95 }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
+
+    // 关卡的摆位：y=0.2、rotation=0.7、tiltZ=0.12（与 Level 1 装饰物数据一致）。
+    const model = createEmptyCanModel();
+    model.position.set(0, 0.2, 0);
+    model.rotation.set(0, 0.7, 0.12);
+    scene.add(model);
+
+    // 丢弃路径（manager.drop）另放一个，检查贴地表现。
+    const manager = createWorldItemManager(scene, []);
+    manager.drop("empty-can", new THREE.Vector3(-0.62, 1.4, 0.34), 0.6);
+
+    // 手持路径用的是同一个工厂。
+    const held = createWorldItemModel("empty-can");
+    held.position.set(0.62, 0.2, -0.4);
+    held.rotation.set(0, -0.5, 0);
+    scene.add(held);
+
+    let meshes = 0;
+    let triangles = 0;
+    model.traverse((object) => {
+      if (!object.isMesh) return;
+      meshes += 1;
+      const geometry = object.geometry;
+      triangles += (geometry.index ? geometry.index.count : geometry.attributes.position.count) / 3;
+    });
+    // 尺寸要按未施加出生旋转的模型量，否则读数会被旋转撑大。
+    const savedRotation = model.rotation.clone();
+    model.rotation.set(0, 0, 0);
+    model.updateMatrixWorld(true);
+    const size = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+    model.rotation.copy(savedRotation);
+    model.updateMatrixWorld(true);
+
+    const views = {
+      "three-quarter": { pos: [0.56, 0.5, 0.66], look: [0, 0.2, 0], label: "三分之四视角 · 卷边/标签/掀开的盖子" },
+      label: { pos: [0.04, 0.26, 0.8], look: [0, 0.19, 0], label: "标签面 · M.E.G. RATIONS 印字与锈迹渗透" },
+      open: { pos: [0.16, 0.74, 0.52], look: [0, 0.17, 0], label: "开口与内壁 · 掀盖、拉环与暗色内壁" },
+      rim: { pos: [0.4, 0.12, 0.56], look: [0, 0.14, 0], label: "卷边与凹底 · 上下卷边与凹陷罐底" },
+      spawn: { pos: [0.82, 0.82, 0.96], look: [0, 0.18, 0.05], label: "Level 1 出生摆位 · 含丢弃件与手持件" },
+    };
+    function applyView(name) {
+      const view = views[name];
+      camera.position.set(...view.pos);
+      camera.lookAt(...view.look);
+      camera.updateMatrixWorld();
+      status.textContent =
+        `${view.label} | 网格=${meshes} 三角形=${Math.round(triangles)} ` +
+        `尺寸=${size.x.toFixed(2)}×${size.z.toFixed(2)}×高${size.y.toFixed(2)}m`;
+    }
+    for (const name of Object.keys(views)) {
+      document.getElementById(name).addEventListener("click", () => applyView(name));
+    }
+    applyView("three-quarter");
+
+    function render() {
+      renderer.render(scene, camera);
+      requestAnimationFrame(render);
+    }
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight);
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+    }
+    addEventListener("resize", resize);
+    resize();
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>

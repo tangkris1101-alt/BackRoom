@@ -13,6 +13,7 @@ import {
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
   HUB_LEVEL,
 } from "../constants.js";
+import { wallSegmentTransform } from "../common/wall-corners.js";
 import { addInstancedBoxes, updateFixturePointLight, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createWideSignTexture } from "../common/textures.js";
@@ -54,17 +55,43 @@ function collectLevelSevenTransforms() {
     for (let col = 0; col < LEVEL_SEVEN_COLS; col += 1) {
       if (!isLevelSevenOpenCell(col, row)) continue;
       const center = levelSevenCellCenter(col, row);
+      // Ends that poke into open space on both flanks are stretched past the
+      // corner so perpendicular wall boxes overlap (see wall-corners.js).
       if (!isLevelSevenOpenCell(col, row - 1)) {
-        northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2));
+        northSouth.push(wallSegmentTransform(
+          center.x,
+          center.z - CELL_SIZE / 2,
+          "x",
+          isLevelSevenOpenCell(col - 1, row) && isLevelSevenOpenCell(col - 1, row - 1),
+          isLevelSevenOpenCell(col + 1, row) && isLevelSevenOpenCell(col + 1, row - 1),
+        ));
       }
       if (!isLevelSevenOpenCell(col, row + 1)) {
-        northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2));
+        northSouth.push(wallSegmentTransform(
+          center.x,
+          center.z + CELL_SIZE / 2,
+          "x",
+          isLevelSevenOpenCell(col - 1, row) && isLevelSevenOpenCell(col - 1, row + 1),
+          isLevelSevenOpenCell(col + 1, row) && isLevelSevenOpenCell(col + 1, row + 1),
+        ));
       }
       if (!isLevelSevenOpenCell(col - 1, row)) {
-        eastWest.push(new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+        eastWest.push(wallSegmentTransform(
+          center.x - CELL_SIZE / 2,
+          center.z,
+          "z",
+          isLevelSevenOpenCell(col, row - 1) && isLevelSevenOpenCell(col - 1, row - 1),
+          isLevelSevenOpenCell(col, row + 1) && isLevelSevenOpenCell(col - 1, row + 1),
+        ));
       }
       if (!isLevelSevenOpenCell(col + 1, row)) {
-        eastWest.push(new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+        eastWest.push(wallSegmentTransform(
+          center.x + CELL_SIZE / 2,
+          center.z,
+          "z",
+          isLevelSevenOpenCell(col, row - 1) && isLevelSevenOpenCell(col + 1, row - 1),
+          isLevelSevenOpenCell(col, row + 1) && isLevelSevenOpenCell(col + 1, row + 1),
+        ));
       }
 
       const isStart = col === LEVEL_SEVEN_START_CELL.col && row === LEVEL_SEVEN_START_CELL.row;

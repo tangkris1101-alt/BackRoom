@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { CELL_SIZE, CEILING_Y, WALL_HEIGHT, WALL_THICKNESS } from "../constants.js";
+import { wallSegmentTransform } from "../common/wall-corners.js";
 import { createFixturePointLight } from "../common/lighting.js";
 import { createWideSignTexture } from "../common/textures.js";
 import { createInteractionSpot } from "../entities/interactions.js";
@@ -107,17 +108,43 @@ export function collectLevelFiveTransforms() {
       const northSouthWalls = isBoilerCell ? boilerNorthSouth : northSouth;
       const eastWestWalls = isBoilerCell ? boilerEastWest : eastWest;
 
+      // Ends that poke into open space on both flanks are stretched past the
+      // corner so perpendicular wall boxes overlap (see wall-corners.js).
       if (!isLevelFiveOpenCell(col, row - 1)) {
-        northSouthWalls.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - S / 2));
+        northSouthWalls.push(wallSegmentTransform(
+          center.x,
+          center.z - S / 2,
+          "x",
+          isLevelFiveOpenCell(col - 1, row) && isLevelFiveOpenCell(col - 1, row - 1),
+          isLevelFiveOpenCell(col + 1, row) && isLevelFiveOpenCell(col + 1, row - 1),
+        ));
       }
       if (!isLevelFiveOpenCell(col, row + 1)) {
-        northSouthWalls.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + S / 2));
+        northSouthWalls.push(wallSegmentTransform(
+          center.x,
+          center.z + S / 2,
+          "x",
+          isLevelFiveOpenCell(col - 1, row) && isLevelFiveOpenCell(col - 1, row + 1),
+          isLevelFiveOpenCell(col + 1, row) && isLevelFiveOpenCell(col + 1, row + 1),
+        ));
       }
       if (!isLevelFiveOpenCell(col - 1, row)) {
-        eastWestWalls.push(new THREE.Vector3(center.x - S / 2, WALL_HEIGHT / 2, center.z));
+        eastWestWalls.push(wallSegmentTransform(
+          center.x - S / 2,
+          center.z,
+          "z",
+          isLevelFiveOpenCell(col, row - 1) && isLevelFiveOpenCell(col - 1, row - 1),
+          isLevelFiveOpenCell(col, row + 1) && isLevelFiveOpenCell(col - 1, row + 1),
+        ));
       }
       if (!isLevelFiveOpenCell(col + 1, row)) {
-        eastWestWalls.push(new THREE.Vector3(center.x + S / 2, WALL_HEIGHT / 2, center.z));
+        eastWestWalls.push(wallSegmentTransform(
+          center.x + S / 2,
+          center.z,
+          "z",
+          isLevelFiveOpenCell(col, row - 1) && isLevelFiveOpenCell(col + 1, row - 1),
+          isLevelFiveOpenCell(col, row + 1) && isLevelFiveOpenCell(col + 1, row + 1),
+        ));
       }
 
       const isDark = isInAnyZone(col, row, LEVEL_FIVE_DARK_ZONES);

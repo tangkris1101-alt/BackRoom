@@ -6,6 +6,7 @@ import {
   WALL_THICKNESS,
 } from "../constants.js";
 import { createFixturePointLight } from "../common/lighting.js";
+import { wallSegmentTransform } from "../common/wall-corners.js";
 import { createWideSignTexture } from "../common/textures.js";
 import {
   LEVEL_ONE_COLS,
@@ -22,6 +23,7 @@ import {
   isLevelOneOpenCell,
   isLevelOneCorridorCell,
   levelOneCellCenter,
+  levelOneWorldToCell,
   isInAnyLevelOneZone,
   countLevelOneOpenNeighbors,
   getLevelOneTargetMount,
@@ -32,6 +34,12 @@ import {
   createLevelOneStorageAssetKit,
 } from "./storage-model.js";
 import { createLevelOneWorkbenches } from "./workbench-model.js";
+import {
+  PIPE_RADIUS,
+  applyPipeRunUv,
+  createLevelOnePipeMaps,
+  createLevelOnePipeMaterial,
+} from "./pipe-textures.js";
 
 export function createLevelOneLights(scene, fixturePositions, { dynamicPointLights = false } = {}) {
   const fixtures = [];
@@ -216,16 +224,8 @@ export function addLevelOneElevator(scene, position) {
 }
 
 export function addLevelOnePipes(scene) {
-  const pipeMaterial = new THREE.MeshStandardMaterial({
-    // A light galvanized gray-green keeps the pipe visible in the fixture-only
-    // parts of Level 1 without adding an invisible fill light.
-    color: 0x9ab7aa,
-    emissive: 0x386653,
-    emissiveIntensity: 0.48,
-    roughness: 0.44,
-    metalness: 0.54,
-  });
-  const pipeGeometry = new THREE.CylinderGeometry(0.125, 0.125, 1, 16);
+  const pipeMaps = createLevelOnePipeMaps();
+  const pipeMaterial = createLevelOnePipeMaterial(pipeMaps);
   const pipes = [
     { col: 9, row: 4, axis: "x" },
     { col: 18, row: 10, axis: "z" },
@@ -251,8 +251,19 @@ export function addLevelOnePipes(scene) {
     const innerWallOffset = CELL_SIZE / 2 - WALL_THICKNESS / 2;
     const startEdge = (axisIsX ? startCenter.x : startCenter.z) - innerWallOffset;
     const endEdge = (axisIsX ? endCenter.x : endCenter.z) + innerWallOffset;
-    const mesh = new THREE.Mesh(pipeGeometry, pipeMaterial);
-    mesh.scale.y = endEdge - startEdge;
+    // A run ends exactly on the wall face, so the caps are pushed a little into
+    // the wall: coplanar caps used to z-fight with the wall panel itself.
+    const overshoot = WALL_THICKNESS / 2 + 0.01;
+    const length = endEdge - startEdge + overshoot * 2;
+    const mesh = new THREE.Mesh(
+      applyPipeRunUv(new THREE.CylinderGeometry(PIPE_RADIUS, PIPE_RADIUS, length, 20, 1), length),
+      pipeMaterial,
+    );
+    // Deliberately not named "...pipe": the shadow pass keys on that word, and
+    // these runs hang between the fixture lights and the floor (some fixture
+    // heads sit inside the pipe volume), so casting would drop a hard dark band
+    // down every corridor the run crosses.
+    mesh.name = `level-one-ceiling-run-${pipe.axis}-${pipe.col}-${pipe.row}`;
     mesh.position.set(
       axisIsX ? (startEdge + endEdge) / 2 : startCenter.x,
       CEILING_Y - 0.42,
@@ -474,18 +485,69 @@ export function addLevelOneCorridorDetails(scene, interactionState = {}) {
 }
 
 
-export function addLevelOneWallSigns(scene) {
-  const signs = [
-    { col: 12, row: 7, text: "M.E.G. BASE", bg: "#101f1a", fg: "#c9ffd5" },
-    { col: 11, row: 10, text: "CORRIDORS", bg: "#28302d", fg: "#dde5d8" },
-    { col: 25, row: 17, text: "SUPPLY", bg: "#263022", fg: "#e9ffbd" },
-    { col: 30, row: 4, text: "ELEVATOR AHEAD", bg: "#101f1a", fg: "#9dffbe" },
-    { col: 7, row: 18, text: "NO ENTRY", bg: "#221814", fg: "#ffd1a1" },
-  ];
+export const LEVEL_ONE_WALL_SIGNS = [
+  { col: 12, row: 7, text: "M.E.G. BASE", bg: "#101f1a", fg: "#c9ffd5" },
+  { col: 11, row: 10, text: "CORRIDORS", bg: "#28302d", fg: "#dde5d8" },
+  { col: 27, row: 17, text: "SUPPLY", bg: "#263022", fg: "#e9ffbd" },
+  { col: 30, row: 4, text: "ELEVATOR AHEAD", bg: "#101f1a", fg: "#9dffbe" },
+  // (8,18) faces the sealed block the sign warns about; the old (7,18) sat
+  // inside that block, so the plate was buried in the wall.
+  { col: 8, row: 18, text: "NO ENTRY", bg: "#221814", fg: "#ffd1a1" },
+];
 
-  signs.forEach((sign) => {
+// A wall box is centred on the cell boundary, so a plate dropped exactly on the
+// mount line is buried half a wall deep. Push the sign out past the face.
+const WALL_SIGN_STANDOFF = WALL_THICKNESS / 2 + 0.035;
+
+// `getLevelOneTargetMount` falls back to the cell's north edge when none of the
+// four neighbours is solid, which left the supply sign hanging in mid air. Walk
+// outward instead, so a sign placed in a wide open hall still lands on the
+// first wall that bounds the space, facing back into it. A cell `step` cells
+// away contributes the boundary at `step - 0.5` cells, which is the wall face
+// the open space actually ends on.
+export function resolveLevelOneSignMount(center, { maxSteps = 14 } = {}) {
+  const cell = levelOneWorldToCell(center.x, center.z);
+  const directions = [[0, -1, 0], [0, 1, Math.PI], [-1, 0, Math.PI / 2], [1, 0, -Math.PI / 2]];
+  if (directions.some(([col, row]) => !isLevelOneOpenCell(cell.col + col, cell.row + row))) {
+    return getLevelOneTargetMount(center);
+  }
+  for (let step = 2; step <= maxSteps; step += 1) {
+    for (const [col, row, rotation] of directions) {
+      if (isLevelOneOpenCell(cell.col + col * step, cell.row + row * step)) continue;
+      return {
+        col: cell.col + col * step,
+        row: cell.row + row * step,
+        x: center.x + col * (step - 0.5) * CELL_SIZE,
+        z: center.z + row * (step - 0.5) * CELL_SIZE,
+        rotation,
+      };
+    }
+  }
+  return getLevelOneTargetMount(center);
+}
+
+export function addLevelOneWallSigns(scene) {
+  LEVEL_ONE_WALL_SIGNS.forEach((sign) => {
     const center = levelOneCellCenter(sign.col, sign.row);
-    const mount = getLevelOneTargetMount(center);
+    const mount = resolveLevelOneSignMount(center);
+    const facing = { x: Math.sin(mount.rotation), z: Math.cos(mount.rotation) };
+    const plateMaterial = new THREE.MeshStandardMaterial({
+      color: 0x39413a,
+      emissive: 0x141a15,
+      emissiveIntensity: 0.16,
+      roughness: 0.72,
+      metalness: 0.22,
+    });
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(2.04, 0.68, 0.05), plateMaterial);
+    plate.name = `level-one-wall-sign-plate-${sign.text.toLowerCase().replace(/\s+/g, "-")}`;
+    plate.position.set(
+      mount.x + facing.x * WALL_SIGN_STANDOFF,
+      1.74,
+      mount.z + facing.z * WALL_SIGN_STANDOFF,
+    );
+    plate.rotation.y = mount.rotation;
+    scene.add(plate);
+
     const material = new THREE.MeshStandardMaterial({
       map: createWideSignTexture(sign.text, sign.bg, sign.fg),
       color: 0xffffff,
@@ -495,7 +557,12 @@ export function addLevelOneWallSigns(scene) {
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.54), material);
-    mesh.position.set(mount.x, 1.74, mount.z);
+    mesh.name = `level-one-wall-sign-${sign.text.toLowerCase().replace(/\s+/g, "-")}`;
+    mesh.position.set(
+      mount.x + facing.x * (WALL_SIGN_STANDOFF + 0.03),
+      1.74,
+      mount.z + facing.z * (WALL_SIGN_STANDOFF + 0.03),
+    );
     mesh.rotation.y = mount.rotation;
     scene.add(mesh);
   });
@@ -561,25 +628,42 @@ export function collectLevelOneTransforms({ openings = [] } = {}) {
       const openNeighborCount = countLevelOneOpenNeighbors(col, row);
       const isOpenHall = openNeighborCount >= 3;
 
-      if (!isLevelOneOpenCell(col, row - 1) && !hasOpeningAt(center.x, center.z - CELL_SIZE / 2)) {
-        (isCorridor ? corridorNorthSouth : northSouth).push(
-          new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2),
-        );
+      const open = (probeCol, probeRow) => isLevelOneOpenCell(probeCol, probeRow);
+      if (!open(col, row - 1) && !hasOpeningAt(center.x, center.z - CELL_SIZE / 2)) {
+        (isCorridor ? corridorNorthSouth : northSouth).push(wallSegmentTransform(
+          center.x,
+          center.z - CELL_SIZE / 2,
+          "x",
+          open(col - 1, row) && open(col - 1, row - 1),
+          open(col + 1, row) && open(col + 1, row - 1),
+        ));
       }
-      if (!isLevelOneOpenCell(col, row + 1) && !hasOpeningAt(center.x, center.z + CELL_SIZE / 2)) {
-        (isCorridor ? corridorNorthSouth : northSouth).push(
-          new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2),
-        );
+      if (!open(col, row + 1) && !hasOpeningAt(center.x, center.z + CELL_SIZE / 2)) {
+        (isCorridor ? corridorNorthSouth : northSouth).push(wallSegmentTransform(
+          center.x,
+          center.z + CELL_SIZE / 2,
+          "x",
+          open(col - 1, row) && open(col - 1, row + 1),
+          open(col + 1, row) && open(col + 1, row + 1),
+        ));
       }
-      if (!isLevelOneOpenCell(col - 1, row) && !hasOpeningAt(center.x - CELL_SIZE / 2, center.z)) {
-        (isCorridor ? corridorEastWest : eastWest).push(
-          new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z),
-        );
+      if (!open(col - 1, row) && !hasOpeningAt(center.x - CELL_SIZE / 2, center.z)) {
+        (isCorridor ? corridorEastWest : eastWest).push(wallSegmentTransform(
+          center.x - CELL_SIZE / 2,
+          center.z,
+          "z",
+          open(col, row - 1) && open(col - 1, row - 1),
+          open(col, row + 1) && open(col - 1, row + 1),
+        ));
       }
-      if (!isLevelOneOpenCell(col + 1, row) && !hasOpeningAt(center.x + CELL_SIZE / 2, center.z)) {
-        (isCorridor ? corridorEastWest : eastWest).push(
-          new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z),
-        );
+      if (!open(col + 1, row) && !hasOpeningAt(center.x + CELL_SIZE / 2, center.z)) {
+        (isCorridor ? corridorEastWest : eastWest).push(wallSegmentTransform(
+          center.x + CELL_SIZE / 2,
+          center.z,
+          "z",
+          open(col, row - 1) && open(col + 1, row - 1),
+          open(col, row + 1) && open(col + 1, row + 1),
+        ));
       }
 
       // Fluorescent fixtures form an intentionally regular warehouse grid.

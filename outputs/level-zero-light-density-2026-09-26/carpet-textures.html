@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#101216;color:#ddd;font:12px system-ui}
+.row{display:flex;gap:12px;padding:12px}
+figure{margin:0}figcaption{margin-bottom:6px}canvas{background:#222;border:1px solid #333}
+</style></head><body><div class="row" id="row"></div>
+<script type="module">
+import * as tex from "/src/scene/level-zero/textures.js";
+const panels = [
+  ["carpet colour", tex.createLevelZeroCarpetTexture],
+  ["carpet detail maps", () => tex.createLevelZeroCarpetDetailMaps()],
+  ["carpet macro", tex.createLevelZeroCarpetMacroTexture],
+  ["ceiling", tex.createLevelZeroCeilingTexture],
+];
+const row = document.getElementById("row");
+for (const [label, factory] of panels) {
+  const value = factory();
+  const figure = document.createElement("figure");
+  const caption = document.createElement("figcaption");
+  caption.textContent = label;
+  const canvas = document.createElement("canvas");
+  canvas.width = 384; canvas.height = 384;
+  const context = canvas.getContext("2d");
+  const texture = value?.map ?? value;
+  const sources = [texture?.image, value?.bumpMap?.image, value?.roughnessMap?.image].filter(Boolean);
+  // 平铺 2x2，便于观察是否可无缝重复
+  sources.forEach((image, index) => {
+    const cell = 192;
+    for (let ty = 0; ty < 2; ty += 1) {
+      for (let tx = 0; tx < 2; tx += 1) {
+        context.drawImage(image, (index % 2) * cell + tx * cell / 2, Math.floor(index / 2) * cell + ty * cell / 2, cell / 2, cell / 2);
+      }
+    }
+  });
+  if (value?.bumpMap) { caption.textContent += " (colour + bump)"; }
+  figure.append(caption, canvas);
+  row.append(figure);
+}
+document.title = "carpet textures";
+</script></body></html>

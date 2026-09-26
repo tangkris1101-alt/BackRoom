@@ -32,11 +32,19 @@ assert.match(source, /skinSurface/);
 assert.match(source, /nailSurface/);
 assert.match(source, /vertexColors:\s*true/);
 assert.match(source, /first-person-human-skin-surface-v3/);
-assert.match(source, /first-person-view-model-key/);
-assert.match(source, /VIEW_MODEL_LIGHT_LAYER/);
+// Hands lighting must stay inside the view-model material. A real light parented
+// to the camera would also illuminate every wall inside its range, because
+// three.js collects lights per camera (object.layers.test(camera.layers)).
+assert.match(source, /viewModelLighting/);
+assert.match(source, /shader\.uniforms\.viewModelKeyIntensity/);
+assert.match(source, /outgoingLight \+= viewModelKeyColor/);
 assert.match(source, /setFirstPersonViewModelKeyLight/);
-assert.match(source, /const fillLight = viewModel\.userData\.fillLight/);
-assert.match(source, /fillLight\?\.layers\.set\(VIEW_MODEL_LIGHT_LAYER\)/);
+assert.match(source, /viewModelLighting\.keyIntensity\.value/);
+assert.doesNotMatch(source, /first-person-view-model-key/);
+assert.doesNotMatch(source, /new THREE\.PointLight\(0xffe7d8/);
+// The soft hemisphere fill is deliberately a real light (and lifts the level).
+assert.match(source, /first-person-view-model-fill/);
+assert.match(source, /const fillLight = viewModel\?\.userData\?\.fillLight/);
 assert.match(levelOneSource, /setFirstPersonViewModelKeyLight\(viewModel/);
 assert.match(levelOneSource, /intensity: \(3\.2 \+ localExposure \* 1\.2\)/);
 assert.match(source, /setArmPoseGeometry\(arms, targetId \? "grip" : "empty"\)/);

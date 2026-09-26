@@ -103,7 +103,11 @@ function createIndoorShadowRig(world, profile) {
       key.position.copy(worldPosition);
       key.color.copy(activeSource.color);
       key.intensity = Math.min(intensityCap, Math.max(0.22, activeSource.intensity * intensityScale));
-      key.distance = Math.min(22, Math.max(8, activeSource.distance || 14));
+      // Pooled fixture lights run without a cutoff radius (distance 0), so the
+      // key light takes its reach from the fixture itself instead of reading a
+      // radius that no longer exists.
+      const sourceRange = activeSource.userData?.fixture?.range ?? 14;
+      key.distance = Math.min(24, Math.max(9, sourceRange * 1.2));
       key.target.position.set(worldPosition.x, Math.max(0, worldPosition.y - 3.4), worldPosition.z);
       key.target.updateMatrixWorld();
     },

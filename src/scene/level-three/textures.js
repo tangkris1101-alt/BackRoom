@@ -1,4 +1,4 @@
-import { createSeededRandom, makeTexture, drawSpeckles } from "../common/texture-utils.js";
+import { createSeededRandom, paintCachedCanvas, wrapCanvasTexture, drawSpeckles } from "../common/texture-utils.js";
 
 const BRICK_WIDTH = 128;
 const BRICK_HEIGHT = 64;
@@ -70,17 +70,27 @@ function paintBrickwork(context, size, heightOnly, variant) {
 }
 
 export function createLevelThreeBrickTexture(variant = 0) {
-  return makeTexture(512, (context, size) => paintBrickwork(context, size, false, variant), 3, 2);
+  // Painted once per session: the brickwork only depends on the variant below.
+  const cacheKey = ["level-three-brick", variant].join("|");
+  return wrapCanvasTexture(
+    paintCachedCanvas(cacheKey, 512, (context, size) => paintBrickwork(context, size, false, variant)),
+    3,
+    2,
+  );
 }
 
 export function createLevelThreeBrickBumpTexture(variant = 0) {
-  return makeTexture(512, (context, size) => paintBrickwork(context, size, true, variant), 3, 2);
+  const cacheKey = ["level-three-brick-bump", variant].join("|");
+  return wrapCanvasTexture(
+    paintCachedCanvas(cacheKey, 512, (context, size) => paintBrickwork(context, size, true, variant)),
+    3,
+    2,
+  );
 }
 
 export function createLevelThreeFloorTexture() {
-  return makeTexture(
-    512,
-    (context, size) => {
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-three-floor", 512, (context, size) => {
       const random = createSeededRandom(0x3e3002);
       context.fillStyle = "#393b34";
       context.fillRect(0, 0, size, size);
@@ -106,16 +116,15 @@ export function createLevelThreeFloorTexture() {
       context.globalAlpha = 1;
       drawSpeckles(context, size, 1200, 0.16, "8,8,7", random);
       drawSpeckles(context, size, 260, 0.08, "181,126,70", random);
-    },
+    }),
     12,
     8,
   );
 }
 
 export function createLevelThreeCeilingTexture() {
-  return makeTexture(
-    512,
-    (context, size) => {
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-three-ceiling", 512, (context, size) => {
       const random = createSeededRandom(0x3e3003);
       context.fillStyle = "#282c27";
       context.fillRect(0, 0, size, size);
@@ -135,7 +144,7 @@ export function createLevelThreeCeilingTexture() {
       }
       drawSpeckles(context, size, 850, 0.13, "8,8,8", random);
       drawSpeckles(context, size, 180, 0.08, "104,96,72", random);
-    },
+    }),
     8,
     6,
   );

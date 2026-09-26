@@ -62,7 +62,6 @@ function randomBetween(min, max) {
 }
 const FLASHLIGHT_LENS_AXIS = new THREE.Vector3(1, 0, 0);
 const HELD_FLASHLIGHT_DIRECTION = new THREE.Vector3(-0.08, -0.14, -1).normalize();
-const VIEW_MODEL_LIGHT_LAYER = 1;
 
 export function createLimbSegment(start, end, radiusTop, radiusBottom, material) {
   const startVector = new THREE.Vector3(...start);
@@ -155,6 +154,24 @@ function loadRelaxedArmGeometries() {
   return relaxedArmLoad;
 }
 
+// Hands lighting is injected into the view-model material instead of using real
+// scene lights. three.js collects lights per camera (object.layers.test(camera.layers)),
+// so a "hands only" point light that the camera can see also lit every wall
+// inside its 1.35m range - which is why standing against a wall produced a
+// flashlight shaped pool with no flashlight equipped. Only the key light is
+// replaced by this shader term; the soft hemisphere fill stays a real light and
+// keeps lifting the level the way it always did.
+const viewModelLighting = {
+  keyColor: { value: new THREE.Color(0xe7f1df) },
+  keyIntensity: { value: 0 },
+};
+// Camera-space direction from the hands towards the old key light position
+// (0, 0.08, 0.16) seen from the arm rig, kept as a string so it lands in GLSL.
+const VIEW_MODEL_KEY_DIRECTION = "vec3(0.14, 0.66, 0.74)";
+// The real light fell off over its 1.35m range; this matches its brightness at
+// hand distance so the arms keep the exposure they were tuned with.
+const VIEW_MODEL_KEY_SCALE = "0.13";
+
 function getBakedArmMaterial() {
   if (bakedArmMaterial) return bakedArmMaterial;
   bakedArmMaterial = new THREE.MeshStandardMaterial({
@@ -176,6 +193,8 @@ function getBakedArmMaterial() {
     side: THREE.FrontSide,
   });
   bakedArmMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.viewModelKeyColor = viewModelLighting.keyColor;
+    shader.uniforms.viewModelKeyIntensity = viewModelLighting.keyIntensity;
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
@@ -188,7 +207,11 @@ function getBakedArmMaterial() {
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nvarying float vSurfaceRoughness;\nvarying float vSkinSurface;\nvarying float vNailSurface;",
+        "#include <common>\nvarying float vSurfaceRoughness;\nvarying float vSkinSurface;\nvarying float vNailSurface;\nuniform vec3 viewModelKeyColor;\nuniform float viewModelKeyIntensity;",
+      )
+      .replace(
+        "#include <opaque_fragment>",
+        `float viewModelKeyWrap = max(dot(normalize(vNormal), normalize(${VIEW_MODEL_KEY_DIRECTION})), 0.0);\noutgoingLight += viewModelKeyColor * viewModelKeyIntensity * ${VIEW_MODEL_KEY_SCALE} * viewModelKeyWrap * diffuseColor.rgb;\n#include <opaque_fragment>`,
       )
       .replace(
         "#include <roughnessmap_fragment>",
@@ -259,21 +282,15 @@ export function attachFirstPersonViewModel(camera) {
   viewModel.userData.loaded = false;
   viewModel.userData.heldItemId = null;
   viewModel.userData.targetHeldItemId = null;
-  // A small camera-space bounce keeps the hands readable in dark scenes, but
-  // directional and local scene lights remain the dominant illumination.
+  // A small camera-space bounce keeps the hands readable in dark scenes. It is a
+  // real light, so it also lifts the level slightly - that is its long-standing
+  // behaviour and is left alone here.
   const fillLight = new THREE.HemisphereLight(0xe8f0df, 0x304039, 0.12);
   fillLight.name = "first-person-view-model-fill";
   viewModel.add(fillLight);
   viewModel.userData.fillLight = fillLight;
-  // A nearby key light gives the arms a readable minimum exposure in levels
-  // that deliberately have no ambient scene light. It starts disabled and is
-  // enabled only by the owning level, so it cannot brighten the world.
-  const keyLight = new THREE.PointLight(0xffe7d8, 0, 1.35, 2);
-  keyLight.name = "first-person-view-model-key";
-  keyLight.position.set(0, 0.08, 0.16);
-  viewModel.add(keyLight);
-  viewModel.userData.keyLight = keyLight;
   camera.add(viewModel);
+  // The hands' key light is not a scene light: see viewModelLighting above.
 
   loadRelaxedArmGeometries().then((relaxedGeometries) => {
     const arms = createBakedHazmatArms(relaxedGeometries);
@@ -298,21 +315,9 @@ export function setFirstPersonViewModelLighting(viewModel, { intensity = 0, skyC
 }
 
 export function setFirstPersonViewModelKeyLight(viewModel, { intensity = 0, color = 0xffe7d8 } = {}) {
-  const keyLight = viewModel?.userData?.keyLight;
-  if (!keyLight) return;
-  // Keep this camera-space light off the world layer. The meshes move to the
-  // dedicated layer only in levels that opt in, retaining normal scene-light
-  // response elsewhere.
-  const camera = viewModel.parent;
-  const fillLight = viewModel.userData.fillLight;
-  camera?.layers.enable(VIEW_MODEL_LIGHT_LAYER);
-  fillLight?.layers.set(VIEW_MODEL_LIGHT_LAYER);
-  keyLight.layers.set(VIEW_MODEL_LIGHT_LAYER);
-  viewModel.userData.arms?.traverse((child) => {
-    if (child.isMesh) child.layers.set(VIEW_MODEL_LIGHT_LAYER);
-  });
-  keyLight.color.set(color);
-  keyLight.intensity = THREE.MathUtils.lerp(keyLight.intensity, intensity, 0.12);
+  if (!viewModel) return;
+  viewModelLighting.keyColor.value.set(color);
+  viewModelLighting.keyIntensity.value = THREE.MathUtils.lerp(viewModelLighting.keyIntensity.value, intensity, 0.12);
 }
 
 function setHeldItemMaterialState(root) {

@@ -26,7 +26,6 @@ import { createManilaRoom } from "./manila-room.js";
 import { createElevatorCab, getLevelZeroElevatorWallMount, LEVEL_ZERO_ELEVATOR_ID } from "./elevator.js";
 import {
   createLights,
-  addMoodZones,
   addRoomTables,
   BRIGHT_ZONES,
   DARK_ZONES,
@@ -82,7 +81,8 @@ function collectReachableLightCells(fixture) {
   return cells;
 }
 
-function createFixtureLightField(fixturePositions) {
+
+function createFixtureLightField(fixturePositions, { includeZones = true } = {}) {
   const size = 512;
   const width = COLS * CELL_SIZE;
   const height = ROWS * CELL_SIZE;
@@ -94,68 +94,117 @@ function createFixtureLightField(fixturePositions) {
   const context = canvas.getContext("2d");
   context.fillStyle = "#000000";
   context.fillRect(0, 0, size, size);
-  context.globalCompositeOperation = "lighter";
 
+  // Glare is baked on its own layer so the reachable-area mask can be feathered
+  // before it is applied: clipping straight to cell rectangles printed their
+  // staircase into the floor as long, evenly lit seams.
+  const glare = document.createElement("canvas");
+  glare.width = size;
+  glare.height = size;
+  const glareContext = glare.getContext("2d");
+  const mask = document.createElement("canvas");
+  mask.width = size;
+  mask.height = size;
+  const maskContext = mask.getContext("2d");
+  maskContext.fillStyle = "#000000";
+  maskContext.fillRect(0, 0, size, size);
+  const cellWidth = (CELL_SIZE / width) * size;
+  const cellHeight = (CELL_SIZE / height) * size;
+
+  glareContext.globalCompositeOperation = "lighter";
   fixturePositions.forEach((fixture) => {
     const x = ((fixture.x - minX) / width) * size;
     const z = ((fixture.z - minZ) / height) * size;
-    const radius = Math.max(16, (fixture.range / width) * size * 1.22);
+    const radius = Math.max(16, (fixture.range / width) * size * 0.9);
     const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.78, 0.34, 1);
-    const gradient = context.createRadialGradient(x, z, 0, x, z, radius);
-    gradient.addColorStop(0, `rgba(255, 246, 207, ${0.28 * strength})`);
-    gradient.addColorStop(0.25, `rgba(252, 236, 180, ${0.225 * strength})`);
-    gradient.addColorStop(0.55, `rgba(240, 210, 130, ${0.13 * strength})`);
-    gradient.addColorStop(0.85, `rgba(187, 151, 77, ${0.05 * strength})`);
+    // The luminaire is square, so the pool is a plain radial falloff again: a
+    // stretched pool under a square diffuser would be the same mismatch in the
+    // other direction.
+    const gradient = glareContext.createRadialGradient(x, z, 0, x, z, radius);
+    gradient.addColorStop(0, `rgba(255, 246, 207, ${0.38 * strength})`);
+    gradient.addColorStop(0.25, `rgba(252, 236, 180, ${0.3 * strength})`);
+    gradient.addColorStop(0.55, `rgba(240, 210, 130, ${0.17 * strength})`);
+    gradient.addColorStop(0.85, `rgba(187, 151, 77, ${0.06 * strength})`);
     gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+    glareContext.fillStyle = gradient;
+    glareContext.fillRect(x - radius, z - radius, radius * 2, radius * 2);
+    // Near field: a tighter pool right under the diffuser, so the bright part of
+    // the light sits inside the square panel instead of spilling past its edges.
+    const coreRadius = Math.max(4, (fixture.range / width) * size * 0.09);
+    const core = glareContext.createRadialGradient(x, z, 0, x, z, coreRadius);
+    core.addColorStop(0, `rgba(255, 249, 222, ${0.5 * strength})`);
+    core.addColorStop(0.45, `rgba(255, 240, 200, ${0.26 * strength})`);
+    core.addColorStop(1, "rgba(255, 232, 180, 0)");
+    glareContext.fillStyle = core;
+    glareContext.fillRect(x - coreRadius, z - coreRadius, coreRadius * 2, coreRadius * 2);
 
-    context.save();
-    context.beginPath();
-    const cellWidth = (CELL_SIZE / width) * size;
-    const cellHeight = (CELL_SIZE / height) * size;
+    maskContext.fillStyle = "#ffffff";
     collectReachableLightCells(fixture).forEach((cell) => {
-      context.rect(
+      maskContext.fillRect(
         cell.col * cellWidth - 0.75,
         cell.row * cellHeight - 0.75,
         cellWidth + 1.5,
         cellHeight + 1.5,
       );
     });
-    context.clip();
-    context.fillStyle = gradient;
-    context.fillRect(x - radius, z - radius, radius * 2, radius * 2);
-    context.restore();
+  });
 
+  const feather = Math.max(3, Math.round(size / 64));
+  const softMask = document.createElement("canvas");
+  softMask.width = size;
+  softMask.height = size;
+  const softMaskContext = softMask.getContext("2d");
+  softMaskContext.filter = `blur(${feather}px)`;
+  softMaskContext.drawImage(mask, 0, 0);
+
+  glareContext.globalCompositeOperation = "destination-in";
+  glareContext.drawImage(softMask, 0, 0);
+  glareContext.globalCompositeOperation = "source-over";
+
+  context.globalCompositeOperation = "lighter";
+  context.drawImage(glare, 0, 0);
+
+  fixturePositions.forEach((fixture) => {
+    const x = ((fixture.x - minX) / width) * size;
+    const z = ((fixture.z - minZ) / height) * size;
+    const radius = Math.max(16, (fixture.range / width) * size * 0.9);
+    const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.78, 0.34, 1);
     // Indirect bounce wash: a wider, dimmer, warmer halo with no cell clip, so
     // light appears to spill off the carpet/wallpaper onto neighbouring
     // surfaces and softens the transition into unlit distance.
     const bounceRadius = radius * 1.7;
     const bounce = context.createRadialGradient(x, z, 0, x, z, bounceRadius);
-    bounce.addColorStop(0, `rgba(255, 214, 150, ${0.075 * strength})`);
-    bounce.addColorStop(0.5, `rgba(214, 168, 96, ${0.04 * strength})`);
+    bounce.addColorStop(0, `rgba(255, 214, 150, ${0.1 * strength})`);
+    bounce.addColorStop(0.5, `rgba(214, 168, 96, ${0.055 * strength})`);
     bounce.addColorStop(1, "rgba(140, 96, 40, 0)");
     context.fillStyle = bounce;
     context.fillRect(x - bounceRadius, z - bounceRadius, bounceRadius * 2, bounceRadius * 2);
   });
 
+  // Mood zones are stamped as soft ellipses, not rectangles. A rectangle keeps
+  // printing a straight boundary across the carpet no matter how wide the
+  // feather is, and that reads as a seam; an ellipse has no straight edge.
   context.globalCompositeOperation = "source-over";
-  context.fillStyle = "rgba(0, 0, 0, 0.06)";
-  DARK_ZONES.forEach((zone) => {
-    context.fillRect(
-      (zone.col / COLS) * size,
-      (zone.row / ROWS) * size,
-      (zone.width / COLS) * size,
-      (zone.height / ROWS) * size,
-    );
-  });
-  context.fillStyle = "rgba(255, 238, 176, 0.02)";
-  BRIGHT_ZONES.forEach((zone) => {
-    context.fillRect(
-      (zone.col / COLS) * size,
-      (zone.row / ROWS) * size,
-      (zone.width / COLS) * size,
-      (zone.height / ROWS) * size,
-    );
-  });
+  const stampZone = (zone, centerColor, edgeColor) => {
+    const centerX = ((zone.col + zone.width / 2) / COLS) * size;
+    const centerY = ((zone.row + zone.height / 2) / ROWS) * size;
+    const radiusX = (zone.width / COLS) * size * 0.62;
+    const radiusY = (zone.height / ROWS) * size * 0.62;
+    context.save();
+    context.translate(centerX, centerY);
+    context.scale(radiusX, radiusY);
+    const gradient = context.createRadialGradient(0, 0, 0, 0, 0, 1);
+    gradient.addColorStop(0, centerColor);
+    gradient.addColorStop(0.5, centerColor);
+    gradient.addColorStop(1, edgeColor);
+    context.fillStyle = gradient;
+    context.fillRect(-1, -1, 2, 2);
+    context.restore();
+  };
+  if (includeZones) {
+    DARK_ZONES.forEach((zone) => stampZone(zone, "rgba(0, 0, 0, 0.062)", "rgba(0, 0, 0, 0)"));
+    BRIGHT_ZONES.forEach((zone) => stampZone(zone, "rgba(255, 238, 176, 0.022)", "rgba(255, 238, 176, 0)"));
+  }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.NoColorSpace;
@@ -168,7 +217,11 @@ function createFixtureLightField(fixturePositions) {
 
 function applyFixtureLightField(material, lightField, intensity) {
   material.levelZeroLightFieldTexture = lightField.texture;
+  material.levelZeroLightFieldIntensity = intensity;
   material.onBeforeCompile = (shader) => {
+    // Kept on the material so the debug layer switch can retarget the baked
+    // light field without rebuilding the level.
+    material.levelZeroLightFieldUniforms = shader.uniforms;
     shader.uniforms.levelZeroLightField = { value: lightField.texture };
     shader.uniforms.levelZeroLightBounds = {
       value: new THREE.Vector4(lightField.minX, lightField.minZ, lightField.width, lightField.height),
@@ -206,12 +259,18 @@ function applyFixtureLightField(material, lightField, intensity) {
           1.0 - (levelZeroWorldPosition.z - levelZeroLightBounds.y) / levelZeroLightBounds.w
         );
         vec3 levelZeroBakedLight = texture2D(levelZeroLightField, levelZeroLightUv).rgb;
-        float levelZeroBounceBoost = 1.0 + max(0.0, 1.0 - levelZeroWorldPosition.y / levelZeroCeilingY) * 0.12;
-        outgoingLight += levelZeroBakedLight * diffuseColor.rgb * levelZeroLightIntensity * levelZeroBounceBoost;
+        // Fluorescent tubes hang at the ceiling, so the floor keeps the full
+        // baked pool while the ceiling BETWEEN fixtures only catches a dim
+        // sheen. This vertical profile is the field's only height response, and
+        // it is what stops the ceiling from reading as one evenly lit light box.
+        float levelZeroHeight = clamp(levelZeroWorldPosition.y / levelZeroCeilingY, 0.0, 1.0);
+        float levelZeroHeightFalloff = mix(1.12, 0.62, smoothstep(0.0, 1.0, levelZeroHeight));
+        outgoingLight += levelZeroBakedLight * diffuseColor.rgb * levelZeroLightIntensity * levelZeroHeightFalloff;
         #include <opaque_fragment>`,
       );
   };
-  material.customProgramCacheKey = () => `level-zero-light-field-${intensity}`;
+  // Same as Level 1: the intensity is a uniform, not a shader variant.
+  material.customProgramCacheKey = () => "level-zero-light-field";
 }
 
 export function createLevelZeroScene({ initialState = null } = {}) {
@@ -222,10 +281,11 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   const HAZE_COLOR = 0x6c603b;
   scene.background = new THREE.Color(HAZE_COLOR);
   scene.fog = new THREE.FogExp2(HAZE_COLOR, 0.0082);
-  // Keep the distant maze readable between fluorescent fixtures. This is a
-  // single, shadowless fill light, so it fixes the black-wall problem without
-  // adding the cost of more dynamic lights or shadow maps.
-  scene.add(new THREE.HemisphereLight(0xffe8ad, 0x6a552d, 0.92));
+  // A shadowless fill light keeps the distant maze readable, but it used to run
+  // at 0.92 and washed every surface to the same value. It now only lifts the
+  // floor of the exposure: the fixtures themselves carry the brightness, which
+  // is what makes their falloff visible on the walls and ceiling.
+  scene.add(new THREE.HemisphereLight(0xffe8ad, 0x6a552d, 0.58));
 
   const cameraFar = Math.hypot(COLS * CELL_SIZE, ROWS * CELL_SIZE) + CELL_SIZE * 2;
   const camera = new THREE.PerspectiveCamera(72, 1, 0.05, cameraFar);
@@ -251,7 +311,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     emissive: 0x8a7449,
     emissiveIntensity: 0,
     roughness: 0.98,
-    ...(lowQuality ? {} : { ...createLevelZeroCarpetDetailMaps(), bumpScale: 0.08 }),
+    ...(lowQuality ? {} : { ...createLevelZeroCarpetDetailMaps(), bumpScale: 0.02 }),
   }));
   const wallMaterial = createGameMaterial({
     map: wallpaperTexture,
@@ -276,10 +336,10 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     roughness: 0.98,
     metalness: 0,
   });
-  applyFixtureLightFieldIfNeeded(floorMaterial, applyFixtureLightField, fixtureLightField, 1.28);
-  applyFixtureLightFieldIfNeeded(wallMaterial, applyFixtureLightField, fixtureLightField, 0.94);
-  applyFixtureLightFieldIfNeeded(ceilingMaterial, applyFixtureLightField, fixtureLightField, 0.8);
-  applyFixtureLightFieldIfNeeded(wallCapMaterial, applyFixtureLightField, fixtureLightField, 0.78);
+  applyFixtureLightFieldIfNeeded(floorMaterial, applyFixtureLightField, fixtureLightField, 1.86);
+  applyFixtureLightFieldIfNeeded(wallMaterial, applyFixtureLightField, fixtureLightField, 1.4);
+  applyFixtureLightFieldIfNeeded(ceilingMaterial, applyFixtureLightField, fixtureLightField, 1.12);
+  applyFixtureLightFieldIfNeeded(wallCapMaterial, applyFixtureLightField, fixtureLightField, 1.1);
   const wallMaterials = [
     wallMaterial,
     wallMaterial,
@@ -299,14 +359,20 @@ export function createLevelZeroScene({ initialState = null } = {}) {
 
   // Map-scale, non-repeating wear layer floating just above the carpet: broad
   // stains and traffic trails at 10-100m scale, so the 3m carpet tile repeat
-  // underneath never reads as identical copies side by side.
+  // underneath never reads as identical copies side by side. It is a lit
+  // material (not MeshBasicMaterial) so it fades with the light like the floor
+  // it decorates instead of staying at full albedo in unlit corners.
+  const carpetMacroMaterial = new THREE.MeshStandardMaterial({
+    map: createLevelZeroCarpetMacroTexture(),
+    transparent: true,
+    depthWrite: false,
+    roughness: 1,
+    metalness: 0,
+  });
+  applyFixtureLightFieldIfNeeded(carpetMacroMaterial, applyFixtureLightField, fixtureLightField, 1.86);
   const carpetMacroOverlay = new THREE.Mesh(
     new THREE.PlaneGeometry(COLS * CELL_SIZE, ROWS * CELL_SIZE),
-    new THREE.MeshBasicMaterial({
-      map: createLevelZeroCarpetMacroTexture(),
-      transparent: true,
-      depthWrite: false,
-    }),
+    carpetMacroMaterial,
   );
   carpetMacroOverlay.rotation.x = -Math.PI / 2;
   carpetMacroOverlay.position.set(MAP_CENTER.x, 0.014, MAP_CENTER.z);
@@ -359,7 +425,6 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     getLevelZeroElevatorWallMount(exitPosition),
     interactionInitial[LEVEL_ZERO_ELEVATOR_ID] ?? null,
   );
-  addMoodZones(scene);
   const manilaRoom = createManilaRoom(scene, MANILA_ROOM, cellCenter);
   const propColliders = [...manilaRoom.colliders, ...addRoomTables(scene, cellCenter)];
   const interactions = [
@@ -514,6 +579,57 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     };
   }
 
+  // Debug layer switches (?debug=true). The baked light field, its mood-zone
+  // stamps and the zone decals are the layers that can leave a visible
+  // boundary on the carpet, so each can be switched off in place.
+  const lightFieldMaterials = [];
+  scene.traverse((object) => {
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.forEach((material) => {
+      if (material?.levelZeroLightFieldIntensity != null && !lightFieldMaterials.includes(material)) {
+        lightFieldMaterials.push(material);
+      }
+    });
+  });
+  const disposableTextures = fixtureLightField?.texture ? [fixtureLightField.texture] : [];
+  let lightFieldWithoutZones = null;
+  let lightFieldEnabled = true;
+  let lightFieldZonesEnabled = true;
+  const setLightFieldEnabled = (enabled) => {
+    lightFieldEnabled = enabled;
+    lightFieldMaterials.forEach((material) => {
+      const uniforms = material.levelZeroLightFieldUniforms;
+      if (uniforms) uniforms.levelZeroLightIntensity.value = enabled ? material.levelZeroLightFieldIntensity : 0;
+    });
+  };
+  const setLightFieldZonesEnabled = (enabled) => {
+    lightFieldZonesEnabled = enabled;
+    if (!enabled && !lightFieldWithoutZones) {
+      lightFieldWithoutZones = createFixtureLightField(fixturePositions, { includeZones: false });
+      disposableTextures.push(lightFieldWithoutZones.texture);
+    }
+    const texture = enabled ? fixtureLightField?.texture : lightFieldWithoutZones?.texture;
+    if (!texture) return;
+    lightFieldMaterials.forEach((material) => {
+      const uniforms = material.levelZeroLightFieldUniforms;
+      if (uniforms) uniforms.levelZeroLightField.value = texture;
+    });
+  };
+  const debugToggles = isLowQuality() ? [] : [
+    {
+      id: "light-field-zones",
+      label: "光场分区",
+      get: () => lightFieldZonesEnabled,
+      set: setLightFieldZonesEnabled,
+    },
+    {
+      id: "light-field",
+      label: "烘焙光场",
+      get: () => lightFieldEnabled,
+      set: setLightFieldEnabled,
+    },
+  ];
+
   return {
     level: 0,
     levelLabel: "LEVEL 0",
@@ -524,6 +640,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     get exposureBias() {
       return exposureBias;
     },
+    debugToggles,
     nextLevel: 1,
     exitMode: "network",
     // Nudges GTAO contact darkening at wall/floor and wall/ceiling junctions
@@ -531,7 +648,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     presentation: { post: { aoIntensity: 0.66 } },
     scene,
     camera,
-    disposableTextures: fixtureLightField?.texture ? [fixtureLightField.texture] : [],
+    disposableTextures,
     spawn,
     targetPosition: elevator.doorCenter,
     isWalkable,

@@ -7,20 +7,43 @@ export function enableAoUv(geometry) {
   if (!geometry.getAttribute("uv2")) geometry.setAttribute("uv2", uv.clone());
   return geometry;
 }
-export function makeTexture(size, draw, repeatX, repeatY) {
+// Procedural canvases are deterministic (every generator seeds its randomness),
+// so a pattern only has to be painted once per session. Caching the *canvas* and
+// not the Texture keeps world disposal working exactly as before: each level
+// still owns its own Texture objects and disposes them on unload.
+const canvasCache = new Map();
+const CANVAS_CACHE_LIMIT = 64;
+
+export function paintCachedCanvas(key, size, draw) {
+  const cached = canvasCache.get(key);
+  if (cached) return cached;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
-  const context = canvas.getContext("2d");
-  draw(context, size);
+  draw(canvas.getContext("2d"), size);
+  if (canvasCache.size >= CANVAS_CACHE_LIMIT) {
+    canvasCache.delete(canvasCache.keys().next().value);
+  }
+  canvasCache.set(key, canvas);
+  return canvas;
+}
 
+export function wrapCanvasTexture(canvas, repeatX, repeatY, colorSpace = THREE.SRGBColorSpace) {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(repeatX, repeatY);
-  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.colorSpace = colorSpace;
   texture.anisotropy = 6;
   return texture;
+}
+
+export function makeTexture(size, draw, repeatX, repeatY) {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  draw(canvas.getContext("2d"), size);
+  return wrapCanvasTexture(canvas, repeatX, repeatY);
 }
 
 export function createSeededRandom(seed) {
@@ -45,17 +68,26 @@ export function tileHash(x, y, seed) {
 }
 
 export function tileNoise(x, y, size, cells, seed) {
-  const scaledX = (x / size) * cells;
-  const scaledY = (y / size) * cells;
+  return tileNoiseXY(x, y, size, cells, cells, seed);
+}
+
+/**
+ * Seamless value noise with independent cell counts per axis. A stretched axis
+ * (fewer cells) still wraps at the texture edge, so stained walls and slabs can
+ * use vertically elongated features without a seam at every tile boundary.
+ */
+export function tileNoiseXY(x, y, size, cellsX, cellsY, seed) {
+  const scaledX = (x / size) * cellsX;
+  const scaledY = (y / size) * cellsY;
   const x0 = Math.floor(scaledX);
   const y0 = Math.floor(scaledY);
-  const x1 = (x0 + 1) % cells;
-  const y1 = (y0 + 1) % cells;
+  const x1 = (x0 + 1) % cellsX;
+  const y1 = (y0 + 1) % cellsY;
   const tx = smoothstep(scaledX - x0);
   const ty = smoothstep(scaledY - y0);
-  const a = tileHash(x0 % cells, y0 % cells, seed);
-  const b = tileHash(x1, y0 % cells, seed);
-  const c = tileHash(x0 % cells, y1, seed);
+  const a = tileHash(x0 % cellsX, y0 % cellsY, seed);
+  const b = tileHash(x1, y0 % cellsY, seed);
+  const c = tileHash(x0 % cellsX, y1, seed);
   const d = tileHash(x1, y1, seed);
   const top = a + (b - a) * tx;
   const bottom = c + (d - c) * tx;

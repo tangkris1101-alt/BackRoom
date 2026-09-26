@@ -174,11 +174,22 @@ assert.match(renderingSource, /canReducePixelRatio/);
 assert.match(renderingSource, /object\.isPointLight/);
 assert.doesNotMatch(renderingSource, /isPointLight[^\n]+castShadow\s*=\s*true/);
 assert.match(levelZeroSceneSource, /collectReachableLightCells/);
-assert.match(levelZeroSceneSource, /context\.clip\(\)/);
-assert.match(levelZeroSceneSource, /new THREE\.HemisphereLight\([^\n]+0\.92\)/);
+// Light must stay confined to cells reachable from its fixture; the confinement
+// runs through a feathered mask (destination-in) so it never prints straight
+// seams where the baked light stops.
+assert.match(levelZeroSceneSource, /globalCompositeOperation = "destination-in"/);
+assert.match(levelZeroSceneSource, /softMaskContext\.filter = `blur\(/);
+// The fill light lifts the exposure floor but must not be the main source: the
+// fixtures carry the brightness so their falloff stays visible.
+assert.match(levelZeroSceneSource, /new THREE\.HemisphereLight\([^\n]+, 0\.[0-6]\d*\)/);
 assert.equal((levelZeroWorldSource.match(/new THREE\.InstancedMesh/g) ?? []).length, 3);
 assert.match(levelZeroWorldSource, /level-zero-fixture-halos/);
-assert.match(levelZeroWorldSource, /const panelMaterial = new THREE\.MeshBasicMaterial\(\{\s*color: 0xfff4d2,\s*toneMapped: false,/);
+// The diffuser face carries a longitudinal falloff map and stays just below
+// clipping, so the bloom pass paints the glow instead of a flat white sticker.
+assert.match(
+  levelZeroWorldSource,
+  /const panelMaterial = new THREE\.MeshBasicMaterial\(\{\s*map: createFixturePanelTexture\(\),\s*color: 0x[a-f0-9]+,\s*toneMapped: false,/,
+);
 assert.doesNotMatch(levelZeroWorldSource, /panels\.setColorAt/);
 assert.match(levelZeroWorldSource, /instanceColor\.needsUpdate = true/);
 assert.doesNotMatch(levelZeroWorldSource, /fixture\.material\.emissiveIntensity/);

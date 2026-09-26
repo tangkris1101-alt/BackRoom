@@ -1,4 +1,4 @@
-import { makeTexture, createSeededRandom } from "../common/texture-utils.js";
+import { createSeededRandom, paintCachedCanvas, wrapCanvasTexture } from "../common/texture-utils.js";
 import * as THREE from "three";
 import tileColorUrl from "../../assets/textures/long-white-tiles/diff.jpg?url";
 import tileNormalUrl from "../../assets/textures/long-white-tiles/normal.jpg?url";
@@ -6,7 +6,8 @@ import tileRoughnessUrl from "../../assets/textures/long-white-tiles/roughness.j
 import tileAoUrl from "../../assets/textures/long-white-tiles/ao.jpg?url";
 
 function tiles(base, grout, repeatX, repeatY, seed) {
-  return makeTexture(512, (context, size) => {
+  const cacheKey = ["level-thirty-seven-tiles", base, grout, seed].join("|");
+  return wrapCanvasTexture(paintCachedCanvas(cacheKey, 512, (context, size) => {
     const random = createSeededRandom(seed);
     context.fillStyle = base;
     context.fillRect(0, 0, size, size);
@@ -23,7 +24,7 @@ function tiles(base, grout, repeatX, repeatY, seed) {
       context.fillStyle = `rgba(40,92,96,${random() * 0.045})`;
       context.fillRect(random() * size, random() * size, 5 + random() * 28, 1 + random() * 4);
     }
-  }, repeatX, repeatY);
+  }), repeatX, repeatY);
 }
 export const createLevelThirtySevenFloorTexture = () => tiles("#dce3dc", "#849b98", 24, 18, 3701);
 export const createLevelThirtySevenWallTexture = () => tiles("#e8ece4", "#9bb0aa", 16, 8, 3702);

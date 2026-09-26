@@ -1,12 +1,28 @@
 import * as THREE from "three";
 
+// Wall ends stretched to fill a convex corner arrive as { position, scale };
+// plain Vector3 modules stay supported.
+function wallPosition(transform) {
+  return transform?.position ?? transform;
+}
+
+function wallScaleAlong(transform, along) {
+  const scale = transform?.scale;
+  if (!scale) return 1;
+  return along === "x" ? scale.x : scale.z;
+}
+
 /** Coalesce touching modules so their coplanar faces do not leave raster seams. */
 export function collapseWallRuns(transforms, along, cellSize, thickness) {
   const fixed = along === "x" ? "z" : "x";
-  const sorted = [...transforms].sort((left, right) =>
-    left[fixed] - right[fixed] || left[along] - right[along]);
+  const sorted = [...transforms].sort((left, right) => {
+    const leftPosition = wallPosition(left);
+    const rightPosition = wallPosition(right);
+    return leftPosition[fixed] - rightPosition[fixed] || leftPosition[along] - rightPosition[along];
+  });
   const runs = [];
-  for (const position of sorted) {
+  for (const transform of sorted) {
+    const position = wallPosition(transform);
     const last = runs.at(-1);
     if (last
       && Math.abs(last.fixed - position[fixed]) < 1e-4
@@ -14,17 +30,35 @@ export function collapseWallRuns(transforms, along, cellSize, thickness) {
       && Math.abs(last.end + cellSize - position[along]) < 1e-4) {
       last.end = position[along];
       last.count += 1;
+      last.lastTransform = transform;
     } else {
-      runs.push({ fixed: position[fixed], y: position.y, start: position[along], end: position[along], count: 1 });
+      runs.push({
+        fixed: position[fixed],
+        y: position.y,
+        start: position[along],
+        end: position[along],
+        count: 1,
+        firstTransform: transform,
+        lastTransform: transform,
+      });
     }
   }
-  return runs.map((run) => ({
-    width: along === "x" ? run.count * cellSize : thickness,
-    depth: along === "z" ? run.count * cellSize : thickness,
-    transforms: [along === "x"
-      ? new THREE.Vector3((run.start + run.end) / 2, run.y, run.fixed)
-      : new THREE.Vector3(run.fixed, run.y, (run.start + run.end) / 2)],
-  }));
+  return runs.map((run) => {
+    // Scaled (corner-extended) ends stretch the run past its module centres.
+    const firstPosition = wallPosition(run.firstTransform);
+    const lastPosition = wallPosition(run.lastTransform);
+    const alongMin = firstPosition[along] - (cellSize * wallScaleAlong(run.firstTransform, along)) / 2;
+    const alongMax = lastPosition[along] + (cellSize * wallScaleAlong(run.lastTransform, along)) / 2;
+    const length = alongMax - alongMin;
+    const center = (alongMin + alongMax) / 2;
+    return {
+      width: along === "x" ? length : thickness,
+      depth: along === "z" ? length : thickness,
+      transforms: [along === "x"
+        ? new THREE.Vector3(center, run.y, run.fixed)
+        : new THREE.Vector3(run.fixed, run.y, center)],
+    };
+  });
 }
 
 /**

@@ -176,8 +176,11 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   // restarting the exact same brick stains at each four-metre module.
   const northSouthGeometry = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, WALL_THICKNESS);
   const eastWestGeometry = new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, CELL_SIZE);
-  const wallVariant = (position) =>
-    Math.abs(Math.round(position.x * 2) * 17 + Math.round(position.z * 2) * 31) % 3;
+  const wallVariant = (transform) => {
+    // Corner-extended ends arrive as { position, scale }.
+    const position = transform.position ?? transform;
+    return Math.abs(Math.round(position.x * 2) * 17 + Math.round(position.z * 2) * 31) % 3;
+  };
   for (let variant = 0; variant < 3; variant += 1) {
     const material = createGameMaterial({
       map: createLevelThreeBrickTexture(variant),

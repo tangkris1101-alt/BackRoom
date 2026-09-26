@@ -24,6 +24,10 @@
     <button id="drawer-left">左抽屉</button>
     <button id="drawer-right">右抽屉</button>
     <button id="pull">F / 推拉抽屉</button>
+    <button id="sign-supply">SUPPLY 牌</button>
+    <button id="sign-noentry">NO ENTRY 牌</button>
+    <button id="pipe">水管特写</button>
+    <button id="pipe-run">水管走向</button>
     <button id="capture">纯画面截图</button>
     <span id="status">正在加载 Level 1…</span>
   </div>
@@ -31,6 +35,7 @@
     import * as THREE from "three";
     import { createLevelOneScene } from "/src/scene/level-one/index.js";
     import { levelOneCellCenter } from "/src/scene/level-one/layout.js";
+    import { LEVEL_ONE_WALL_SIGNS, resolveLevelOneSignMount } from "/src/scene/level-one/props.js";
 
     const status = document.getElementById("status");
     document.getElementById("capture").addEventListener("click", () => {
@@ -100,6 +105,33 @@
       },
     };
 
+    // 挂牌机位直接用关卡数据算挂点：站在牌子正面 5.5m 处回看，用于确认贴墙。
+    for (const [id, text] of [["sign-supply", "SUPPLY"], ["sign-noentry", "NO ENTRY"]]) {
+      const sign = LEVEL_ONE_WALL_SIGNS.find((entry) => entry.text === text);
+      const mount = resolveLevelOneSignMount(levelOneCellCenter(sign.col, sign.row));
+      const facingX = Math.sin(mount.rotation);
+      const facingZ = Math.cos(mount.rotation);
+      views[id] = {
+        pos: [mount.x + facingX * 5.5 - facingZ * 0.8, 1.78, mount.z + facingZ * 5.5 + facingX * 0.8],
+        look: [mount.x, 1.72, mount.z],
+        label: `${text} 牌 · 挂点贴墙验收`,
+      };
+    }
+
+    // 水管：贴着吊顶走线（y = CEILING_Y - 0.42 ≈ 3.24），在 (18,10) 这条沿 z 的
+    // 管线上看接头与铭牌，再沿管线方向看整条走线。
+    const pipeCell = levelOneCellCenter(18, 10);
+    views.pipe = {
+      pos: [pipeCell.x + 0.95, 2.42, pipeCell.z - 0.55],
+      look: [pipeCell.x, 3.2, pipeCell.z + 0.5],
+      label: "水管特写 · 焊缝/接头螺栓/水渍锈迹/铭牌",
+    };
+    views["pipe-run"] = {
+      pos: [pipeCell.x + 0.35, 2.35, pipeCell.z - 2.2],
+      look: [pipeCell.x + 0.05, 3.24, pipeCell.z + 12],
+      label: "水管走向 · 沿管线看接头节距",
+    };
+
     let lastFocusId = "-";
     let currentLabel = views.crate.label;
     function drawerStates() {
@@ -130,8 +162,7 @@
 
     for (const name of Object.keys(views)) {
       document.getElementById(name).addEventListener("click", () => applyView(name));
-    }
-    document.getElementById("pull").addEventListener("click", () => {
+    }    document.getElementById("pull").addEventListener("click", () => {
       const result = world.interact(world.camera.position, {});
       lastFocusId = result?.id ? `${result.id}（${result.count ? "拉出" : "推回"}）` : "无可用抽屉";
       updateStatus(views.drawers.label);

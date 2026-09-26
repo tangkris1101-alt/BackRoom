@@ -1,11 +1,8 @@
 import * as THREE from "three";
+import { createSeededRandom, paintCachedCanvas } from "../common/texture-utils.js";
 
-function makeCanvas(size = 512) {
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  return { canvas, ctx: canvas.getContext("2d") };
-}
+const ROOM_FLOOR_SEED = 701;
+const WATER_SEED = 702;
 
 function makeTexture(canvas, repeatX, repeatY) {
   const texture = new THREE.CanvasTexture(canvas);
@@ -16,8 +13,10 @@ function makeTexture(canvas, repeatX, repeatY) {
   return texture;
 }
 
-export function createLevelSevenRoomFloorTexture() {
-  const { canvas, ctx } = makeCanvas(512);
+// The grain used to come from Math.random(); seeding it keeps the paint
+// reproducible so the canvas can be reused for the rest of the session.
+function paintLevelSevenRoomFloor(ctx) {
+  const random = createSeededRandom(ROOM_FLOOR_SEED);
   ctx.fillStyle = "#2b2520";
   ctx.fillRect(0, 0, 512, 512);
   ctx.strokeStyle = "rgba(95, 82, 72, 0.5)";
@@ -33,14 +32,17 @@ export function createLevelSevenRoomFloorTexture() {
     ctx.stroke();
   }
   for (let i = 0; i < 180; i += 1) {
-    ctx.fillStyle = `rgba(35, 26, 18, ${0.12 + Math.random() * 0.2})`;
-    ctx.fillRect(Math.random() * 512, Math.random() * 512, 4 + Math.random() * 16, 1 + Math.random() * 5);
+    ctx.fillStyle = `rgba(35, 26, 18, ${0.12 + random() * 0.2})`;
+    ctx.fillRect(random() * 512, random() * 512, 4 + random() * 16, 1 + random() * 5);
   }
-  return makeTexture(canvas, 8, 6);
 }
 
-export function createLevelSevenWallpaperTexture() {
-  const { canvas, ctx } = makeCanvas(512);
+export function createLevelSevenRoomFloorTexture() {
+  const cacheKey = ["level-seven-room-floor", ROOM_FLOOR_SEED].join("|");
+  return makeTexture(paintCachedCanvas(cacheKey, 512, paintLevelSevenRoomFloor), 8, 6);
+}
+
+function paintLevelSevenWallpaper(ctx) {
   ctx.fillStyle = "#1f1919";
   ctx.fillRect(0, 0, 512, 512);
   for (let x = 0; x < 512; x += 42) {
@@ -62,11 +64,13 @@ export function createLevelSevenWallpaperTexture() {
     }
     ctx.stroke();
   }
-  return makeTexture(canvas, 5, 2);
 }
 
-export function createLevelSevenCeilingTexture() {
-  const { canvas, ctx } = makeCanvas(512);
+export function createLevelSevenWallpaperTexture() {
+  return makeTexture(paintCachedCanvas("level-seven-wallpaper", 512, paintLevelSevenWallpaper), 5, 2);
+}
+
+function paintLevelSevenCeiling(ctx) {
   ctx.fillStyle = "#0a0809";
   ctx.fillRect(0, 0, 512, 512);
   ctx.strokeStyle = "rgba(82, 64, 54, 0.22)";
@@ -81,27 +85,34 @@ export function createLevelSevenCeilingTexture() {
     ctx.lineTo(512, i);
     ctx.stroke();
   }
-  return makeTexture(canvas, 6, 4);
 }
 
-export function createLevelSevenWaterTexture() {
-  const { canvas, ctx } = makeCanvas(512);
+export function createLevelSevenCeilingTexture() {
+  return makeTexture(paintCachedCanvas("level-seven-ceiling", 512, paintLevelSevenCeiling), 6, 4);
+}
+
+function paintLevelSevenWater(ctx) {
+  const random = createSeededRandom(WATER_SEED);
   const gradient = ctx.createRadialGradient(256, 256, 20, 256, 256, 390);
   gradient.addColorStop(0, "#0f1d1f");
   gradient.addColorStop(1, "#010608");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 512, 512);
   for (let i = 0; i < 44; i += 1) {
-    ctx.strokeStyle = `rgba(76, 116, 122, ${0.05 + Math.random() * 0.09})`;
-    ctx.lineWidth = 1 + Math.random() * 2;
+    ctx.strokeStyle = `rgba(76, 116, 122, ${0.05 + random() * 0.09})`;
+    ctx.lineWidth = 1 + random() * 2;
     ctx.beginPath();
-    const y = Math.random() * 512;
+    const y = random() * 512;
     for (let x = -40; x <= 552; x += 24) {
-      const waveY = y + Math.sin(x * 0.03 + i) * (8 + Math.random() * 8);
+      const waveY = y + Math.sin(x * 0.03 + i) * (8 + random() * 8);
       if (x === -40) ctx.moveTo(x, waveY);
       else ctx.lineTo(x, waveY);
     }
     ctx.stroke();
   }
-  return makeTexture(canvas, 7, 7);
+}
+
+export function createLevelSevenWaterTexture() {
+  const cacheKey = ["level-seven-water", WATER_SEED].join("|");
+  return makeTexture(paintCachedCanvas(cacheKey, 512, paintLevelSevenWater), 7, 7);
 }

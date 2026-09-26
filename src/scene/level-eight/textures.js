@@ -1,4 +1,4 @@
-import { makeTexture, createSeededRandom, drawSpeckles } from "../common/texture-utils.js";
+import { createSeededRandom, paintCachedCanvas, wrapCanvasTexture, drawSpeckles } from "../common/texture-utils.js";
 import * as THREE from "three";
 import rockColorUrl from "../../assets/textures/rock027/Rock027_1K-JPG_Color.jpg?url";
 import rockNormalUrl from "../../assets/textures/rock027/Rock027_1K-JPG_NormalGL.jpg?url";
@@ -6,7 +6,8 @@ import rockRoughnessUrl from "../../assets/textures/rock027/Rock027_1K-JPG_Rough
 import rockAoUrl from "../../assets/textures/rock027/Rock027_1K-JPG_AmbientOcclusion.jpg?url";
 
 function rockTexture(base, repeatX, repeatY, seed) {
-  return makeTexture(512, (context, size) => {
+  const cacheKey = ["level-eight-rock", base, seed].join("|");
+  return wrapCanvasTexture(paintCachedCanvas(cacheKey, 512, (context, size) => {
     const random = createSeededRandom(seed);
     context.fillStyle = base;
     context.fillRect(0, 0, size, size);
@@ -18,7 +19,7 @@ function rockTexture(base, repeatX, repeatY, seed) {
       context.fill();
     }
     drawSpeckles(context, size, 520, 0.24, "12,15,14", random);
-  }, repeatX, repeatY);
+  }), repeatX, repeatY);
 }
 
 export const createLevelEightFloorTexture = () => rockTexture("#343a37", 18, 14, 801);

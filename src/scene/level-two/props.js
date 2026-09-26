@@ -5,6 +5,7 @@ import {
   WALL_HEIGHT,
 } from "../constants.js";
 import { createFixturePointLight } from "../common/lighting.js";
+import { wallSegmentTransform } from "../common/wall-corners.js";
 import { createWideSignTexture } from "../common/textures.js";
 import { createLevelTwoMetalTexture } from "./textures.js";
 import { isInAnyZone } from "../common/layout.js";
@@ -108,17 +109,43 @@ export function collectLevelTransforms({
       if (isDiagonalCell(col, row)) {
         // Diagonal cells don't contribute rectangular walls (handled separately in merged geometry).
       } else {
+        // Ends that poke into open space on both flanks are stretched past the
+        // corner so perpendicular wall boxes overlap (see wall-corners.js).
         if (!isCellOpen(col, row - 1)) {
-          northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2));
+          northSouth.push(wallSegmentTransform(
+            center.x,
+            center.z - CELL_SIZE / 2,
+            "x",
+            isCellOpen(col - 1, row) && isCellOpen(col - 1, row - 1),
+            isCellOpen(col + 1, row) && isCellOpen(col + 1, row - 1),
+          ));
         }
         if (!isCellOpen(col, row + 1)) {
-          northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2));
+          northSouth.push(wallSegmentTransform(
+            center.x,
+            center.z + CELL_SIZE / 2,
+            "x",
+            isCellOpen(col - 1, row) && isCellOpen(col - 1, row + 1),
+            isCellOpen(col + 1, row) && isCellOpen(col + 1, row + 1),
+          ));
         }
         if (!isCellOpen(col - 1, row)) {
-          eastWest.push(new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+          eastWest.push(wallSegmentTransform(
+            center.x - CELL_SIZE / 2,
+            center.z,
+            "z",
+            isCellOpen(col, row - 1) && isCellOpen(col - 1, row - 1),
+            isCellOpen(col, row + 1) && isCellOpen(col - 1, row + 1),
+          ));
         }
         if (!isCellOpen(col + 1, row)) {
-          eastWest.push(new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+          eastWest.push(wallSegmentTransform(
+            center.x + CELL_SIZE / 2,
+            center.z,
+            "z",
+            isCellOpen(col, row - 1) && isCellOpen(col + 1, row - 1),
+            isCellOpen(col, row + 1) && isCellOpen(col + 1, row + 1),
+          ));
         }
       }
 

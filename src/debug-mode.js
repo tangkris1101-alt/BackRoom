@@ -13,6 +13,7 @@ export class DebugMode {
       ALLOW_QUERY_DEBUG && new URLSearchParams(window.location.search).get("debug") === "true";
     this.featuresEnabled = this.queryEnabled;
     this.areaLight = null;
+    this.areaLightEnabled = true;
   }
 
   isActive() {
@@ -26,14 +27,19 @@ export class DebugMode {
     return this.isActive();
   }
 
+  setAreaLightEnabled(enabled) {
+    this.areaLightEnabled = Boolean(enabled);
+    this.sync();
+  }
+
   sync() {
     const active = this.isActive();
     if (this.canvas) {
       this.canvas.dataset.debugQuery = String(this.queryEnabled);
       this.canvas.dataset.debugFeatures = String(active);
-      this.canvas.dataset.debugAreaLight = String(active);
+      this.canvas.dataset.debugAreaLight = String(active && this.areaLightEnabled);
     }
-    if (this.areaLight) this.areaLight.intensity = active ? 4.6 : 0;
+    if (this.areaLight) this.areaLight.intensity = active && this.areaLightEnabled ? 4.6 : 0;
     this.onSync?.(active);
   }
 

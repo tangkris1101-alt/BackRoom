@@ -80,7 +80,13 @@ function makeCanvasTexture(canvas, colorSpace = THREE.NoColorSpace) {
   return texture;
 }
 
-function createPaintedSteelMaps(seed) {
+// Each painted sheet is 1024px of per-pixel work and the seeds are fixed, so a
+// session only ever needs one copy of each. Canvases are cached rather than
+// Textures so every cab still owns disposable textures.
+const paintedSteelSheets = new Map();
+let treadPlateSheet = null;
+
+function createPaintedSteelSheets(seed) {
   // A full 1024px sheet is used exactly once per leaf: there are no visible
   // 512px repeats or stretched metal photos across the 2.36m door height.
   const size = 1024;
@@ -163,14 +169,31 @@ function createPaintedSteelMaps(seed) {
   normalContext.putImageData(normal, 0, 0);
   roughContext.putImageData(rough, 0, 0);
 
+  return { color: colorCanvas, normal: normalCanvas, rough: roughCanvas };
+}
+
+function createPaintedSteelMaps(seed) {
+  let sheets = paintedSteelSheets.get(seed);
+  if (!sheets) {
+    sheets = createPaintedSteelSheets(seed);
+    paintedSteelSheets.set(seed, sheets);
+  }
   return {
-    map: makeCanvasTexture(colorCanvas, THREE.SRGBColorSpace),
-    normalMap: makeCanvasTexture(normalCanvas),
-    roughnessMap: makeCanvasTexture(roughCanvas),
+    map: makeCanvasTexture(sheets.color, THREE.SRGBColorSpace),
+    normalMap: makeCanvasTexture(sheets.normal),
+    roughnessMap: makeCanvasTexture(sheets.rough),
   };
 }
 
 function createTreadPlateMaps() {
+  if (!treadPlateSheet) treadPlateSheet = createTreadPlateSheet();
+  return {
+    map: makeCanvasTexture(treadPlateSheet.color, THREE.SRGBColorSpace),
+    bumpMap: makeCanvasTexture(treadPlateSheet.bump),
+  };
+}
+
+function createTreadPlateSheet() {
   const size = 512;
   const colorCanvas = document.createElement("canvas");
   const bumpCanvas = document.createElement("canvas");
@@ -204,21 +227,18 @@ function createTreadPlateMaps() {
     color.fillStyle = `rgba(15,16,13,${random() * 0.14})`;
     color.fillRect(x, y, 1.5, 1.5);
   }
-  return {
-    map: makeCanvasTexture(colorCanvas, THREE.SRGBColorSpace),
-    bumpMap: makeCanvasTexture(bumpCanvas),
-  };
-}
-
-function addBox(group, name, dimensions, position, material) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...dimensions), material);
-  mesh.name = name;
-  mesh.position.set(...position);
-  group.add(mesh);
-  return mesh;
+  return { color: colorCanvas, bump: bumpCanvas };
 }
 
 function createElevatorSign(text, foreground = "#e3edd3") {
+  return makeCanvasTexture(getElevatorSignCanvas(text, foreground), THREE.SRGBColorSpace);
+}
+
+const elevatorSignCanvases = new Map();
+function getElevatorSignCanvas(text, foreground) {
+  const key = `elevator-sign|${text}|${foreground}`;
+  const cached = elevatorSignCanvases.get(key);
+  if (cached) return cached;
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 160;
@@ -230,7 +250,16 @@ function createElevatorSign(text, foreground = "#e3edd3") {
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.fillText(text, 256, 84);
-  return makeCanvasTexture(canvas, THREE.SRGBColorSpace);
+  elevatorSignCanvases.set(key, canvas);
+  return canvas;
+}
+
+function addBox(group, name, dimensions, position, material) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...dimensions), material);
+  mesh.name = name;
+  mesh.position.set(...position);
+  group.add(mesh);
+  return mesh;
 }
 
 function toWorldWithRotation(position, rotation, localX, localZ) {

@@ -96,18 +96,18 @@ function addArchitecture(scene, colliders) {
   ns.name = "level-thirteen-north-south-walls";
   ew.name = "level-thirteen-east-west-walls";
   const transform = new THREE.Object3D();
-  transforms.northSouth.forEach((position, index) => {
+  // Corner-extended ends arrive as { position, scale }.
+  const applyWallTransform = (entry, mesh, index) => {
+    const position = entry.position ?? entry;
+    const scale = entry.scale ?? { x: 1, y: 1, z: 1 };
     transform.position.copy(position);
     transform.rotation.set(0, 0, 0);
-    transform.scale.set(1, 1, 1);
+    transform.scale.set(scale.x, scale.y, scale.z);
     transform.updateMatrix();
-    ns.setMatrixAt(index, transform.matrix);
-  });
-  transforms.eastWest.forEach((position, index) => {
-    transform.position.copy(position);
-    transform.updateMatrix();
-    ew.setMatrixAt(index, transform.matrix);
-  });
+    mesh.setMatrixAt(index, transform.matrix);
+  };
+  transforms.northSouth.forEach((entry, index) => applyWallTransform(entry, ns, index));
+  transforms.eastWest.forEach((entry, index) => applyWallTransform(entry, ew, index));
   ns.instanceMatrix.needsUpdate = true;
   ew.instanceMatrix.needsUpdate = true;
   scene.add(ns, ew);

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { createSeededRandom, makeTexture, drawSpeckles } from "../common/texture-utils.js";
+import { createSeededRandom, paintCachedCanvas, wrapCanvasTexture, drawSpeckles } from "../common/texture-utils.js";
 import darkWoodColorUrl from "../../assets/textures/level-five/dark-wood/diffuse.jpg?url";
 import darkWoodNormalUrl from "../../assets/textures/level-five/dark-wood/normal.jpg?url";
 import darkWoodRoughnessUrl from "../../assets/textures/level-five/dark-wood/roughness.jpg?url";
@@ -38,9 +38,9 @@ export function createLevelFivePbrMaps(kind, repeatX, repeatY, { includeDetailMa
 
 export function createLevelFiveCarpetTexture() {
   const random = createSeededRandom(0x5e1f05);
-  return makeTexture(
-    512,
-    (context, size) => {
+  // Painted once per session: the pattern is fixed, so the canvas is reused.
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-five-carpet", 512, (context, size) => {
       context.fillStyle = "#5b2115";
       context.fillRect(0, 0, size, size);
 
@@ -81,7 +81,7 @@ export function createLevelFiveCarpetTexture() {
       }
       drawSpeckles(context, size, 1900, 0.09, "12,4,2", random);
       drawSpeckles(context, size, 500, 0.06, "218,168,82", random);
-    },
+    }),
     12,
     9,
   );
@@ -89,9 +89,8 @@ export function createLevelFiveCarpetTexture() {
 
 export function createLevelFiveWallpaperTexture() {
   const random = createSeededRandom(0x5a11);
-  return makeTexture(
-    512,
-    (context, size) => {
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-five-wallpaper", 512, (context, size) => {
       context.fillStyle = "#67291d";
       context.fillRect(0, 0, size, size);
 
@@ -131,7 +130,7 @@ export function createLevelFiveWallpaperTexture() {
       }
       drawSpeckles(context, size, 900, 0.08, "18,6,4", random);
       drawSpeckles(context, size, 240, 0.06, "222,178,88", random);
-    },
+    }),
     2.8,
     1.2,
   );
@@ -139,9 +138,8 @@ export function createLevelFiveWallpaperTexture() {
 
 export function createLevelFiveCeilingTexture() {
   const random = createSeededRandom(0x050ce11);
-  return makeTexture(
-    512,
-    (context, size) => {
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-five-ceiling", 512, (context, size) => {
       context.fillStyle = "#b99d75";
       context.fillRect(0, 0, size, size);
       context.strokeStyle = "rgba(45,24,14,0.34)";
@@ -152,7 +150,7 @@ export function createLevelFiveCeilingTexture() {
       context.strokeRect(18, 18, size - 36, size - 36);
       drawSpeckles(context, size, 1400, 0.08, "42,22,12", random);
       drawSpeckles(context, size, 180, 0.05, "244,210,150", random);
-    },
+    }),
     18,
     13,
   );
@@ -160,9 +158,8 @@ export function createLevelFiveCeilingTexture() {
 
 export function createLevelFiveBoilerWallTexture() {
   const random = createSeededRandom(0xb011e8);
-  return makeTexture(
-    512,
-    (context, size) => {
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-five-boiler-wall", 512, (context, size) => {
       context.fillStyle = "#46362e";
       context.fillRect(0, 0, size, size);
       for (let y = 0; y < size; y += 96) {
@@ -183,7 +180,7 @@ export function createLevelFiveBoilerWallTexture() {
       }
       drawSpeckles(context, size, 1600, 0.12, "8,5,4", random);
       drawSpeckles(context, size, 300, 0.06, "146,106,72", random);
-    },
+    }),
     5,
     2,
   );

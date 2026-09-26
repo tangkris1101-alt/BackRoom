@@ -2,6 +2,7 @@ import * as THREE from "three";
 import {
   createAlmondWaterModel,
   createDetectorModel,
+  createEmptyCanModel,
   createFlashlightModel,
   createFiresaltModel,
   createSilenceLiquidModel,
@@ -328,7 +329,9 @@ export function createWorldItemModel(id) {
   } else if (definition.shape === "badge") {
     group.add(new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.025, 0.34), material));
   } else if (definition.shape === "can") {
-    group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.38, 16), material));
+    // A modelled tin (rolled rims, label, levered lid) instead of a bare
+    // cylinder: the same silhouette, so spawn offsets and aim boxes still fit.
+    group.add(createEmptyCanModel());
   } else if (definition.shape === "spool") {
     const spool = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.25, 16), material);
     spool.rotation.z = Math.PI / 2;

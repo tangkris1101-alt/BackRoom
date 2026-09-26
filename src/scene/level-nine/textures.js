@@ -2,7 +2,7 @@ import * as THREE from "three";
 import asphaltDiffuseUrl from "../../assets/textures/level-eleven/asphalt-02/diffuse.jpg?url";
 import asphaltNormalUrl from "../../assets/textures/level-eleven/asphalt-02/normal.jpg?url";
 import asphaltArmUrl from "../../assets/textures/level-eleven/asphalt-02/arm.jpg?url";
-import { createSeededRandom, drawSpeckles, makeTexture } from "../common/texture-utils.js";
+import { createSeededRandom, drawSpeckles, paintCachedCanvas, wrapCanvasTexture } from "../common/texture-utils.js";
 
 const textureLoader = new THREE.TextureLoader();
 
@@ -16,7 +16,9 @@ function loadAsphaltTexture(url, color = false) {
 }
 
 function suburbTexture(base, repeatX, repeatY, seed, lineColor) {
-  return makeTexture(512, (context, size) => {
+  const cacheKey = ["level-nine-suburb", base, seed, lineColor].join("|");
+  return wrapCanvasTexture(
+    paintCachedCanvas(cacheKey, 512, (context, size) => {
     const random = createSeededRandom(seed);
     context.fillStyle = base;
     context.fillRect(0, 0, size, size);
@@ -32,7 +34,7 @@ function suburbTexture(base, repeatX, repeatY, seed, lineColor) {
       context.stroke();
     }
     context.globalAlpha = 1;
-  }, repeatX, repeatY);
+  }), repeatX, repeatY);
 }
 
 export function createLevelNineAsphaltMaps(detail = true) {

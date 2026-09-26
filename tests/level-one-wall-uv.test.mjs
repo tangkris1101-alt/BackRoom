@@ -28,22 +28,26 @@ test("Level 1 wall run merging preserves the span of every original wall group",
     const runs = collapseWallRuns(transforms, along, CELL_SIZE, WALL_THICKNESS);
     const span = runs.reduce((sum, run) => sum + (along === "x" ? run.width : run.depth), 0);
     const expectedSpan = transforms.length * CELL_SIZE;
+    // Convex corner ends stretch past the vertex, so a run may exceed the raw
+    // module span; it must never fall short of it.
+    const cornerTolerance = runs.length * (WALL_THICKNESS / 2 - 0.001) * 2 + spanTolerance;
     assert.ok(
-      Math.abs(span - expectedSpan) <= spanTolerance,
-      `${along}-run span ${span} must match ${expectedSpan} within ${spanTolerance}`,
+      span >= expectedSpan - spanTolerance && span <= expectedSpan + cornerTolerance,
+      `${along}-run span ${span} must stay within [${expectedSpan}, ${expectedSpan + cornerTolerance}]`,
     );
     assert.ok(runs.length <= transforms.length);
   }
 });
 
 test("adjacent Level 1 wall sections share continuous world-space paint UVs", () => {
+  const tileMeters = 6.4;
   const { wall, caps } = createWorldMappedWallGeometry([
     {
       width: 4,
       depth: 0.2,
       transforms: [new THREE.Vector3(0, 1.5, 0), new THREE.Vector3(4, 1.5, 0)],
     },
-  ], 3);
+  ], 3, { horizontalTileMeters: tileMeters });
   const positions = wall.getAttribute("position");
   const normals = wall.getAttribute("normal");
   const uvs = wall.getAttribute("uv");
@@ -55,10 +59,30 @@ test("adjacent Level 1 wall sections share continuous world-space paint UVs", ()
     if (Math.abs(positions.getX(index) - 6) < 1e-6) farUvs.push(uvs.getX(index));
   }
   assert.ok(seamUvs.length >= 2, "both wall modules must meet at the seam");
-  seamUvs.forEach((u) => assert.ok(Math.abs(u - 2 / 3.2) < 1e-6));
-  farUvs.forEach((u) => assert.ok(Math.abs(u - 6 / 3.2) < 1e-6));
+  seamUvs.forEach((u) => assert.ok(Math.abs(u - 2 / tileMeters) < 1e-6));
+  farUvs.forEach((u) => assert.ok(Math.abs(u - 6 / tileMeters) < 1e-6));
   assert.equal(positions.count, 48);
   assert.equal(caps.getAttribute("position").count, 24);
   wall.dispose();
   caps.dispose();
+});
+
+test("wall runs stretch past convex corners so perpendicular walls overlap", () => {
+  const { northSouth, eastWest } = collectLevelOneTransforms();
+  const extension = WALL_THICKNESS / 2 - 0.001;
+  const extended = [...northSouth, ...eastWest].filter((transform) => transform.scale);
+  assert.ok(extended.length > 0, "some wall ends must be stretched to fill a corner");
+  for (const transform of extended) {
+    const isAlongX = transform.scale.x !== 1;
+    const scale = isAlongX ? transform.scale.x : transform.scale.z;
+    assert.ok(scale > 1 && scale < 1 + extension, `unexpected corner stretch ${scale}`);
+    const other = isAlongX ? transform.scale.z : transform.scale.x;
+    assert.equal(other, 1, "only the run axis may stretch");
+  }
+  const runs = collapseWallRuns(northSouth, "x", CELL_SIZE, WALL_THICKNESS);
+  const span = runs.reduce((sum, run) => sum + run.width, 0);
+  const plainSpan = northSouth.length * CELL_SIZE;
+  assert.ok(span > plainSpan, "corner extension must widen the wall surface");
+  assert.ok(span - plainSpan <= runs.length * extension * 2 + 1e-6);
+
 });

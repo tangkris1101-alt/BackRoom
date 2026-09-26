@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { createSeededRandom, makeTexture, drawSpeckles, clampColor, tileNoise } from "../common/texture-utils.js";
+import { createSeededRandom, paintCachedCanvas, wrapCanvasTexture, drawSpeckles, clampColor, tileNoise } from "../common/texture-utils.js";
 import carpetNormalUrl from "../../assets/textures/level-twelve-thirteen/carpet-011/normal.jpg?url";
 import carpetRoughnessUrl from "../../assets/textures/level-twelve-thirteen/carpet-011/roughness.jpg?url";
 
@@ -8,9 +8,9 @@ const CARPET_DETAIL_REPEAT = [43, 31];
 
 export function createLevelFourCarpetTexture() {
   const random = createSeededRandom(0x4f4f04);
-  return makeTexture(
-    1024,
-    (context, size) => {
+  // Painted once per session: the pile is per-pixel work plus 43k strokes.
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-four-carpet", 1024, (context, size) => {
       const image = context.createImageData(size, size);
       const pixels = image.data;
       for (let y = 0; y < size; y += 1) {
@@ -45,7 +45,7 @@ export function createLevelFourCarpetTexture() {
       }
       drawSpeckles(context, size, 7000, 0.055, "36,42,38", random);
       drawSpeckles(context, size, 2500, 0.045, "210,214,200", random);
-    },
+    }),
     ...CARPET_COLOR_REPEAT,
   );
 }
@@ -71,9 +71,8 @@ export function createLevelFourCarpetMaps({ includeDetailMaps = true } = {}) {
 
 export function createLevelFourWallTexture() {
   const random = createSeededRandom(0x0ff1ce);
-  return makeTexture(
-    512,
-    (context, size) => {
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-four-wall", 512, (context, size) => {
       context.fillStyle = "#c9c4ae";
       context.fillRect(0, 0, size, size);
       for (let x = 0; x < size; x += 128) {
@@ -93,7 +92,7 @@ export function createLevelFourWallTexture() {
         context.fill();
       }
       drawSpeckles(context, size, 520, 0.08, "80,74,58", random);
-    },
+    }),
     2.6,
     1.15,
   );
@@ -101,9 +100,8 @@ export function createLevelFourWallTexture() {
 
 export function createLevelFourCeilingTexture() {
   const random = createSeededRandom(0xce1414);
-  return makeTexture(
-    512,
-    (context, size) => {
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-four-ceiling", 512, (context, size) => {
       context.fillStyle = "#d8d4bf";
       context.fillRect(0, 0, size, size);
       context.strokeStyle = "rgba(72,70,58,0.32)";
@@ -113,7 +111,7 @@ export function createLevelFourCeilingTexture() {
       context.lineWidth = 1.4;
       context.strokeRect(10, 10, size - 20, size - 20);
       drawSpeckles(context, size, 1700, 0.08, "92,88,72", random);
-    },
+    }),
     18,
     16,
   );

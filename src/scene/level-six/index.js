@@ -12,6 +12,7 @@ import {
   SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
   SUPER_ALMOND_WATER_RESPAWN_CHANCE,
 } from "../constants.js";
+import { wallSegmentTransform } from "../common/wall-corners.js";
 import { addInstancedBoxes, createStableLightState } from "../common/lighting.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import { createWideSignTexture } from "../common/textures.js";
@@ -53,17 +54,43 @@ function collectLevelSixWallTransforms() {
     for (let col = 0; col < LEVEL_SIX_COLS; col += 1) {
       if (!isLevelSixOpenCell(col, row)) continue;
       const center = levelSixCellCenter(col, row);
+      // Ends that poke into open space on both flanks are stretched past the
+      // corner so perpendicular wall boxes overlap (see wall-corners.js).
       if (!isLevelSixOpenCell(col, row - 1)) {
-        northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2));
+        northSouth.push(wallSegmentTransform(
+          center.x,
+          center.z - CELL_SIZE / 2,
+          "x",
+          isLevelSixOpenCell(col - 1, row) && isLevelSixOpenCell(col - 1, row - 1),
+          isLevelSixOpenCell(col + 1, row) && isLevelSixOpenCell(col + 1, row - 1),
+        ));
       }
       if (!isLevelSixOpenCell(col, row + 1)) {
-        northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2));
+        northSouth.push(wallSegmentTransform(
+          center.x,
+          center.z + CELL_SIZE / 2,
+          "x",
+          isLevelSixOpenCell(col - 1, row) && isLevelSixOpenCell(col - 1, row + 1),
+          isLevelSixOpenCell(col + 1, row) && isLevelSixOpenCell(col + 1, row + 1),
+        ));
       }
       if (!isLevelSixOpenCell(col - 1, row)) {
-        eastWest.push(new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+        eastWest.push(wallSegmentTransform(
+          center.x - CELL_SIZE / 2,
+          center.z,
+          "z",
+          isLevelSixOpenCell(col, row - 1) && isLevelSixOpenCell(col - 1, row - 1),
+          isLevelSixOpenCell(col, row + 1) && isLevelSixOpenCell(col - 1, row + 1),
+        ));
       }
       if (!isLevelSixOpenCell(col + 1, row)) {
-        eastWest.push(new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+        eastWest.push(wallSegmentTransform(
+          center.x + CELL_SIZE / 2,
+          center.z,
+          "z",
+          isLevelSixOpenCell(col, row - 1) && isLevelSixOpenCell(col + 1, row - 1),
+          isLevelSixOpenCell(col, row + 1) && isLevelSixOpenCell(col + 1, row + 1),
+        ));
       }
     }
   }

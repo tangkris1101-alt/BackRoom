@@ -76,6 +76,20 @@ const LEVEL_ONE_DOORWAY_WIDTH = 2.7;
 const LEVEL_ONE_DOORWAY_HEIGHT = 2.56;
 const LEVEL_ONE_EXIT_ACTIVITY_RADIUS = CELL_SIZE * 6;
 const LEVEL_ONE_ARRIVAL_ELEVATOR_ID = "level-one-arrival-elevator";
+// Painting a wider stretch of wall between repeats keeps the damp pattern from
+// reading as a regular stripe down the long halls.
+const LEVEL_ONE_WALL_TILE_METERS = 6.4;
+
+// Deterministic per-fixture variation. Rows of identical blobs would light the
+// slab and walls in even bands that read as printed seams; varying reach and
+// strength per fixture keeps the grid from being legible.
+function getFixtureVariation(fixture) {
+  const seedValue = Math.abs(Math.sin((fixture.x * 12.9898 + fixture.z * 78.233) * 0.017));
+  return {
+    radius: 0.82 + (seedValue % 0.37),
+    strength: 0.86 + ((seedValue * 7.31) % 0.28),
+  };
+}
 
 function createLevelOneLightField(fixturePositions, { includeTexture = true } = {}) {
   const size = 512;
@@ -83,10 +97,11 @@ function createLevelOneLightField(fixturePositions, { includeTexture = true } = 
   const height = LEVEL_ONE_ROWS * CELL_SIZE;
   const sample = (worldX, worldZ) => THREE.MathUtils.clamp(
     fixturePositions.reduce((total, fixture) => {
-      const radius = Math.max((24 / size) * width, fixture.range * 1.42);
+      const variation = getFixtureVariation(fixture);
+      const radius = Math.max((24 / size) * width, fixture.range * 1.42 * variation.radius);
       const distance = Math.hypot(fixture.x - worldX, fixture.z - worldZ);
       const falloff = THREE.MathUtils.clamp(1 - distance / radius, 0, 1);
-      const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.8, 0.42, 1);
+      const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.8, 0.42, 1) * variation.strength;
       return total + falloff * falloff * strength;
     }, 0),
     0,
@@ -104,13 +119,18 @@ function createLevelOneLightField(fixturePositions, { includeTexture = true } = 
   fixturePositions.forEach((fixture) => {
     const x = ((fixture.x - LEVEL_ONE_ORIGIN_X) / width) * size;
     const z = ((fixture.z - LEVEL_ONE_ORIGIN_Z) / height) * size;
-    const radius = Math.max(24, (fixture.range / width) * size * 1.42);
-    const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.8, 0.42, 1);
+    const variation = getFixtureVariation(fixture);
+    const radius = Math.max(24, (fixture.range / width) * size * 1.42 * variation.radius);
+    const strength = THREE.MathUtils.clamp(fixture.baseIntensity / 1.8, 0.42, 1) * variation.strength;
     const gradient = context.createRadialGradient(x, z, 0, x, z, radius);
-    gradient.addColorStop(0, `rgba(232, 237, 232, ${0.82 * strength})`);
-    gradient.addColorStop(0.36, `rgba(193, 202, 196, ${0.48 * strength})`);
-    gradient.addColorStop(0.78, `rgba(128, 138, 132, ${0.15 * strength})`);
-    gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+    // Sampled smooth falloff instead of a few hard stops: the old profile left
+    // a visible ring where the gradient knee sat, which banded every fixture
+    // row across the slab.
+    for (let stop = 0; stop <= 1.0001; stop += 0.125) {
+      const falloff = Math.pow(1 - stop, 1.9);
+      const tone = Math.round(128 + 104 * (1 - stop));
+      gradient.addColorStop(stop, `rgba(${tone}, ${tone + 5}, ${tone}, ${(1.2 * falloff * strength).toFixed(4)})`);
+    }
     context.fillStyle = gradient;
     context.fillRect(x - radius, z - radius, radius * 2, radius * 2);
   });
@@ -128,6 +148,8 @@ function applyLevelOneLightField(material, lightField, intensity) {
   if (!material?.isMeshStandardMaterial || material.userData.levelOneLightFieldIntensity != null) return;
   material.userData.levelOneLightFieldIntensity = intensity;
   material.onBeforeCompile = (shader) => {
+    // Kept on the material so the debug layer switch can dim the baked field.
+    material.userData.levelOneLightFieldUniforms = shader.uniforms;
     shader.uniforms.levelOneLightField = { value: lightField.texture };
     shader.uniforms.levelOneLightFieldBounds = {
       value: new THREE.Vector4(LEVEL_ONE_ORIGIN_X, LEVEL_ONE_ORIGIN_Z, lightField.width, lightField.height),
@@ -164,7 +186,10 @@ function applyLevelOneLightField(material, lightField, intensity) {
         #include <opaque_fragment>`,
       );
   };
-  material.customProgramCacheKey = () => `level-one-light-field-${intensity}`;
+  // The injected GLSL is identical for every intensity - only the uniform value
+  // differs, and uniforms live on the material. Baking the intensity into the
+  // cache key instead made three.js compile the same shader once per intensity.
+  material.customProgramCacheKey = () => "level-one-light-field";
 }
 
 function isFirstPersonViewModelMesh(object) {
@@ -222,7 +247,7 @@ function addLevelOneWorldMappedWalls(scene, northSouth, eastWest, materials) {
   const geometry = createWorldMappedWallGeometry([
     ...collapseWallRuns(northSouth, "x", CELL_SIZE, WALL_THICKNESS),
     ...collapseWallRuns(eastWest, "z", CELL_SIZE, WALL_THICKNESS),
-  ], WALL_HEIGHT);
+  ], WALL_HEIGHT, { horizontalTileMeters: LEVEL_ONE_WALL_TILE_METERS });
   scene.add(new THREE.Mesh(geometry.wall, materials[0]));
   scene.add(new THREE.Mesh(geometry.caps, materials[2]));
 }
@@ -369,7 +394,18 @@ export function createLevelOneScene({ initialState = null, entryContext = null }
     roughness: 0.94,
   });
   applyLevelOneLightFieldSafe(skirtingMaterial, lightField, 1.5);
-  const atFloor = (transforms) => transforms.map(({ x, z }) => new THREE.Vector3(x, 0.075, z));
+  // Corner-extended ends arrive as { position, scale }. The skirt has to carry
+  // the same stretch: a module-length skirt stops at the wall's old end, which
+  // leaves a notch at every convex corner and a bare strip at every wall end.
+  const atFloor = (transforms) => transforms.map((transform) => {
+    const position = transform.position ?? transform;
+    const scale = transform.scale;
+    if (!scale) return new THREE.Vector3(position.x, 0.075, position.z);
+    return {
+      position: new THREE.Vector3(position.x, 0.075, position.z),
+      scale: new THREE.Vector3(scale.x, 1, scale.z),
+    };
+  });
   const northSouthSkirting = new THREE.BoxGeometry(CELL_SIZE, 0.15, WALL_THICKNESS + 0.035);
   const eastWestSkirting = new THREE.BoxGeometry(WALL_THICKNESS + 0.035, 0.15, CELL_SIZE);
   addInstancedBoxes(scene, northSouthSkirting, skirtingMaterial, atFloor(northSouth));
@@ -663,6 +699,35 @@ export function createLevelOneScene({ initialState = null, entryContext = null }
     };
   }
 
+  // Debug layer switch (?debug=true): dim the baked fixture light field so the
+  // wall/ceiling shading can be compared against the lit result.
+  const lightFieldMaterials = [];
+  scene.traverse((object) => {
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.forEach((material) => {
+      if (material?.userData?.levelOneLightFieldIntensity != null && !lightFieldMaterials.includes(material)) {
+        lightFieldMaterials.push(material);
+      }
+    });
+  });
+  let lightFieldEnabled = true;
+  const debugToggles = lightField.texture ? [{
+    id: "light-field",
+    label: "烘焙光场",
+    get: () => lightFieldEnabled,
+    set: (enabled) => {
+      lightFieldEnabled = enabled;
+      lightFieldMaterials.forEach((material) => {
+        const uniforms = material.userData.levelOneLightFieldUniforms;
+        if (uniforms) {
+          uniforms.levelOneLightFieldIntensity.value = enabled
+            ? material.userData.levelOneLightFieldIntensity
+            : 0;
+        }
+      });
+    },
+  }] : [];
+
   return {
     level: 1,
     levelLabel: "LEVEL 1",
@@ -670,6 +735,7 @@ export function createLevelOneScene({ initialState = null, entryContext = null }
     get viewModelName() {
       return getViewModelName(viewModel);
     },
+    debugToggles,
     colliderCount: propColliders.length,
     nextLevel: 2,
     exitMode: "network",

@@ -354,14 +354,17 @@ export function createLevelZeroCarpetDetailMaps() {
           const u = x / size;
           const v = y / size;
           const mid = (tileNoise(x, y, size, 11, 8.7) - 0.5) * 16;
-          const fine = (bumpRandom() - 0.5) * 44;
+          // Fine grain stays a surface texture, not a corrugation: at 512px per
+          // 3m tile one texel is 5.9mm, so a +-22 height swing used to read as a
+          // 2.9cm wavelength ridge that the hemisphere light shaded as stripes.
+          const fine = (bumpRandom() - 0.5) * 14;
           // Same wobbled pile rows as the colour map, so the emboss does not
           // shade long straight bands even when the albedo stays subtle.
           const wobbleA = tileNoise(x, y, size, 9, 9.4) * 4.5;
           const wobbleB = tileNoise(x, y, size, 11, 3.8) * 3.5;
           const pile =
-            Math.sin(Math.PI * 2 * (u * 18 + v * 2 + wobbleA)) * 2 +
-            Math.sin(Math.PI * 2 * (u * 7 - v * 3 + wobbleB)) * 1.6;
+            Math.sin(Math.PI * 2 * (u * 18 + v * 2 + wobbleA)) * 0.7 +
+            Math.sin(Math.PI * 2 * (u * 7 - v * 3 + wobbleB)) * 0.5;
           const height = clampColor(128 + mid + fine + pile);
           data[i] = height;
           data[i + 1] = height;
@@ -387,7 +390,7 @@ export function createLevelZeroCarpetDetailMaps() {
         for (let x = 0; x < size; x += 1) {
           const i = (y * size + x) * 4;
           const mid = (tileNoise(x, y, size, 11, 8.7) - 0.5) * 14;
-          const fine = (roughRandom() - 0.5) * 10;
+          const fine = (roughRandom() - 0.5) * 5;
           const value = clampColor(245 + mid + fine);
           data[i] = value;
           data[i + 1] = value;

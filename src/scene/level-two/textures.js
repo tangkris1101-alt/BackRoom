@@ -1,10 +1,11 @@
-import { createSeededRandom, makeTexture, drawSpeckles, clampColor, tileNoise } from "../common/texture-utils.js";
+import { createSeededRandom, paintCachedCanvas, wrapCanvasTexture, drawSpeckles, clampColor, tileNoise } from "../common/texture-utils.js";
 
 export function createLevelTwoGrimyTexture(seed, repeatX, repeatY, base, rust = 1) {
   const random = createSeededRandom(seed);
-  return makeTexture(
-    512,
-    (context, size) => {
+  // Painted once per session: the pattern only depends on the arguments below.
+  const cacheKey = ["level-two-grimy", seed, base.join(","), rust].join("|");
+  return wrapCanvasTexture(
+    paintCachedCanvas(cacheKey, 512, (context, size) => {
       const image = context.createImageData(size, size);
       const data = image.data;
 
@@ -84,7 +85,7 @@ export function createLevelTwoGrimyTexture(seed, repeatX, repeatY, base, rust = 
 
       drawSpeckles(context, size, 980, 0.1, "13,12,9", random);
       drawSpeckles(context, size, 210, 0.08, "173,104,50", random);
-    },
+    }),
     repeatX,
     repeatY,
   );
@@ -92,9 +93,8 @@ export function createLevelTwoGrimyTexture(seed, repeatX, repeatY, base, rust = 
 
 export function createLevelTwoFloorTexture() {
   const random = createSeededRandom(0x2f2002);
-  return makeTexture(
-    512,
-    (context, size) => {
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-two-floor", 512, (context, size) => {
       context.fillStyle = "#726d5c";
       context.fillRect(0, 0, size, size);
 
@@ -145,7 +145,7 @@ export function createLevelTwoFloorTexture() {
 
       drawSpeckles(context, size, 1050, 0.1, "12,12,9", random);
       drawSpeckles(context, size, 360, 0.12, "153,92,43", random);
-    },
+    }),
     11,
     9,
   );
@@ -161,9 +161,8 @@ export function createLevelTwoCeilingTexture() {
 
 export function createLevelTwoMetalTexture(seed = 0x2f2005) {
   const random = createSeededRandom(seed);
-  return makeTexture(
-    256,
-    (context, size) => {
+  return wrapCanvasTexture(
+    paintCachedCanvas(["level-two-metal", seed].join("|"), 256, (context, size) => {
       const image = context.createImageData(size, size);
       const data = image.data;
       for (let y = 0; y < size; y += 1) {
@@ -189,7 +188,7 @@ export function createLevelTwoMetalTexture(seed = 0x2f2005) {
         context.lineTo(x + (random() - 0.5) * 11, y + 15 + random() * 70);
         context.stroke();
       }
-    },
+    }),
     1,
     1,
   );

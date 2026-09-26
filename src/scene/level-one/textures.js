@@ -1,4 +1,4 @@
-import { createSeededRandom, makeTexture, drawSpeckles, clampColor, tileNoise, smoothstep } from "../common/texture-utils.js";
+import { createSeededRandom, makeTexture, paintCachedCanvas, wrapCanvasTexture, drawSpeckles, clampColor, tileNoise, tileNoiseXY, smoothstep } from "../common/texture-utils.js";
 import * as THREE from "three";
 import concreteColorUrl from "../../assets/textures/concrete-floor-worn/diff.jpg?url";
 import concreteNormalUrl from "../../assets/textures/concrete-floor-worn/normal.jpg?url";
@@ -18,11 +18,35 @@ function dampMask(value, threshold) {
   return Math.max(0, value - threshold) / (1 - threshold);
 }
 
-export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, contrast = 1, { painted = false, grime = 0 } = {}) {
+export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, contrast = 1, {
+  painted = false,
+  grime = 0,
+  wearOctaves = [4, 15, 2],
+  blotchOctaves = [5, 13, 29],
+  blotchWeight = 0.7,
+  streakWeight = 0.7,
+  footWeight = 0.85,
+} = {}) {
   const random = createSeededRandom(seed);
-  return makeTexture(
-    512,
-    (context, size) => {
+  const [wearCoarse, wearMid, wearSettle] = wearOctaves;
+  const [octaveA, octaveB, octaveC] = blotchOctaves;
+  // Painting this pattern costs ~0.7s of per-pixel noise, and the result only
+  // depends on the parameters below, so it is painted once per session.
+  const cacheKey = [
+    "level-one-concrete",
+    seed,
+    base.join(","),
+    contrast,
+    painted ? "painted" : "raw",
+    grime,
+    wearOctaves.join(","),
+    blotchOctaves.join(","),
+    blotchWeight,
+    streakWeight,
+    footWeight,
+  ].join("|");
+  return wrapCanvasTexture(
+    paintCachedCanvas(cacheKey, 512, (context, size) => {
       const image = context.createImageData(size, size);
       const data = image.data;
 
@@ -32,23 +56,35 @@ export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, cont
         const foot = smoothstep(Math.min(1, Math.max(0, (vertical - 0.87) / 0.13)));
         for (let x = 0; x < size; x += 1) {
           const i = (y * size + x) * 4;
-          const broad = (tileNoise(x, y, size, 4, seed * 0.03) - 0.5) * (painted ? 8 : 24) * contrast;
-          const mid = (tileNoise(x, y, size, 15, seed * 0.07) - 0.5) * (painted ? 10 : 8) * contrast;
+          const broad = (tileNoise(x, y, size, wearCoarse, seed * 0.03) - 0.5) * (painted ? 8 : 24) * contrast;
+          const mid = (tileNoise(x, y, size, wearMid, seed * 0.07) - 0.5) * (painted ? 10 : 8) * contrast;
           const fine = (random() - 0.5) * (painted ? 9 : 5) * contrast;
-          const settling = Math.max(0, tileNoise(x, y, size, 2, seed * 0.11) - 0.62) * -5 * contrast;
+          const settling = Math.max(0, tileNoise(x, y, size, wearSettle, seed * 0.11) - 0.62) * -5 * contrast;
           const wear = broad + mid + fine + settling;
 
           let stain = 0;
           if (grime > 0) {
-            const blotch = dampMask(tileNoise(x, y, size, 3, seed * 0.05), 0.52);
-            const depth = 0.45 + dampMask(tileNoise(x, y, size, 8, seed * 0.09), 0.35) * 0.55;
-            // Streaks come in clusters of narrow and wide runs so the wall
-            // never reads as evenly spaced stripes.
-            const cluster = 0.25 + tileNoise(x, y * 0.1, size, 7, seed * 0.19) * 0.95;
-            const streak = dampMask(tileNoise(x, y * 0.35, size, 26, seed * 0.17), 0.55) * cluster * runDown;
-            const wideStreak = dampMask(tileNoise(x, y * 0.18, size, 9, seed * 0.21), 0.61) * 0.45 * runDown;
+            // Three coprime octaves plus a two-axis warp. A single blob size
+            // would place its features on its own grid and repeat at that
+            // spacing, which reads as a regular stripe along the wall.
+            const warpX = (tileNoise(x, y, size, 9, seed * 0.31) - 0.5) * 46;
+            const warpY = (tileNoise(x, y, size, 12, seed * 0.37) - 0.5) * 18;
+            const patch = tileNoise(x, y, size, octaveA, seed * 0.05) * 0.55
+              + tileNoise(x, y, size, octaveB, seed * 0.11) * 0.3
+              + tileNoise(x, y, size, octaveC, seed * 0.23) * 0.15;
+            const blotch = dampMask(patch, 0.47);
+            const depth = 0.4 + dampMask(tileNoise(x, y, size, octaveC, seed * 0.09), 0.3) * 0.6;
+            // Two octaves for the run coverage: a single blob size would space
+            // the damp runs evenly, which reads as a hooked stripe pattern.
+            const runMask = 0.35 + (tileNoise(x, y, size, octaveB, seed * 0.43) * 0.6
+              + tileNoise(x, y, size, octaveC, seed * 0.53) * 0.4) * 1.3;
+            const streak = dampMask(tileNoiseXY(x + warpX, y + warpY, size, 30, 3, seed * 0.17), 0.5) * runMask * runDown;
+            const wideStreak = dampMask(tileNoiseXY(x + warpX * 0.6, y + warpY, size, 11, 4, seed * 0.21), 0.55) * 0.5 * runDown;
             const footNoise = 0.55 + tileNoise(x, y, size, 30, seed * 0.23) * 0.45;
-            stain = Math.min(1.45, blotch * depth * 0.75 + (streak + wideStreak) * 0.72 + foot * footNoise * 0.85);
+            stain = Math.min(1.45,
+              blotch * depth * blotchWeight
+              + (streak + wideStreak) * streakWeight
+              + foot * footNoise * footWeight);
           }
 
           // Damp stains pull the blue channel down first so the grime reads as
@@ -75,7 +111,7 @@ export function createLevelOneConcreteTexture(seed, repeatX, repeatY, base, cont
 
       drawSpeckles(context, size, 420, 0.035, "45,47,45", random);
       drawSpeckles(context, size, 80, 0.02, "174,176,171", random);
-    },
+    }),
     repeatX,
     repeatY,
   );
@@ -108,7 +144,17 @@ export function createLevelOneWallTexture() {
 }
 
 export function createLevelOneCeilingTexture() {
-  const texture = createLevelOneConcreteTexture(0x1e1e12, 10, 7, CEILING_BASE, 0.8, { grime: 1.3 });
+  // The slab is a single huge plane seen mostly at grazing angles, so its
+  // paint needs fine, low-contrast, isotropic mottling: coarse patches would
+  // be stretched by perspective into long streaks that read as panel seams.
+  const texture = createLevelOneConcreteTexture(0x1e1e12, 30, 22, CEILING_BASE, 0.55, {
+    grime: 1,
+    wearOctaves: [11, 27, 6],
+    blotchOctaves: [7, 17, 37],
+    blotchWeight: 0.5,
+    streakWeight: 0,
+    footWeight: 0,
+  });
   texture.needsUpdate = true;
   return texture;
 }
@@ -123,15 +169,14 @@ function getLevelOneWallHeight(x, y, size, seed) {
   const fine = (tileNoise(x, y, size, 49, seed * 0.119) - 0.5) * 0.18;
   // The damp film sits slightly proud of the paint and holds a sheen, so it
   // also has to show up in the roughness and normal maps.
-  const stain = Math.max(0, tileNoise(x, y, size, 3, seed * 0.05) - 0.52) * 1.25;
+  const stain = Math.max(0, tileNoise(x, y, size, 4, seed * 0.05) - 0.5) * 1.25;
   return broad + paint + fine - stain;
 }
 
 function createLevelOneWallDetailTexture(seed, { mode = "normal" } = {}) {
   const size = 256;
-  const texture = makeTexture(
-    size,
-    (context) => {
+  const texture = wrapCanvasTexture(
+    paintCachedCanvas(`level-one-wall-detail|${seed}|${mode}`, size, (context) => {
       const image = context.createImageData(size, size);
       const data = image.data;
       for (let y = 0; y < size; y += 1) {
@@ -154,7 +199,7 @@ function createLevelOneWallDetailTexture(seed, { mode = "normal" } = {}) {
         }
       }
       context.putImageData(image, 0, 0);
-    },
+    }),
     1,
     1,
   );

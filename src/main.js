@@ -156,6 +156,10 @@ let documentReaderId = null;
 const buffList = document.querySelector("#buff-list");
 const entityMarkers = document.querySelector("#entity-markers");
 const debugExitMarkers = document.querySelector("#debug-exit-markers");
+const debugPanel = document.querySelector("#debug-panel");
+const debugPanelPosition = document.querySelector("#debug-panel-position");
+const debugPanelHeading = document.querySelector("#debug-panel-heading");
+const debugPanelToggles = document.querySelector("#debug-panel-toggles");
 const pauseOverlay = document.querySelector("#pause-overlay");
 const pauseTitle = document.querySelector("#pause-title");
 const pauseSubtitle = document.querySelector("#pause-subtitle");
@@ -524,7 +528,12 @@ const debugMode = new DebugMode({
   canvas,
   onSync(active) {
     controls?.setDebugUnlimitedStamina?.(active);
-    if (!active) clearDebugExitMarkers();
+    if (!active) {
+      clearDebugExitMarkers();
+      clearDebugPanel();
+    } else {
+      renderDebugPanel();
+    }
   },
 });
 
@@ -923,12 +932,24 @@ const ITEM_ICON_SVG = {
     <path d="M50 21 L50 80 M31 30 Q40 49 38 78 M69 30 Q60 49 62 78 M23 45 Q36 57 29 73 M77 45 Q64 57 71 73" fill="none" stroke="#a89177" stroke-width="2.5"/>
     <path d="M50 27 Q57 48 50 77 Q43 48 50 27" fill="#eee1c7" opacity="0.6"/>`,
 
+  // Matches the modelled tin: rolled rims, a levered-open lid with its pull
+  // tab, a printed label band and rust bleeding from both crimps.
   "empty-can": `
-    <path d="M31 24 Q50 16 69 24 L65 79 Q50 87 35 79 Z" fill="#7b8480" stroke="#28302d" stroke-width="3"/>
-    <ellipse cx="50" cy="24" rx="19" ry="7" fill="#b7c0b8" stroke="#28302d" stroke-width="2.5"/>
-    <ellipse cx="50" cy="24" rx="9" ry="3.5" fill="#333b38"/>
-    <path d="M34 37 Q50 43 66 37 M34 61 Q50 54 66 61" fill="none" stroke="#cfd6ce" stroke-width="2" opacity="0.55"/>
-    <path d="M39 29 L45 76 M57 29 L52 76" stroke="#4d5651" stroke-width="2" opacity="0.65"/>`,
+    <path d="M30 27 Q50 18 70 27 L66 78 Q50 87 34 78 Z" fill="#7b8480" stroke="#28302d" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M35 31 L38 76 Q42 79 47 80 L45 31 Z" fill="#c8d0c8" opacity="0.22"/>
+    <path d="M59 30 L62 76 Q57 80 52 80 L55 30 Z" fill="#2f3733" opacity="0.3"/>
+    <ellipse cx="50" cy="27" rx="20" ry="7.2" fill="#aeb7af" stroke="#28302d" stroke-width="2.5"/>
+    <ellipse cx="47" cy="28" rx="13.5" ry="4.6" fill="#202824"/>
+    <ellipse cx="54" cy="26.6" rx="12.4" ry="6.1" transform="rotate(-13 54 26.6)" fill="#c6cec5" stroke="#28302d" stroke-width="2"/>
+    <path d="M46 22.6 Q54 21 61 24" fill="none" stroke="#eef2ea" stroke-width="1.4" opacity="0.55"/>
+    <ellipse cx="58" cy="30.4" rx="4.6" ry="1.9" transform="rotate(-16 58 30.4)" fill="none" stroke="#6d7871" stroke-width="1.5"/>
+    <path d="M34 48 Q50 53 66 48 L65 66 Q50 71 35 66 Z" fill="#ddd6b4" stroke="#6f664e" stroke-width="1.6"/>
+    <path d="M34.6 50 Q50 55 65.4 50 L65.2 54 Q50 59 34.8 54 Z" fill="#4d5b3c"/>
+    <path d="M34.8 60.5 Q50 65.5 65.2 60.5 L65 64.5 Q50 69.5 35 64.5 Z" fill="#4d5b3c"/>
+    <path d="M41 57.4 L59 57.4" stroke="#454f33" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M31.5 33 Q35 36 32.5 40 M63 30 Q66 33 63 36" fill="none" stroke="#8a5527" stroke-width="2.2" opacity="0.5" stroke-linecap="round"/>
+    <path d="M37 70 Q43 73 49 71" fill="none" stroke="#8a5527" stroke-width="2.2" opacity="0.4" stroke-linecap="round"/>
+    <path d="M33.5 42 Q30 49 33 57" fill="none" stroke="#39413d" stroke-width="1.8" opacity="0.35"/>`,
 
   "concrete-chip": `
     <path d="M21 68 L31 29 L55 18 L79 37 L73 70 L52 84 L30 80 Z" fill="#83837a" stroke="#302f2a" stroke-width="3" stroke-linejoin="round"/>
@@ -2866,6 +2887,122 @@ function updateDebugExitMarkers() {
   );
 }
 
+const DEBUG_TOGGLE_LABELS = {
+  "debug-fill-light": { zh: "调试补光", en: "Debug fill light" },
+  "light-field-zones": { zh: "光场分区", en: "Light-field zones" },
+  "light-field": { zh: "烘焙光场", en: "Baked light field" },
+  shadows: { zh: "阴影", en: "Shadows" },
+};
+
+const DEBUG_HEADING_NAMES = {
+  zh: ["北", "东北", "东", "东南", "南", "西南", "西", "西北"],
+  en: ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
+};
+
+function getDebugToggles() {
+  const toggles = Array.isArray(world?.debugToggles) ? [...world.debugToggles] : [];
+  toggles.push({
+    id: "debug-fill-light",
+    label: "调试补光",
+    get: () => debugMode.areaLightEnabled,
+    set: (enabled) => debugMode.setAreaLightEnabled(enabled),
+  });
+  toggles.push({
+    id: "shadows",
+    get: () => renderer.shadowMap.enabled,
+    set: setShadowsEnabled,
+  });
+  return toggles;
+}
+
+function debugToggleLabel(toggle) {
+  const names = DEBUG_TOGGLE_LABELS[toggle.id];
+  if (!names) return toggle.label ?? toggle.id;
+  return currentLanguage === "en" ? names.en : names.zh;
+}
+
+function setShadowsEnabled(enabled) {
+  if (renderer.shadowMap.enabled === enabled) return;
+  renderer.shadowMap.enabled = enabled;
+  // Shadow support is compiled into each program, so the materials have to be
+  // rebuilt for the switch to take effect.
+  world?.scene?.traverse((object) => {
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.forEach((material) => {
+      if (material) material.needsUpdate = true;
+    });
+  });
+}
+
+function renderDebugPanel() {
+  if (!debugPanel || !debugPanelToggles) return;
+  if (!isDebugFeaturesActive()) {
+    clearDebugPanel();
+    return;
+  }
+  debugPanel.removeAttribute("hidden");
+  const toggles = getDebugToggles();
+  debugPanelToggles.replaceChildren(
+    ...toggles.map((toggle, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "debug-panel__toggle";
+      button.dataset.debugToggle = toggle.id;
+      button.setAttribute("aria-pressed", String(Boolean(toggle.get())));
+      const keyHint = document.createElement("small");
+      keyHint.textContent = `${index + 1} `;
+      button.append(keyHint, document.createTextNode(debugToggleLabel(toggle)));
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleDebugLayer(toggle.id);
+      });
+      return button;
+    }),
+  );
+}
+
+function clearDebugPanel() {
+  if (debugPanel) debugPanel.setAttribute("hidden", "");
+  debugPanelToggles?.replaceChildren();
+}
+
+function toggleDebugLayer(id) {
+  const toggle = getDebugToggles().find((entry) => entry.id === id);
+  if (!toggle) return false;
+  toggle.set(!toggle.get());
+  renderDebugPanel();
+  return true;
+}
+
+let debugReadoutTimer = 0;
+function updateDebugPanel(delta) {
+  if (!debugPanel || !isDebugFeaturesActive() || !world?.camera) return;
+  if (debugPanel.hasAttribute("hidden")) {
+    renderDebugPanel();
+    return;
+  }
+  const toggles = getDebugToggles();
+  const buttons = [...(debugPanelToggles?.children ?? [])];
+  if (buttons.length !== toggles.length
+    || buttons.some((button, index) => button.dataset.debugToggle !== toggles[index].id)) {
+    renderDebugPanel();
+  }
+  debugReadoutTimer -= delta;
+  if (debugReadoutTimer > 0) return;
+  debugReadoutTimer = 0.1;
+
+  const position = world.camera.position;
+  const heading = ((world.camera.rotation.y * 180) / Math.PI % 360 + 360) % 360;
+  const names = DEBUG_HEADING_NAMES[currentLanguage === "en" ? "en" : "zh"];
+  if (debugPanelPosition) {
+    debugPanelPosition.textContent = `X ${position.x.toFixed(1)} · Z ${position.z.toFixed(1)}`;
+  }
+  if (debugPanelHeading) {
+    debugPanelHeading.textContent = `H ${Math.round(heading)}° · ${names[Math.round(heading / 45) % 8]}`;
+  }
+}
+
 function startDetectorScan() {
   if (!detectorOwned || detectorActiveTimer > 0 || detectorCooldownTimer > 0) return;
   detectorActiveTimer = DETECTOR_SCAN_DURATION;
@@ -4106,6 +4243,7 @@ function animate(timestamp) {
   updateFlashlight(delta);
   updateDetector(delta, metrics);
   updateDebugExitMarkers();
+  updateDebugPanel(delta);
   if (shouldEnterExit(metrics) && !gameFailed && !exitComplete && !levelTransition) {
     const nextLevel = metrics.nextLevel ?? world.nextLevel;
     if (nextLevel !== null && nextLevel !== undefined) {
@@ -4223,6 +4361,15 @@ function onUseKeyDown(event) {
     event.preventDefault();
     if (!event.repeat) toggleDebugFeatures();
     return;
+  }
+  if (debugMode.queryEnabled && /^Digit[1-9]$/.test(event.code)) {
+    const index = Number(event.code.slice(5)) - 1;
+    const toggle = getDebugToggles()[index];
+    if (toggle && isDebugFeaturesActive()) {
+      event.preventDefault();
+      if (!event.repeat) toggleDebugLayer(toggle.id);
+      return;
+    }
   }
   if (event.code === "KeyF") {
     event.preventDefault();

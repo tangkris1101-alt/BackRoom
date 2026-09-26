@@ -1,4 +1,5 @@
 export { createAlmondWaterLabelTexture } from "./labels.js";
+export { createEmptyCanModel } from "./empty-can.js";
 export {
   createAlmondWaterModel,
   createAlmondWaterPickup,

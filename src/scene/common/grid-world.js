@@ -11,6 +11,7 @@ import {
 } from "../items/index.js";
 import { getFocusedItem, getPickupTarget, tryPickupItems } from "../entities/index.js";
 import { enableAoUv } from "./texture-utils.js";
+import { wallSegmentTransform } from "./wall-corners.js";
 
 export function collectGridWallTransforms({ cols, rows, isOpen, cellCenter }) {
   const northSouth = [];
@@ -19,10 +20,45 @@ export function collectGridWallTransforms({ cols, rows, isOpen, cellCenter }) {
     for (let col = 0; col < cols; col += 1) {
       if (!isOpen(col, row)) continue;
       const center = cellCenter(col, row);
-      if (!isOpen(col, row - 1)) northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z - CELL_SIZE / 2));
-      if (!isOpen(col, row + 1)) northSouth.push(new THREE.Vector3(center.x, WALL_HEIGHT / 2, center.z + CELL_SIZE / 2));
-      if (!isOpen(col - 1, row)) eastWest.push(new THREE.Vector3(center.x - CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
-      if (!isOpen(col + 1, row)) eastWest.push(new THREE.Vector3(center.x + CELL_SIZE / 2, WALL_HEIGHT / 2, center.z));
+      // Ends that poke into open space on both flanks are stretched past the
+      // corner so the perpendicular wall boxes overlap instead of leaving a
+      // half-thickness notch (see wall-corners.js).
+      if (!isOpen(col, row - 1)) {
+        northSouth.push(wallSegmentTransform(
+          center.x,
+          center.z - CELL_SIZE / 2,
+          "x",
+          isOpen(col - 1, row) && isOpen(col - 1, row - 1),
+          isOpen(col + 1, row) && isOpen(col + 1, row - 1),
+        ));
+      }
+      if (!isOpen(col, row + 1)) {
+        northSouth.push(wallSegmentTransform(
+          center.x,
+          center.z + CELL_SIZE / 2,
+          "x",
+          isOpen(col - 1, row) && isOpen(col - 1, row + 1),
+          isOpen(col + 1, row) && isOpen(col + 1, row + 1),
+        ));
+      }
+      if (!isOpen(col - 1, row)) {
+        eastWest.push(wallSegmentTransform(
+          center.x - CELL_SIZE / 2,
+          center.z,
+          "z",
+          isOpen(col, row - 1) && isOpen(col - 1, row - 1),
+          isOpen(col, row + 1) && isOpen(col - 1, row + 1),
+        ));
+      }
+      if (!isOpen(col + 1, row)) {
+        eastWest.push(wallSegmentTransform(
+          center.x + CELL_SIZE / 2,
+          center.z,
+          "z",
+          isOpen(col, row - 1) && isOpen(col + 1, row - 1),
+          isOpen(col, row + 1) && isOpen(col + 1, row + 1),
+        ));
+      }
     }
   }
   return { northSouth, eastWest };

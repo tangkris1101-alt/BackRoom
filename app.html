@@ -423,6 +423,14 @@
       <button id="door-prompt" class="door-prompt" type="button" aria-live="polite" aria-label="Open" hidden>[F] 打开</button>
       <div id="entity-markers" class="entity-markers" aria-hidden="true"></div>
       <div id="debug-exit-markers" class="debug-exit-markers" aria-hidden="true"></div>
+      <aside id="debug-panel" class="debug-panel" aria-label="Debug readout" hidden>
+        <div class="debug-panel__readout">
+          <span id="debug-panel-position">X 0.0 · Z 0.0</span>
+          <span id="debug-panel-heading">H 0° · 北</span>
+        </div>
+        <div id="debug-panel-toggles" class="debug-panel__toggles"></div>
+        <p id="debug-panel-hint" class="debug-panel__hint">数字键切换图层 · X 关闭调试</p>
+      </aside>
       <div id="item-info" class="item-info" aria-live="polite" hidden>
         <span id="item-info-name">ALMOND WATER</span>
         <strong id="item-info-effect">+50 STAMINA BOOST</strong>

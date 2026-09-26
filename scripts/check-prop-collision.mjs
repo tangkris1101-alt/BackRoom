@@ -238,4 +238,37 @@ assert.match(
   "the crate that used to share a cell with the supply shelf must stay moved aside",
 );
 
+// Level 1's wall signs hang on real faces. A sign authored in a solid cell, or
+// in a cell with no solid neighbour, used to end up buried half a wall deep or
+// floating in mid air: `getLevelOneTargetMount` answers with the cell's north
+// edge when nothing around it is solid, and a plate placed straight on the
+// mount line sits inside the 22cm wall box centred there.
+const levelOneProps = await import("../src/scene/level-one/props.js");
+const levelOneSignLayout = await import("../src/scene/level-one/layout.js");
+const cellIsOpen = (col, row) => levelOneSignLayout.isLevelOneOpenCell(col, row);
+assert.ok(levelOneProps.LEVEL_ONE_WALL_SIGNS.length > 0, "level 1 still models its wall signs");
+for (const sign of levelOneProps.LEVEL_ONE_WALL_SIGNS) {
+  assert.equal(
+    cellIsOpen(sign.col, sign.row),
+    true,
+    `the ${sign.text} sign must be authored in a walkable cell, not inside a wall`,
+  );
+  const center = levelOneSignLayout.levelOneCellCenter(sign.col, sign.row);
+  const mount = levelOneProps.resolveLevelOneSignMount(center);
+  const facingX = Math.sin(mount.rotation);
+  const facingZ = Math.cos(mount.rotation);
+  const behind = levelOneSignLayout.levelOneWorldToCell(mount.x - facingX * 0.18, mount.z - facingZ * 0.18);
+  const ahead = levelOneSignLayout.levelOneWorldToCell(mount.x + facingX * 0.18, mount.z + facingZ * 0.18);
+  assert.equal(
+    cellIsOpen(behind.col, behind.row),
+    false,
+    `the ${sign.text} sign must hang against a solid wall`,
+  );
+  assert.equal(
+    cellIsOpen(ahead.col, ahead.row),
+    true,
+    `the ${sign.text} sign must face open space instead of the inside of a wall`,
+  );
+}
+
 console.log("prop collision checks passed");
