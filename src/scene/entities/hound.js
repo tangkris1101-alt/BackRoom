@@ -120,7 +120,7 @@ export function createHoundEntity(
 
   const stunLight = new THREE.PointLight(0xd9eeff, 0, 3.6, 2.1);
   stunLight.position.set(0, 0.86, 0);
-  stunLight.visible = false;
+  // Left visible for the hound's whole life; stun state only drives intensity.
   group.add(stunLight);
 
   let contact = false;
@@ -237,7 +237,7 @@ export function createHoundEntity(
           : Math.abs(Math.sin(elapsed * 5.4)) * 0.032;
       group.rotation.z = isDormant ? Math.sin(elapsed * 0.9) * 0.012 : stunned ? Math.sin(elapsed * 27) * 0.085 : gait;
       group.rotation.x = attack.phase === "windup" ? -0.12 : attack.phase === "hit" ? 0.16 : 0;
-      stunLight.visible = stunned;
+      // Stun glow is intensity-only; a visibility toggle would recompile shaders.
       stunLight.intensity = stunned ? 1.15 + Math.sin(elapsed * 18) * 0.35 : 0;
 
       return {
