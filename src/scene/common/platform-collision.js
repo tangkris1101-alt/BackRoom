@@ -4,6 +4,13 @@ export const LANDING_TOLERANCE = 0.18;
 // player could land from 0.18m below a platform top but remained blocked by
 // its side until 0.04m below it, which made a close jump feel like a pushback.
 export const SIDE_CLEARANCE = LANDING_TOLERANCE;
+// Standing support only needs the body's centre over the platform, with a small
+// inset so a body brushing the edge cannot flicker between supported and
+// falling. Requiring the whole capsule inside instead (the original rule) threw
+// the support away the instant the capsule began to overhang an edge, and since
+// the same collider only blocks sideways below its top, the player dropped
+// straight down through the tabletop and was then pushed off it.
+export const LEDGE_SUPPORT_INSET = 0.05;
 
 export function colliderBlocksAtFeetHeight(collider, feetY = 0) {
   if (collider?.active === false) return false;
@@ -19,19 +26,21 @@ export function getPlatformFloorHeight({
   x,
   z,
   feetY = Infinity,
-  radius = DEFAULT_PLAYER_RADIUS,
+  supportInset = LEDGE_SUPPORT_INSET,
   baseFloorHeight = 0,
 }) {
   let floorHeight = baseFloorHeight;
   for (const collider of colliders) {
     if (collider?.active === false || !Number.isFinite(collider?.topY)) continue;
-    const fullyOnTop =
-      x - radius >= collider.minX &&
-      x + radius <= collider.maxX &&
-      z - radius >= collider.minZ &&
-      z + radius <= collider.maxZ;
+    // Platforms at or below the floor already found cannot raise it.
+    if (collider.topY <= floorHeight) continue;
+    const bodyOnTop =
+      x - supportInset >= collider.minX &&
+      x + supportInset <= collider.maxX &&
+      z - supportInset >= collider.minZ &&
+      z + supportInset <= collider.maxZ;
     const canLandOnPlatform = feetY >= collider.topY - LANDING_TOLERANCE;
-    if (fullyOnTop && canLandOnPlatform) floorHeight = Math.max(floorHeight, collider.topY);
+    if (bodyOnTop && canLandOnPlatform) floorHeight = collider.topY;
   }
   return floorHeight;
 }

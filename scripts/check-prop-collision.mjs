@@ -61,14 +61,33 @@ assert.equal(
   "the backrest must keep blocking once the seat is already cleared",
 );
 
-// The chair is too small to be fully supported by the player's radius, so it
-// stays an obstacle instead of an unintended standing surface.
-assert.equal(getPlatformFloorHeight({ colliders, x: chairX, z: chairZ, feetY: seat.topY }), 0);
+// Standing support follows the body's centre, so the chair seat is a real
+// standing surface now, while the table still refuses a landing from below the
+// landing tolerance. Both matter for the table-edge bug: the same centre-over-
+// platform rule is what keeps a player who overhangs a tabletop from dropping
+// through it.
+assert.equal(
+  getPlatformFloorHeight({ colliders, x: chairX, z: chairZ, feetY: seat.topY }),
+  seat.topY,
+  "the chair seat is a standing surface for a centred body",
+);
 assert.equal(getPlatformFloorHeight({ colliders, x: tableX, z: tableZ, feetY: table.topY }), table.topY);
 assert.equal(
   getPlatformFloorHeight({ colliders, x: tableX, z: tableZ, feetY: table.topY - LANDING_TOLERANCE - 1e-3 }),
   0,
   "the table must not become a landing surface below the landing tolerance",
+);
+// Level 0's rooms exist to be walked on: a body hanging over the tabletop edge
+// must keep its footing instead of falling through the table.
+assert.equal(
+  getPlatformFloorHeight({ colliders, x: table.maxX - 0.1, z: tableZ, feetY: table.topY }),
+  table.topY,
+  "a body overhanging the documentation tabletop keeps its footing",
+);
+assert.equal(
+  getPlatformFloorHeight({ colliders, x: table.maxX + 0.2, z: tableZ, feetY: table.topY }),
+  0,
+  "support must end once the body's centre leaves the tabletop",
 );
 
 const escaped = resolvePlatformOverlap({ colliders, x: chairX, z: chairZ, feetY: 0 });

@@ -256,6 +256,46 @@
       }
     }
 
+    // Walking off a tabletop used to end support the moment the capsule began
+    // to overhang, so the player sank through the table and slid to the floor.
+    // Drive the real controls off the edge and measure what the body does.
+    function edgeWalkTest(world, tableMesh, { frames = 150 } = {}) {
+      const box = new THREE.Box3().setFromObject(tableMesh);
+      const startX = box.min.x + 0.35;
+      const startZ = (box.min.z + box.max.z) / 2;
+      // The drawn box includes the paper stack lying on the tabletop, so the
+      // walking surface comes from the collision query, not from box.max.y.
+      const topY = world.getFloorHeight(startX, startZ, box.max.y);
+      const controls = new FirstPersonControls({
+        camera: world.camera,
+        canvas: stubCanvas(),
+        isWalkable: world.isWalkable,
+        getFloorHeight: world.getFloorHeight,
+        resolvePosition: world.resolvePosition,
+        spawn: { x: startX, z: startZ, yaw: -Math.PI / 2 },
+      });
+      controls.relocate({ x: startX, z: startZ, yaw: -Math.PI / 2 });
+      controls.bodyY = topY + controls.eyeHeight;
+      controls.camera.position.y = controls.bodyY;
+      controls.onKeyDown({ code: "KeyW", preventDefault() {} });
+      let supportLostDepth = null;
+      let belowTopFrames = 0;
+      let endX = startX;
+      for (let index = 0; index < frames; index += 1) {
+        controls.update(1 / 60);
+        const feet = controls.bodyY - controls.eyeHeight;
+        const x = controls.camera.position.x;
+        const inside = x > box.min.x && x < box.max.x;
+        if (supportLostDepth === null && controls.groundY < topY + controls.eyeHeight - 0.01) {
+          supportLostDepth = inside ? Math.min(box.max.x - x, x - box.min.x) : 0;
+        }
+        if (feet < topY - 0.02 && inside) belowTopFrames += 1;
+        endX = x;
+      }
+      controls.onKeyUp({ code: "KeyW", preventDefault() {} });
+      return { topY, box, supportLostDepth, belowTopFrames, endX, feet: controls.bodyY - controls.eyeHeight };
+    }
+
     // Level 0's headline bug: walking straight at the chair used to pass
     // through it. Drive the real controls and check where the player stops.
     function walkTest(world, { startX, startZ, yaw, frames = 150 }) {
@@ -349,6 +389,24 @@
         if (chair) checkModelFootprint(world, [chair], 0, "L0 椅子整个占地");
         const table = world.scene.getObjectByName("level-zero-room-table-1");
         if (table) checkModelFootprint(world, [table], 0, "L0 房间桌整个占地");
+        if (table) {
+          const edge = edgeWalkTest(world, table);
+          record(
+            edge.supportLostDepth !== null && edge.supportLostDepth <= 0.06,
+            "L0 走到桌面边缘不会提前失去支撑",
+            `失去支撑时身体中心仍在桌面内 ${edge.supportLostDepth?.toFixed(3)}m（旧实现为 0.28m）`,
+          );
+          record(
+            edge.belowTopFrames === 0,
+            "L0 桌面边缘不再向下穿模",
+            `落到桌面以下且仍在桌面上方的帧数 ${edge.belowTopFrames}（旧实现为 3 帧）`,
+          );
+          record(
+            edge.feet <= 0.001 && edge.endX > edge.box.max.x,
+            "L0 走出边缘后正常落到地面并离开桌面",
+            `落点 x=${edge.endX.toFixed(2)} 脚高 ${edge.feet.toFixed(3)}`,
+          );
+        }
 
         const blockedWalk = walkTest(world, { startX: 80.5, startZ: 60.78, yaw: -Math.PI / 2 });
         record(

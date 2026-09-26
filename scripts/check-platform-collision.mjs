@@ -43,10 +43,23 @@ assert.equal(
   0,
   "player cannot step up from the side",
 );
+// Standing support follows the body's centre, not the whole 0.36m capsule.
+// Requiring full containment used to end support the moment the capsule began
+// to overhang, which dropped the player through the tabletop and then off it.
 assert.equal(
   getPlatformFloorHeight({ colliders: [table], x: 1.05, z: 0, feetY: 1 }),
+  0.88,
+  "a player standing near the tabletop edge is still supported",
+);
+assert.equal(
+  getPlatformFloorHeight({ colliders: [table], x: 0.78, z: 0, feetY: 1 }),
+  0.88,
+  "a body overhanging the edge keeps its footing",
+);
+assert.equal(
+  getPlatformFloorHeight({ colliders: [table], x: 1.24, z: 0, feetY: 1 }),
   0,
-  "a player only lands when fully supported by the tabletop",
+  "support ends once the body's centre passes the tabletop edge",
 );
 
 console.log("platform collision checks passed");
