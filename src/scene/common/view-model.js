@@ -5,6 +5,7 @@ import relaxedLeftArmUrl from "../../assets/models/fps-arm-para-relaxed-baked.bi
 import relaxedRightArmUrl from "../../assets/models/fps-arm-para-right-relaxed-baked.bin?url";
 import { SHOW_FIRST_PERSON_VIEW_MODEL } from "../constants.js";
 import { createWorldItemModel, getWorldItemDefinition } from "./world-items.js";
+import { attachPlayerBody, describePlayerBody, updateFirstPersonPlayerBody } from "./player-body.js";
 import armAnchors from "../../assets/models/fps-arm-anchors.json";
 
 const VIEW_MODEL_NAME = "BAKED RIGGED FPS HAZMAT ARMS";
@@ -291,6 +292,15 @@ export function attachFirstPersonViewModel(camera) {
   viewModel.userData.fillLight = fillLight;
   camera.add(viewModel);
   // The hands' key light is not a scene light: see viewModelLighting above.
+  // Levels that drive it (Level 1, for its baked light field) set it every
+  // frame; a level that does not must not inherit the previous level's value,
+  // or the sleeves stay blown out pale in the next level down.
+  viewModelLighting.keyIntensity.value = 0;
+
+  // The body is a camera child as well, but it is driven back into world space
+  // every frame - see player-body.js. Building it here, before the level bakes
+  // its fixture light field, is what lets the warehouses light it like a prop.
+  viewModel.userData.body = attachPlayerBody(camera);
 
   loadRelaxedArmGeometries().then((relaxedGeometries) => {
     const arms = createBakedHazmatArms(relaxedGeometries);
@@ -468,6 +478,7 @@ export function getViewModelName(viewModel) {
 
 export function updateFirstPersonHazmatViewModel(viewModel, elapsed) {
   if (!viewModel) return;
+  updateFirstPersonPlayerBody(viewModel, elapsed);
   const motion = viewModel.parent?.userData.firstPersonMotion;
   const walkAmount = THREE.MathUtils.clamp(motion?.walkBobStrength ?? 0, 0, 1);
   const stridePhase = Number.isFinite(motion?.walkCycle) ? motion.walkCycle : 0;

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>绝缘线圈（电线卷）模型验收</title>
+  <style>
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111; color:#fff; font:14px system-ui,sans-serif; }
+    canvas { display:block; width:100%; height:100%; }
+    .controls { position:fixed; left:20px; top:20px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 12px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
+    button { background:#e8dfb5; color:#182016; border:0; border-radius:4px; padding:8px 13px; cursor:pointer; font-weight:600; }
+    button.is-active { background:#8fbf7a; }
+    #status { min-width:420px; flex:1; line-height:1.45; }
+    .icon-strip { position:fixed; left:20px; bottom:20px; display:flex; gap:14px; align-items:flex-end; padding:12px 14px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
+    .icon-slot { background:#23262c; border:1px solid #3a3e46; border-radius:10px; }
+    .icon-slot svg { width:100%; height:100%; display:block; }
+    .icon-slot.i32 { width:32px; height:32px; }
+    .icon-slot.i56 { width:56px; height:56px; }
+    .icon-slot.i96 { width:96px; height:96px; }
+    .icon-slot.i160 { width:160px; height:160px; }
+    #icon-status { max-width:300px; font-size:12px; line-height:1.5; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button id="three-quarter">三分之四视角</button>
+    <button id="label">标签面</button>
+    <button id="winding">线圈与上層</button>
+    <button id="lead">剥皮引线端</button>
+    <button id="spawn">Level 2 出生摆位</button>
+    <button id="legacy">旧模型对照</button>
+    <button id="capture">纯画面截图</button>
+    <span id="status">正在加载…</span>
+  </div>
+  <div class="icon-strip">
+    <div class="icon-slot i32"><svg viewBox="0 0 100 100" data-spool-icon></svg></div>
+    <div class="icon-slot i56"><svg viewBox="0 0 100 100" data-spool-icon></svg></div>
+    <div class="icon-slot i96"><svg viewBox="0 0 100 100" data-spool-icon></svg></div>
+    <div class="icon-slot i160"><svg viewBox="0 0 100 100" data-spool-icon></svg></div>
+    <span id="icon-status">图标：读取中…</span>
+  </div>
+  <script type="module">
+    import * as THREE from "three";
+    import { createWireSpoolModel } from "/src/scene/items/wire-spool.js";
+    import { createWorldItemManager, createWorldItemModel } from "/src/scene/common/world-items.js";
+
+    // 图标直接取自 main.js 的真实字符串，避免验收页里再抄一份走样。
+    const iconStatus = document.getElementById("icon-status");
+    fetch("/src/main.js")
+      .then((response) => response.text())
+      .then((source) => {
+        const match = source.match(/"wire-spool":\s*`([\s\S]*?)`/);
+        if (!match) {
+          iconStatus.textContent = "图标：未在 main.js 中找到 wire-spool 图标";
+          return;
+        }
+        document.querySelectorAll("[data-spool-icon]").forEach((svg) => {
+          svg.innerHTML = match[1];
+        });
+        iconStatus.textContent = `图标：取自 src/main.js（${match[1].trim().length} 字符，未改动）`;
+      })
+      .catch((error) => {
+        iconStatus.textContent = `图标读取失败：${error?.message ?? error}`;
+      });
+
+    const status = document.getElementById("status");
+    document.getElementById("capture").addEventListener("click", () => {
+      document.querySelector(".controls").style.display = "none";
+    });
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    document.body.append(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x2b322c);
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 60);
+
+    scene.add(new THREE.HemisphereLight(0xdfe8dc, 0x2c332c, 1.05));
+    const key = new THREE.DirectionalLight(0xfff3dc, 2.0);
+    key.position.set(1.4, 2.4, 1.6);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xbcd0c4, 0.75);
+    fill.position.set(-1.6, 0.9, -1.2);
+    scene.add(fill);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x5c635c, roughness: 0.95 }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
+
+    // 关卡摆位：y=0.26（轮缘半径 0.25 的落地高度）、rotation=1.1、tiltZ=0.05，
+    // 与 Level 2 装饰物数据一致。
+    const model = createWireSpoolModel();
+    model.position.set(0, 0.26, 0);
+    model.rotation.set(0, 1.1, 0.05);
+    scene.add(model);
+
+    // 旧模型对照：被替换掉的那颗 16 段圆柱，用同样的摆位。
+    const legacy = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.25, 0.25, 0.25, 16),
+      new THREE.MeshStandardMaterial({ color: 0xb15d32, roughness: 0.78, metalness: 0.05 }),
+    );
+    legacy.rotation.z = Math.PI / 2;
+    legacy.position.copy(model.position);
+    legacy.rotation.y = model.rotation.y;
+    legacy.rotation.z = Math.PI / 2 + model.rotation.z;
+    legacy.visible = false;
+    scene.add(legacy);
+
+    // 丢弃路径（manager.drop 走 grounded → getFloorOffset 的 0.26）另放一个。
+    const manager = createWorldItemManager(scene, []);
+    manager.drop("wire-spool", new THREE.Vector3(-0.86, 1.4, 0.42), 0.6);
+
+    // 手持路径用的是同一个工厂。
+    const held = createWorldItemModel("wire-spool");
+    held.position.set(0.86, 0.26, -0.5);
+    held.rotation.set(0.18, -0.3, -0.18);
+    held.scale.multiplyScalar(0.78);
+    scene.add(held);
+
+    let meshes = 0;
+    let triangles = 0;
+    model.traverse((object) => {
+      if (!object.isMesh) return;
+      meshes += 1;
+      const geometry = object.geometry;
+      triangles += (geometry.index ? geometry.index.count : geometry.attributes.position.count) / 3;
+    });
+    // 尺寸要按未施加出生旋转的模型量，否则读数会被旋转撑大。
+    const savedRotation = model.rotation.clone();
+    model.rotation.set(0, 0, 0);
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const lowest = box.min.y;
+    model.rotation.copy(savedRotation);
+    model.updateMatrixWorld(true);
+
+    const views = {
+      "three-quarter": { pos: [0.66, 0.52, 0.78], look: [0, 0.26, 0], label: "三分之四视角 · 法兰/线圈/标签/引线" },
+      label: { pos: [0.86, 0.32, 0.1], look: [0, 0.26, 0], label: "标签面 · M.E.G. SUPPLY LINE 印刷贴纸" },
+      winding: { pos: [0.36, 0.46, 0.44], look: [0.02, 0.27, 0.02], label: "线圈与上层 · 密绕 13 圈 + 半解开的 4 圈" },
+      lead: { pos: [0.62, 0.28, 0.58], look: [0.16, 0.06, 0.2], label: "剥皮引线端 · 脆化绝缘层与裸铜芯" },
+      spawn: { pos: [1.15, 1.05, 1.25], look: [0, 0.24, 0.06], label: "Level 2 出生摆位 · 含丢弃件与手持件" },
+    };
+    function applyView(name) {
+      const view = views[name];
+      camera.position.set(...view.pos);
+      camera.lookAt(...view.look);
+      camera.updateMatrixWorld();
+      status.textContent =
+        `${view.label} | 网格=${meshes} 三角形=${Math.round(triangles)} ` +
+        `尺寸=${size.x.toFixed(2)}×${size.z.toFixed(2)}×高${size.y.toFixed(2)}m 最低点=${lowest.toFixed(3)}m`;
+    }
+    for (const name of Object.keys(views)) {
+      document.getElementById(name).addEventListener("click", () => {
+        document.getElementById("legacy").classList.remove("is-active");
+        model.visible = true;
+        legacy.visible = false;
+        applyView(name);
+      });
+    }
+    document.getElementById("legacy").addEventListener("click", () => {
+      model.visible = false;
+      legacy.visible = true;
+      document.getElementById("legacy").classList.add("is-active");
+      camera.position.set(0.66, 0.52, 0.78);
+      camera.lookAt(0, 0.26, 0);
+      camera.updateMatrixWorld();
+      status.textContent = "旧模型对照 · 被替换掉的 16 段圆柱（网格=1 三角形=96）";
+    });
+    applyView(new URLSearchParams(location.search).get("view") ?? "three-quarter");
+    const params = new URLSearchParams(location.search);
+    if (params.get("legacy") === "1") {
+      document.getElementById("legacy").click();
+    }
+    // 纯画面截图同样支持 ?capture=1，便于脚本抓验收图。
+    if (params.get("capture") === "1") {
+      document.querySelector(".controls").style.display = "none";
+      document.querySelector(".icon-strip").style.display = "none";
+    }
+
+    function render() {
+      renderer.render(scene, camera);
+      requestAnimationFrame(render);
+    }
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight);
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+    }
+    addEventListener("resize", resize);
+    resize();
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>

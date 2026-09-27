@@ -31,7 +31,10 @@ import {
   LEVEL_THREE_ORIGIN_Z,
   LEVEL_THREE_DARK_ZONES,
   LEVEL_THREE_BAR_POSITIONS,
+  LEVEL_THREE_ELEVATOR_CELLS,
+  isLevelThreeElevatorCell,
   isLevelThreeOpenCell,
+  getLevelThreeTargetMount,
   levelThreeCellCenter,
   levelThreeWorldToCell,
   countLevelThreeOpenNeighbors,
@@ -51,6 +54,7 @@ import {
   addLevelThreeNotebookPapers,
   addLevelThreeMural,
   addLevelThreePurpificationSpots,
+  addLevelThreeArrivalManifold,
   addLevelThreeAssemblyLineEquipment,
   addLevelThreeBoilerRoomPipe,
 } from "./props.js";
@@ -86,11 +90,17 @@ import {
 const LEVEL_THREE_HOUND_SPEED = 1.83;
 const LEVEL_THREE_AMBUSH_HOUND_SPEED = 1.83;
 
-export function createLevelThreeScene({ initialState = null } = {}) {
+export function createLevelThreeScene({ initialState = null, entryContext = null } = {}) {
   const scene = new THREE.Scene();
   const FOG_COLOR = 0x242620;
   scene.background = new THREE.Color(FOG_COLOR);
   scene.fog = new THREE.FogExp2(FOG_COLOR, 0.017);
+
+  // Level 2 has no door into Level 3 any more: its exit is the thermal noclip at
+  // the end of the pipe gallery, so the wanderer arrives here through the
+  // manifold at the back of the entry stub and is still cooling down.
+  const arrivedThroughPipes =
+    entryContext?.type === "route" && entryContext.sourceLevel === 2;
 
   const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 78);
   const spawnCell = levelThreeCellCenter(3, 3);
@@ -98,7 +108,9 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const spawn = {
     x: spawnCell.x,
     z: spawnCell.z,
-    yaw: -Math.PI * 0.34,
+    // Facing down the stub, into the station. The pipe arrival shares the pose,
+    // so the manifold is behind the player on the first turn.
+    yaw: arrivedThroughPipes ? Math.PI : -Math.PI * 0.34,
   };
   camera.position.set(spawn.x, 1.62, spawn.z);
   camera.rotation.order = "YXZ";
@@ -116,16 +128,18 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
+  // Entity walkability, not the player's: a save written while an entity stood
+  // in a doorway is snapped out of the exit cell on load.
   const entityInitial = snapEntityStates(
     Array.isArray(initialState?.entities) ? initialState.entities : [],
-    isWalkable,
+    isEntityWalkable,
   );
   const savedBacteriaStates = entityInitial.filter((entity) => entity.type === "bacteria");
 
   const { northSouth, eastWest, fixturePositions } = collectLevelTransforms({
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
-    isCellOpen: isLevelThreeOpenCell,
+    isCellOpen: isExitFreeCell,
     getCellCenter: levelThreeCellCenter,
     countOpenNeighbors: countLevelThreeOpenNeighbors,
     darkZones: LEVEL_THREE_DARK_ZONES,
@@ -219,10 +233,11 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   addLevelThreeNotebookPapers(scene);
   addLevelThreeMural(scene);
   addLevelThreePurpificationSpots(scene);
+  const arrivalPuffs = addLevelThreeArrivalManifold(scene);
   const almondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
-    isCellOpen: isLevelThreeOpenCell,
+    isCellOpen: isExitFreeCell,
     getCellCenter: levelThreeCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
@@ -231,7 +246,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const superAlmondWater = createAlmondWaterPickup(scene, {
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
-    isCellOpen: isLevelThreeOpenCell,
+    isCellOpen: isExitFreeCell,
     getCellCenter: levelThreeCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
@@ -245,7 +260,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const flashlight = createFlashlightPickup(scene, {
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
-    isCellOpen: isLevelThreeOpenCell,
+    isCellOpen: isExitFreeCell,
     getCellCenter: levelThreeCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
@@ -254,7 +269,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const detector = createDetectorPickup(scene, {
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
-    isCellOpen: isLevelThreeOpenCell,
+    isCellOpen: isExitFreeCell,
     getCellCenter: levelThreeCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
@@ -263,7 +278,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const compass = createCompassPickup(scene, {
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
-    isCellOpen: isLevelThreeOpenCell,
+    isCellOpen: isExitFreeCell,
     getCellCenter: levelThreeCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
@@ -272,7 +287,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const silenceLiquid = createSilenceLiquidPickup(scene, {
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
-    isCellOpen: isLevelThreeOpenCell,
+    isCellOpen: isExitFreeCell,
     getCellCenter: levelThreeCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
@@ -281,7 +296,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const firesalt = createFiresaltPickup(scene, {
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
-    isCellOpen: isLevelThreeOpenCell,
+    isCellOpen: isExitFreeCell,
     getCellCenter: levelThreeCellCenter,
     avoidPositions: [spawnCell, targetPosition],
     blockedAabbs: propColliders,
@@ -298,9 +313,31 @@ export function createLevelThreeScene({ initialState = null } = {}) {
       initialState: interactionInitial["level-three-generator"] ?? null,
     }),
   ];
+  // Both exits are wall mounts, so the doorway faces the room instead of the
+  // wall behind it: the office car rides the south wall of the big hall, the
+  // hotel service car the west wall of the Boiler Room.
+  const elevatorMounts = LEVEL_THREE_ELEVATOR_CELLS.map((cell) =>
+    getLevelThreeTargetMount(levelThreeCellCenter(cell.col, cell.row)),
+  );
   const routes = [
-    { id: "level-three-elevator-level-four", targetLevel: 4, targetLabel: "LEVEL 4", label: "OFFICE", kind: "elevator", position: targetPosition, rotation: 0 },
-    { id: "level-three-elevator-level-five", targetLevel: 5, targetLabel: "LEVEL 5", label: "HOTEL", kind: "elevator", position: levelThreeCellCenter(15, 18), rotation: Math.PI },
+    {
+      id: "level-three-elevator-level-four",
+      targetLevel: 4,
+      targetLabel: "LEVEL 4",
+      label: "OFFICE",
+      kind: "elevator",
+      position: { x: elevatorMounts[0].x, z: elevatorMounts[0].z },
+      rotation: elevatorMounts[0].rotation,
+    },
+    {
+      id: "level-three-elevator-level-five",
+      targetLevel: 5,
+      targetLabel: "LEVEL 5",
+      label: "HOTEL",
+      kind: "elevator",
+      position: { x: elevatorMounts[1].x, z: elevatorMounts[1].z },
+      rotation: elevatorMounts[1].rotation,
+    },
   ];
   // Door colliders join the prop list that isWalkable / getFloorHeight /
   // resolvePosition already walk. Every pickup above was placed before this
@@ -309,7 +346,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const bacteriaSpawns = pickBacteriaSpawnPositions({
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
-    isCellOpen: isLevelThreeOpenCell,
+    isCellOpen: isExitFreeCell,
     getCellCenter: levelThreeCellCenter,
     targetPosition,
     spawnPosition: spawnCell,
@@ -318,12 +355,12 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const bacteria = bacteriaSpawns.map((spawnPosition, index) =>
     createBacteriaEntity(scene, {
       spawnPosition,
-      isWalkable,
+      isWalkable: isEntityWalkable,
       speed: 1.48,
       initialState: savedBacteriaStates[index] ?? null,
       cols: LEVEL_THREE_COLS,
       rows: LEVEL_THREE_ROWS,
-      isCellOpen: isLevelThreeOpenCell,
+      isCellOpen: isExitFreeCell,
       worldToCell: levelThreeWorldToCell,
       cellCenter: levelThreeCellCenter,
     }),
@@ -333,19 +370,19 @@ export function createLevelThreeScene({ initialState = null } = {}) {
       chooseBacteriaSpawn({
         cols: LEVEL_THREE_COLS,
         rows: LEVEL_THREE_ROWS,
-        isCellOpen: isLevelThreeOpenCell,
+        isCellOpen: isExitFreeCell,
         getCellCenter: levelThreeCellCenter,
         targetPosition,
         spawnPosition: spawnCell,
         avoidPositions: bacteriaSpawns,
         minSeparation: CELL_SIZE * 7,
       })[0] ?? targetPosition,
-    isWalkable,
+    isWalkable: isEntityWalkable,
     speed: LEVEL_THREE_HOUND_SPEED,
     initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
     cols: LEVEL_THREE_COLS,
     rows: LEVEL_THREE_ROWS,
-    isCellOpen: isLevelThreeOpenCell,
+    isCellOpen: isExitFreeCell,
     worldToCell: levelThreeWorldToCell,
     cellCenter: levelThreeCellCenter,
   });
@@ -355,7 +392,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
   const ambushHound = ambushPosition
     ? createHoundEntity(scene, {
         spawnPosition: ambushPosition,
-        isWalkable,
+        isWalkable: isEntityWalkable,
         speed: LEVEL_THREE_AMBUSH_HOUND_SPEED,
         id: "ambush-hound",
         type: "ambush-hound",
@@ -364,13 +401,15 @@ export function createLevelThreeScene({ initialState = null } = {}) {
         initialState: entityInitial.find((entity) => entity.type === "ambush-hound") ?? null,
         cols: LEVEL_THREE_COLS,
         rows: LEVEL_THREE_ROWS,
-        isCellOpen: isLevelThreeOpenCell,
+        isCellOpen: isExitFreeCell,
         worldToCell: levelThreeWorldToCell,
         cellCenter: levelThreeCellCenter,
       })
     : null;
 
   let objectiveReached = Boolean(objectiveInitial.reached);
+  // 1 right after an arrival through Level 2's pipe gallery, decaying to 0.
+  let heatResidue = arrivedThroughPipes ? 1 : 0;
 
   function isWalkable(x, z, radius = 0.36, feetY = 0) {
     const corner = radius * 0.72;
@@ -403,6 +442,20 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     return resolvePlatformOverlap({ colliders: propColliders, x, z, radius, feetY, maxCorrection });
   }
 
+  // The exit cells are kept clear. Entities and items both ask for this instead
+  // of the raw open-cell test, so the search grid, the step test and the item
+  // candidates all agree that a doorway is not a place to stand.
+  function isExitFreeCell(col, row) {
+    if (!isLevelThreeOpenCell(col, row)) return false;
+    return !isLevelThreeElevatorCell(col, row);
+  }
+
+  function isEntityWalkable(x, z, radius = 0.36, feetY = 0) {
+    const cell = levelThreeWorldToCell(x, z);
+    if (isLevelThreeElevatorCell(cell.col, cell.row)) return false;
+    return isWalkable(x, z, radius, feetY);
+  }
+
   function update(delta, elapsed, playerPosition, effects = {}) {
     let lightTotal = 0;
     fixtures.forEach((fixture, index) => {
@@ -414,6 +467,17 @@ export function createLevelThreeScene({ initialState = null } = {}) {
       updateFixturePointLight(fixture, pulse, 1.02);
       lightTotal += pulse;
     });
+
+    arrivalPuffs.forEach((puff) => {
+      const wave = 0.5 + Math.sin(elapsed * 1.35 + (puff.userData.phase ?? 0)) * 0.5;
+      puff.scale.set(0.8 + wave * 0.5, 0.7 + wave * 0.7, 0.8 + wave * 0.5);
+      puff.position.y = 1.34 + wave * 0.14;
+      puff.material.opacity = 0.03 + wave * 0.05;
+    });
+
+    // Residue heat: the wanderer who just crawled out of Level 2's gallery
+    // spends the first seconds of the station cooling down.
+    heatResidue = Math.max(0, heatResidue - delta / 2.6);
 
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.42;
     const enteredExit = exitNetwork.update(delta, playerPosition);
@@ -463,11 +527,18 @@ export function createLevelThreeScene({ initialState = null } = {}) {
         flashlight.inspect(camera),
       ),
       lightState: updateLightState(delta, flicker),
-      statusText: objectiveReached
-        ? "BREAKER OPEN"
-        : exitDistance < 8
-          ? "BREAKER TRACE"
-          : "ELECTRICAL STATION",
+      screenEffects: {
+        vignette: heatResidue * 0.45,
+        desaturation: heatResidue * 0.2,
+        static: heatResidue * 0.24,
+      },
+      statusText: heatResidue > 0.12
+        ? "COOLING DOWN"
+        : objectiveReached
+          ? "BREAKER OPEN"
+          : exitDistance < 8
+            ? "BREAKER TRACE"
+            : "ELECTRICAL STATION",
     };
   }
 
@@ -493,7 +564,7 @@ export function createLevelThreeScene({ initialState = null } = {}) {
     getFloorHeight,
     resolvePosition,
     decorativeItemSpawns: [
-      { id: "wire-spool", position: { ...levelThreeCellCenter(8, 9), y: 0.2 }, rotation: 0.9, tiltZ: 0.18 },
+      { id: "wire-spool", position: { ...levelThreeCellCenter(8, 9), y: 0.26 }, rotation: 0.9, tiltZ: 0.05 },
     ],
     update,
     getPickupTarget: (playerPosition) =>

@@ -1,4 +1,13 @@
-import { createSeededRandom, paintCachedCanvas, wrapCanvasTexture, drawSpeckles, clampColor, tileNoise } from "../common/texture-utils.js";
+import {
+  createSeededRandom,
+  paintCachedCanvas,
+  wrapCanvasTexture,
+  drawSpeckles,
+  clampColor,
+  tileHash,
+  tileNoise,
+  tileNoiseXY,
+} from "../common/texture-utils.js";
 
 export function createLevelTwoGrimyTexture(seed, repeatX, repeatY, base, rust = 1) {
   const random = createSeededRandom(seed);
@@ -91,60 +100,141 @@ export function createLevelTwoGrimyTexture(seed, repeatX, repeatY, base, rust = 
   );
 }
 
+// One slab seam: a narrow, wobbling groove with the dirt that piles up beside
+// it. Real joints are rarely a clean line — stretches of the groove are packed
+// flush with dust, others are chipped or filled, so both are modelled per pixel
+// instead of being stroked as a uniform rule.
+function buildLevelTwoJointProfiles(size, bases, seed) {
+  const sines = [0, 1, 2, 3];
+  return bases.map((base, index) => {
+    const offset = new Float32Array(size);
+    const openness = new Float32Array(size);
+    const packed = new Float32Array(size);
+    const chipped = new Float32Array(size);
+    for (let i = 0; i < size; i += 1) {
+      const t = (i / size) * Math.PI * 2;
+      offset[i] = sines.reduce(
+        (total, harmonic) =>
+          total +
+          Math.sin(t * (harmonic + 1) * 2 + index * 1.7 + harmonic * 2.3) *
+            (1.15 / (harmonic + 1)),
+        0,
+      );
+      openness[i] = 0.42 + 0.58 * tileNoiseXY(0, i, size, 1, 5, seed + index * 13);
+      packed[i] = tileNoiseXY(0, i, size, 1, 41, seed + 91 + index * 13);
+      chipped[i] = tileNoiseXY(0, i, size, 1, 17, seed + 57 + index * 13);
+    }
+    return { base, offset, openness, packed, chipped };
+  });
+}
+
 export function createLevelTwoFloorTexture() {
   const random = createSeededRandom(0x2f2002);
   return wrapCanvasTexture(
     paintCachedCanvas("level-two-floor", 512, (context, size) => {
-      context.fillStyle = "#726d5c";
-      context.fillRect(0, 0, size, size);
+      const image = context.createImageData(size, size);
+      const data = image.data;
+      // Slab seams sit ~6 m apart in world space (the level floor is 200 m x 112 m
+      // across 11 x 9 repeats), which is why the seams are drawn sparsely and
+      // slightly out of step between the two axes.
+      const jointsX = buildLevelTwoJointProfiles(size, [0, size / 3, (size * 2) / 3], 0x2f21);
+      const jointsZ = buildLevelTwoJointProfiles(size, [0, size / 2], 0x2f35);
+      const jointSums = { grime: 0, dust: 0 };
+
+      function accumulateJoint(joints, along, across, chipField) {
+        for (const joint of joints) {
+          const center = joint.base + joint.offset[along];
+          const raw = Math.abs(across - center);
+          const distance = Math.min(raw, size - raw);
+          const band = Math.max(0, 1 - distance / 6.2);
+          if (band <= 0) continue;
+          const groove = Math.max(0, 1 - distance / 1.75);
+          const pack = joint.packed[along] > 0.54 ? 1 : 0;
+          const grooveStrength =
+            groove * groove * 0.24 * joint.openness[along] * (pack ? 0.4 : 1);
+          const bandStrength = band * band * 0.09 * (0.6 + 0.4 * joint.openness[along]);
+          const chip =
+            joint.chipped[along] > 0.6 && chipField > 0.68 && band > 0.45
+              ? (chipField - 0.68) * 0.8
+              : 0;
+          jointSums.grime += grooveStrength + bandStrength + chip;
+          jointSums.dust += groove * 0.85 * (pack ? 0.5 : 0);
+        }
+      }
 
       for (let y = 0; y < size; y += 1) {
-        const shade = 0.05 + Math.sin(y * 0.08) * 0.018;
-        context.fillStyle = `rgba(0,0,0,${shade})`;
-        context.fillRect(0, y, size, 1);
-      }
+        for (let x = 0; x < size; x += 1) {
+          const i = (y * size + x) * 4;
+          const patch = (tileNoiseXY(x, y, size, 3, 4, 0x2f41) - 0.5) * 34;
+          const mottle = (tileNoiseXY(x, y, size, 9, 7, 0x2f42) - 0.5) * 24;
+          const fine = (tileNoiseXY(x, y, size, 26, 26, 0x2f43) - 0.5) * 9;
+          const grain = (random() - 0.5) * 6;
+          const base = 114 + patch + mottle + fine + grain;
 
-      context.strokeStyle = "rgba(15,14,10,0.46)";
-      context.lineWidth = 2;
-      for (let x = 0; x <= size; x += 64) {
-        context.beginPath();
-        context.moveTo(x, 0);
-        context.lineTo(x, size);
-        context.stroke();
-      }
-      for (let y = 0; y <= size; y += 96) {
-        context.beginPath();
-        context.moveTo(0, y);
-        context.lineTo(size, y);
-        context.stroke();
-      }
+          const chipField = tileNoiseXY(x, y, size, 34, 34, 0x2f44);
+          jointSums.grime = 0;
+          jointSums.dust = 0;
+          accumulateJoint(jointsX, y, x, chipField);
+          accumulateJoint(jointsZ, x, y, chipField);
 
-      context.globalAlpha = 0.2;
-      context.strokeStyle = "#b15d2d";
-      context.lineWidth = 2.2;
-      for (let i = 0; i < 16; i += 1) {
-        const y = random() * size;
-        context.beginPath();
-        context.moveTo(random() * 80, y);
-        context.lineTo(size - random() * 80, y + (random() - 0.5) * 18);
-        context.stroke();
-      }
-      context.globalAlpha = 1;
-
-      context.globalAlpha = 0.22;
-      context.fillStyle = "#0d0d0a";
-      for (let y = 44; y < size; y += 132) {
-        context.fillRect(0, y, size, 18);
-        context.fillStyle = "#7b4a24";
-        for (let x = 0; x < size; x += 42) {
-          context.fillRect(x, y, 22, 18);
+          const jitter = (tileHash(x, y, 0x2f45) - 0.5) * 0.1;
+          const shade = Math.min(1.25, Math.max(0, jointSums.grime + jitter * 0.5));
+          const lift = Math.min(0.7, jointSums.dust) * (0.5 + patch / 90);
+          data[i] = clampColor(base - shade * 88 + lift * 13);
+          data[i + 1] = clampColor(base - shade * 82 + lift * 12);
+          data[i + 2] = clampColor(base - shade * 70 + lift * 10);
+          data[i + 3] = 255;
         }
-        context.fillStyle = "#0d0d0a";
+      }
+      context.putImageData(image, 0, 0);
+
+      // Oil and rust pooling: soft, edge-free blooms instead of the straight
+      // streaks that used to run the full width of every repeat. Kept large and
+      // low-contrast so the shape does not read as a stamp repeating every tile.
+      for (let i = 0; i < 8; i += 1) {
+        const x = size * (0.12 + random() * 0.76);
+        const y = size * (0.12 + random() * 0.76);
+        const rx = 34 + random() * 86;
+        const ry = rx * (0.4 + random() * 0.7);
+        const warm = random() > 0.62;
+        const stain = context.createRadialGradient(0, 0, 0, 0, 0, 1);
+        stain.addColorStop(0, warm ? "rgba(92,52,24,0.2)" : "rgba(18,16,11,0.26)");
+        stain.addColorStop(0.5, warm ? "rgba(92,52,24,0.09)" : "rgba(18,16,11,0.12)");
+        stain.addColorStop(1, "rgba(0,0,0,0)");
+        context.save();
+        context.translate(x, y);
+        context.scale(rx, ry);
+        context.fillStyle = stain;
+        context.beginPath();
+        context.arc(0, 0, 1, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+      }
+
+      // Hairline cracks, kept clear of the tile border so the repeat never
+      // shows a crack that stops dead at a seam.
+      context.globalAlpha = 0.24;
+      context.strokeStyle = "#131109";
+      context.lineWidth = 1;
+      for (let i = 0; i < 4; i += 1) {
+        let x = size * (0.16 + random() * 0.68);
+        let y = size * (0.16 + random() * 0.68);
+        let angle = random() * Math.PI * 2;
+        context.beginPath();
+        context.moveTo(x, y);
+        const steps = 6 + Math.floor(random() * 7);
+        for (let step = 0; step < steps; step += 1) {
+          angle += (random() - 0.5) * 1.5;
+          x = Math.max(size * 0.08, Math.min(size * 0.92, x + Math.cos(angle) * (10 + random() * 24)));
+          y = Math.max(size * 0.08, Math.min(size * 0.92, y + Math.sin(angle) * (10 + random() * 24)));
+          context.lineTo(x, y);
+        }
+        context.stroke();
       }
       context.globalAlpha = 1;
 
-      drawSpeckles(context, size, 1050, 0.1, "12,12,9", random);
-      drawSpeckles(context, size, 360, 0.12, "153,92,43", random);
+      drawSpeckles(context, size, 980, 0.11, "12,12,9", random);
+      drawSpeckles(context, size, 340, 0.1, "156,132,104", random);
     }),
     11,
     9,

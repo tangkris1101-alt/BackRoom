@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Level 3 管道到达检查</title>
+  <style>
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111; color:#fff; font:13px system-ui,sans-serif; }
+    canvas { display:block; width:100%; height:100%; }
+    #hud { position:fixed; left:10px; top:10px; padding:4px 8px; background:#000000cc; border:1px solid #ffffff33; border-radius:4px; white-space:pre; }
+  </style>
+</head>
+<body>
+  <div id="hud"></div>
+  <script type="module">
+    import * as THREE from "three";
+    import { createLevelThreeScene } from "/src/scene/level-three/index.js";
+    import { levelThreeCellCenter } from "/src/scene/level-three/layout.js";
+
+    // Mirrors the transition main.js performs when Level 2's thermal noclip
+    // fires: an entry context naming the level the player came from.
+    //   ?from=2&view=spawn     what the arrival looks like
+    //   ?from=2&view=manifold  turning around to the pipe they came out of
+    const query = new URLSearchParams(location.search);
+    const from = Number(query.get("from") ?? 2);
+    const view = query.get("view") ?? "spawn";
+    // ?col=&row=&yaw=&pitch=&eye= aims the camera anywhere else in the level.
+    const number = (key, fallback) => (query.has(key) ? Number(query.get(key)) : fallback);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(1);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = Number(new URLSearchParams(location.search).get("exposure") ?? 0.9);
+    document.body.append(renderer.domElement);
+
+    const world = createLevelThreeScene({
+      entryContext: { type: "route", sourceLevel: from },
+    });
+    const camera = world.camera;
+    camera.fov = 72;
+    const aiming = query.has("col") || query.has("row") || query.has("yaw");
+    const cell = levelThreeCellCenter(number("col", 3), number("row", 3));
+    const yaw = aiming
+      ? (number("yaw", 0) * Math.PI) / 180
+      : (view === "manifold" ? world.spawn.yaw + Math.PI : world.spawn.yaw);
+    const pitch = aiming ? (number("pitch", 0) * Math.PI) / 180 : -0.06;
+    if (aiming) camera.position.set(cell.x, number("eye", 1.62), cell.z);
+    camera.rotation.set(pitch, yaw, 0, "YXZ");
+    camera.updateMatrixWorld(true);
+
+    document.getElementById("hud").textContent =
+      `view ${view}  from Level ${from}\nspawn yaw ${(world.spawn.yaw * 180 / Math.PI).toFixed(0)}°`;
+
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight);
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+    }
+    addEventListener("resize", resize);
+    resize();
+
+    let previousFrame = performance.now();
+    let elapsed = 0;
+    const playerPosition = new THREE.Vector3(camera.position.x, 0, camera.position.z);
+    function frame(now) {
+      const delta = Math.min((now - previousFrame) / 1000, 0.05);
+      previousFrame = now;
+      elapsed += delta;
+      world.update(delta, elapsed, playerPosition);
+      renderer.render(world.scene, camera);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    setTimeout(() => { document.body.dataset.ready = "true"; }, 900);
+    window.__world = world;
+  </script>
+</body>
+</html>

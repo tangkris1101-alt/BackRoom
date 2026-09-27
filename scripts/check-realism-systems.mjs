@@ -173,6 +173,17 @@ assert.match(renderingSource, /PCFShadowMap/);
 assert.match(renderingSource, /canReducePixelRatio/);
 assert.match(renderingSource, /object\.isPointLight/);
 assert.doesNotMatch(renderingSource, /isPointLight[^\n]+castShadow\s*=\s*true/);
+// renderer.render() runs more than once per frame inside the composer, and each
+// call redraws every caster from the same light transforms, so the shadow map is
+// refreshed once per frame from render() rather than once per scene pass.
+assert.match(renderingSource, /renderer\.shadowMap\.autoUpdate = false/);
+assert.match(renderingSource, /renderer\.shadowMap\.needsUpdate = true/);
+// Anti-aliasing has to live in the composer: every geometry pass draws into an
+// off screen target, so the renderer's own flag only reaches the low quality
+// path that draws straight to the canvas.
+assert.match(renderingSource, /composer\.addPass\(fxaaPass\)/);
+assert.match(renderingSource, /fxaaPass\.material\.uniforms\.resolution\.value\.set/);
+assert.match(mainSource, /antialias: !getGraphicsProfile\(\)\.gtao/);
 assert.match(levelZeroSceneSource, /collectReachableLightCells/);
 // Light must stay confined to cells reachable from its fixture; the confinement
 // runs through a feathered mask (destination-in) so it never prints straight

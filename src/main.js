@@ -2,12 +2,13 @@ import * as THREE from "three";
 import "./styles.css";
 import { createAmbientHum } from "./ambient-audio.js";
 import { getGraphicsProfile } from "./graphics-profile.js";
-import { createRenderingPipeline } from "./rendering-pipeline.js";
+import { ADAPTIVE_RESTORE_MARGIN_FPS, ADAPTIVE_SHED_MARGIN_FPS, createRenderingPipeline } from "./rendering-pipeline.js";
 import { resolveFootstepSurface } from "./scene/common/footstep-surfaces.js";
 import { DebugMode, DEBUG_PLAYABLE_LEVELS } from "./debug-mode.js";
 import { createBackroomsScene, getBackroomsLevelInfo, preloadLevelScene } from "./scene.js";
 import { FirstPersonControls } from "./first-person-controls.js";
 import { syncFirstPersonHeldItem, preloadFirstPersonViewModel, primeFirstPersonViewModelPoses } from "./scene/common/view-model.js";
+import { PLAYER_BODY_NAME, describePlayerBody } from "./scene/common/player-body.js";
 import { disposeWorldResources } from "./scene/common/dispose.js";
 import { createFiresaltEffectManager } from "./scene/items/index.js";
 import {
@@ -243,8 +244,15 @@ let openingPending = false;
 let changelogReturnFocus = null;
 
 const FPS_SAMPLE_INTERVAL = 0.75;
-const FPS_LOW_THRESHOLD = 54;
-const FPS_HIGH_THRESHOLD = 58;
+// Frame-rate steps for the render resolution. They live here rather than in the
+// pipeline because this is the file that owns renderPixelRatio; the two margins
+// that decide what counts as "missing the target" are shared with it.
+const PIXEL_RATIO_STEP_DOWN = 0.1;
+const PIXEL_RATIO_STEP_UP = 0.05;
+const PIXEL_RATIO_RAISE_SAMPLES = 8;
+const PIXEL_RATIO_COOLDOWN_SAMPLES = 12;
+let pixelRatioSteady = 0;
+let pixelRatioCooldown = 0;
 const OVERLAY_FADE_MS = 460;
 const LEVEL_TRANSITION_FADE_IN_MS = 720;
 const LEVEL_TRANSITION_HOLD_MS = 360;
@@ -508,7 +516,11 @@ hideGameplayUi();
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  antialias: true,
+  // Only the low quality path draws the scene straight to this canvas, where
+  // multisampling is the only anti-aliasing there is. Once the composer runs
+  // the canvas receives a single full screen quad and the pipeline supplies its
+  // own edge pass, so the multisampled backbuffer would only cost memory.
+  antialias: !getGraphicsProfile().gtao,
   powerPreference: "high-performance",
 });
 let graphicsProfile = getGraphicsProfile();
@@ -1760,6 +1772,11 @@ function handleLevelPickerOptionActivation(event) {
   chooseLevel(Number(option.dataset.level));
 }
 
+function syncPlayerBodyDataset() {
+  const body = world?.camera?.getObjectByName?.(PLAYER_BODY_NAME) ?? null;
+  canvas.dataset.playerBody = describePlayerBody(body);
+}
+
 function syncLevelHud() {
   syncLevelPicker();
   if (loadingLevelLabel) loadingLevelLabel.textContent = world.levelLabel;
@@ -1768,6 +1785,7 @@ function syncLevelHud() {
   canvas.dataset.levelName = world.levelName;
   canvas.dataset.levelDanger = getLevelDangerInfo(world.level).danger;
   canvas.dataset.viewModel = world.viewModelName ?? "NONE";
+  syncPlayerBodyDataset();
   canvas.dataset.colliderCount = String(world.colliderCount ?? 0);
   canvas.dataset.reachedLevels = [...reachedLevels].sort((a, b) => a - b).join(",");
   canvas.dataset.completedLevels = [...completedLevels].sort((a, b) => a - b).join(",");
@@ -2485,14 +2503,14 @@ function setRenderPixelRatio(nextPixelRatio) {
   resize();
 }
 
-function getAdaptiveFpsThresholds() {
-  if (frameRateLimit > 0 && frameRateLimit < FPS_HIGH_THRESHOLD) {
-    return {
-      low: frameRateLimit * 0.8,
-      high: frameRateLimit - 1,
-    };
-  }
-  return { low: FPS_LOW_THRESHOLD, high: FPS_HIGH_THRESHOLD };
+// The frame rate the game is actually aiming at: the player's frame limit, or
+// the display's own rate when the limit is off - capped at 60, because the game
+// is authored for 60 and an uncapped 144Hz panel should not force image quality
+// down just to chase frames nobody asked for.
+function getAdaptiveTargetFps() {
+  const measured = Number(canvas.dataset.displayRefreshRate) || 0;
+  const requested = frameRateLimit > 0 ? frameRateLimit : 60;
+  return measured > 0 ? Math.min(requested, measured) : requested;
 }
 
 function updatePerformanceReadout(delta) {
@@ -2508,13 +2526,30 @@ function updatePerformanceReadout(delta) {
   const averageFrameTime = sortedFrameTimes.length
     ? sortedFrameTimes.reduce((sum, value) => sum + value, 0) / sortedFrameTimes.length
     : 0;
-  const thresholds = getAdaptiveFpsThresholds();
-  const pipelineAdaptation = renderingPipeline.updateAdaptive(displayedFps);
-  if (displayedFps < thresholds.low && pipelineAdaptation?.canReducePixelRatio) {
-    setRenderPixelRatio(renderPixelRatio - 0.1);
-  } else if (displayedFps > thresholds.high) {
-    setRenderPixelRatio(renderPixelRatio + 0.05);
+  const targetFps = getAdaptiveTargetFps();
+  const pipelineAdaptation = renderingPipeline.updateAdaptive(displayedFps, targetFps);
+  // Dropping frames against the target starts shedding straight away; the
+  // resolution only comes back once the ladder is whole again, and never sooner
+  // than a few samples after it moved - each step reallocates the whole post
+  // chain, so a slow settle beats a fast see-saw.
+  if (displayedFps < targetFps - ADAPTIVE_SHED_MARGIN_FPS && pipelineAdaptation?.canReducePixelRatio) {
+    setRenderPixelRatio(renderPixelRatio - PIXEL_RATIO_STEP_DOWN);
+    pixelRatioCooldown = PIXEL_RATIO_COOLDOWN_SAMPLES;
+    pixelRatioSteady = 0;
+  } else if (
+    pipelineAdaptation?.canRaisePixelRatio &&
+    displayedFps >= targetFps - ADAPTIVE_RESTORE_MARGIN_FPS &&
+    pixelRatioCooldown <= 0
+  ) {
+    pixelRatioSteady += 1;
+    if (pixelRatioSteady >= PIXEL_RATIO_RAISE_SAMPLES) {
+      setRenderPixelRatio(renderPixelRatio + PIXEL_RATIO_STEP_UP);
+      pixelRatioSteady = 0;
+    }
+  } else {
+    pixelRatioSteady = 0;
   }
+  pixelRatioCooldown = Math.max(0, pixelRatioCooldown - 1);
 
   fpsReadout.textContent = `${displayedFps} FPS`;
   fpsReadout.dataset.quality = renderPixelRatio < 1 ? "LOW" : "HIGH";
@@ -4100,6 +4135,25 @@ function applyEntityContactDamage(delta, metrics) {
   }
 }
 
+// Environmental hazards (Level 2's thermal noclip site) arrive as a rate on the
+// metrics instead of as an entity hit: no attack cooldown and no damage flash,
+// because the level itself is already driving the heat visuals. The damage is
+// capped by the floor the level publishes, so heat alone never finishes a
+// wounded wanderer — it only makes the way out cost something.
+function applyEnvironmentDamage(delta, metrics) {
+  if (isDebugFeaturesActive()) return;
+  if (gameFailed || exitComplete || levelTransition) return;
+  if (!controls || controls.health <= 0) return;
+  const perSecond = Number(metrics?.environmentDamagePerSecond ?? 0);
+  if (!Number.isFinite(perSecond) || perSecond <= 0) return;
+  const healthMax = Number.isFinite(controls.healthMax) ? controls.healthMax : HEALTH_MAX;
+  const floor = Math.max(0, Math.min(healthMax, Number(metrics?.environmentDamageFloor ?? 0)));
+  const drop = Math.min(perSecond * delta, controls.health - floor);
+  if (!(drop > 0)) return;
+  controls.applyDamage(drop);
+  markDirty();
+}
+
 function animate(timestamp) {
   clock.update(timestamp);
   if (!gameStarted || !world || !controls) {
@@ -4240,6 +4294,7 @@ function animate(timestamp) {
   };
   lastMetrics = metrics;
   canvas.dataset.viewModel = world.viewModelName ?? "NONE";
+  syncPlayerBodyDataset();
   updateFlashlight(delta);
   updateDetector(delta, metrics);
   updateDebugExitMarkers();
@@ -4260,6 +4315,7 @@ function animate(timestamp) {
   // Exit recognition wins this frame: a pursuing entity must not get a final
   // damage tick after the player has already reached the transition point.
   applyEntityContactDamage(delta, metrics);
+  applyEnvironmentDamage(delta, metrics);
   if (levelTransition) {
     ambientHum.stopAllEntityAudio();
   } else {

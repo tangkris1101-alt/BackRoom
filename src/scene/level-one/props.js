@@ -6,6 +6,7 @@ import {
   WALL_THICKNESS,
 } from "../constants.js";
 import { createFixturePointLight } from "../common/lighting.js";
+import { isLowQuality } from "../common/materials.js";
 import { wallSegmentTransform } from "../common/wall-corners.js";
 import { createWideSignTexture } from "../common/textures.js";
 import {
@@ -17,6 +18,7 @@ import {
   LEVEL_ONE_START_CELL,
   LEVEL_ONE_TARGET_CELL,
   LEVEL_ONE_MAX_POINT_LIGHTS,
+  LEVEL_ONE_LOW_POINT_LIGHTS,
   LEVEL_ONE_CORRIDOR_FIXTURES,
 } from "./layout.js";
 import {
@@ -43,11 +45,16 @@ import {
 
 export function createLevelOneLights(scene, fixturePositions, { dynamicPointLights = false } = {}) {
   const fixtures = [];
+  // Low quality reads the level off a hemisphere plus a directional fill, so it
+  // only keeps a handful of fixtures live. Every point light left in the scene
+  // costs a per-fragment loop on every lit surface, which is the one bill the
+  // "performance" mode should not still be paying at full price.
+  const pointLightBudget = isLowQuality() ? LEVEL_ONE_LOW_POINT_LIGHTS : LEVEL_ONE_MAX_POINT_LIGHTS;
   const pointLightIndexes = new Set(
     fixturePositions
       .map((fixture, index) => ({ index, priority: fixture.priority }))
       .sort((a, b) => b.priority - a.priority)
-      .slice(0, LEVEL_ONE_MAX_POINT_LIGHTS)
+      .slice(0, pointLightBudget)
       .map(({ index }) => index),
   );
   const tubeGeometry = new THREE.BoxGeometry(1, 0.04, 0.34);
@@ -128,7 +135,7 @@ export function createLevelOneLights(scene, fixturePositions, { dynamicPointLigh
     // so toggling a pool light's visibility recompiles the whole level's shaders
     // (tens of programs, hundreds of ms each) whenever the ranking or a fixture
     // pulse changes. Intensity alone does the work; unlit slots fade to zero.
-    const lightPool = Array.from({ length: LEVEL_ONE_MAX_POINT_LIGHTS }, () => {
+    const lightPool = Array.from({ length: pointLightBudget }, () => {
       const light = new THREE.PointLight(0xffffff, 0, 1, 2);
       scene.add(light);
       return light;

@@ -17,6 +17,10 @@ export const LEVEL_ONE_ARRIVAL_SHAFT_CELL = { col: 4, row: 19 };
 // cap high enough to cover the expanded warehouse grid without relying on
 // invisible fill or ambient lights.
 export const LEVEL_ONE_MAX_POINT_LIGHTS = 32;
+// Low quality skips the baked light field and reads the level off a hemisphere
+// plus a directional fill, so it only needs the nearest few fixtures live.
+// Every extra point light is a per-fragment loop on every lit surface.
+export const LEVEL_ONE_LOW_POINT_LIGHTS = 8;
 export const LEVEL_ONE_MIN_FIXTURE_DISTANCE = CELL_SIZE * 3.5;
 export const LEVEL_ONE_CORRIDOR_BOUNDS = { col: 2, row: 6, width: 10, height: 9 };
 export const LEVEL_ONE_CORRIDOR_FIXTURES = [

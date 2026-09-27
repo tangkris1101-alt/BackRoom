@@ -239,6 +239,10 @@ export class FirstPersonControls {
     motion.landingImpact = this.landingImpact;
     motion.accelerationPitch = this.movementPitchOffset;
     motion.turnRoll = this.turnRollOffset;
+    // The player body sits on the ground rather than on the eye: it needs the
+    // unsmoothed hip height to keep the boots planted while the head bobs.
+    motion.bodyY = this.bodyY;
+    motion.eyeHeight = this.eyeHeight;
     this.camera.userData.firstPersonMotion = motion;
   }
 

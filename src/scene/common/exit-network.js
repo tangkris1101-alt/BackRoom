@@ -562,7 +562,9 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
       unlocked: isThreshold || Boolean(initialState?.[definition.id]?.unlocked ?? initialState?.[definition.id]?.count),
       openProgress: isThreshold || definition.stairModel === true || Boolean(initialState?.[definition.id]?.count) ? 1 : 0,
       triggered: false,
-      i18n: createRouteText(definition),
+      // The owning level may hand the route its own wording (Level 2 keeps the
+      // Hub doorway nameless until the corridor walk wakes it).
+      i18n: definition.i18n ?? createRouteText(definition),
     };
     route.model = isThreshold ? {} : createRouteModel(scene, route);
     // Doors with a leaf are solid in both states, so they publish one collider
@@ -676,6 +678,9 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
     let bestScore = -Infinity;
     for (const route of routes) {
       if (route.kind === "threshold") continue;
+      // A sealed route is not a door yet: no prompt, no wording, nothing to
+      // find until the owning level opens its gate.
+      if (typeof route.gate === "function" && !route.gate()) continue;
       const distance = distanceTo(route, playerPosition);
       if (distance > INSPECT_DISTANCE) continue;
       toRoute.set(route.position.x - camera.position.x, 1.35 - camera.position.y, route.position.z - camera.position.z);
@@ -720,6 +725,9 @@ export function createExitNetwork(scene, camera, routeDefinitions, initialState 
     let candidate = null;
     for (const route of routes) {
       if (route.kind === "threshold") continue;
+      // A sealed route is not a door yet: no prompt, no wording, nothing to
+      // find until the owning level opens its gate.
+      if (typeof route.gate === "function" && !route.gate()) continue;
       const distance = distanceTo(route, playerPosition);
       if ((routeId && route.id !== routeId) || distance > INTERACT_RADIUS) continue;
       if (!candidate || distance < candidate.distance) candidate = { route, distance };

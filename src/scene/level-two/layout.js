@@ -30,6 +30,49 @@ export const LEVEL_TWO_DARK_ZONES = [
   { col: 24, row: 21, width: 4, height: 2 },
 ];
 
+// The Hub entrance. Canon Level 2 does not put The Hub behind an obvious door:
+// the wanderers who trade the route describe "a trail of corridors that aligns
+// with the Konami Code". The alcove door therefore stays sealed — a flush slab
+// with nothing but a hairline seam — until the walk below is performed in order.
+export const LEVEL_TWO_HUB_TRAIL = {
+  door: { col: 31, row: 9 },
+  start: { col: 31, row: 12 },
+  // Up, up, down, down, left, right, left, right, then the two marked plates.
+  steps: [
+    { col: 31, row: 11, glyph: "up" },
+    { col: 31, row: 10, glyph: "up" },
+    { col: 31, row: 11, glyph: "down" },
+    { col: 31, row: 12, glyph: "down" },
+    { col: 30, row: 12, glyph: "left" },
+    { col: 31, row: 12, glyph: "right" },
+    { col: 30, row: 12, glyph: "left" },
+    { col: 31, row: 12, glyph: "right" },
+    { col: 31, row: 11, glyph: "B" },
+    { col: 31, row: 10, glyph: "A" },
+  ],
+  // Where the scratched code is left for anyone who thinks to look up.
+  hint: { col: 31, row: 10, side: "west" },
+};
+
+// The thermal noclip site. Canon Level 2 has no door out of the pipe halls in
+// the direction of Level 3: the documented exit is an area that gets
+// unreasonably hot, and the heat is worst where the machinery is loudest — the
+// dead end of Tunnel C. Standing in the pool long enough drops the wanderer
+// through the floor instead of opening a door, which is also what keeps the
+// corridor free of door colliders: nothing here is solid.
+export const LEVEL_TWO_HEAT_GALLERY = {
+  // Cells the hot floor pool and the extra machinery cover.
+  cells: { col: 39, row: 22, width: 3, height: 1 },
+  // The pool the player has to stand in, centred on the pipe mouth at the end
+  // of the tunnel.
+  triggerRadius: 2.6,
+  noclipSeconds: 3,
+  coolSeconds: 1.4,
+  damagePerSecond: 4,
+  // Heat alone never kills: a wounded wanderer can still crawl in and out.
+  healthFloor: 20,
+};
+
 const SIDE_NONE = "N";
 const SIDE_NORTH = "N";
 const SIDE_SOUTH = "S";
@@ -190,6 +233,39 @@ export function levelTwoCellCenter(col, row) {
     x: LEVEL_TWO_ORIGIN_X + col * CELL_SIZE + CELL_SIZE / 2,
     z: LEVEL_TWO_ORIGIN_Z + row * CELL_SIZE + CELL_SIZE / 2,
   };
+}
+
+// Declared after the origin constants above: computing it at module init next
+// to the zone table would read those `const`s before they exist.
+export const LEVEL_TWO_HEAT_GALLERY_CENTER = levelTwoCellCenter(
+  LEVEL_TWO_HEAT_GALLERY.cells.col + LEVEL_TWO_HEAT_GALLERY.cells.width - 1,
+  LEVEL_TWO_HEAT_GALLERY.cells.row,
+);
+
+// The cell a step of the Hub trail leads into, or null once the trail is done.
+export function levelTwoHubTrailStep(index) {
+  return LEVEL_TWO_HUB_TRAIL.steps[index] ?? null;
+}
+
+export function sameLevelTwoCell(a, b) {
+  return Boolean(a && b) && a.col === b.col && a.row === b.row;
+}
+
+export function levelTwoHeatGalleryCell(col, row) {
+  const { cells } = LEVEL_TWO_HEAT_GALLERY;
+  return (
+    col >= cells.col &&
+    col < cells.col + cells.width &&
+    row >= cells.row &&
+    row < cells.row + cells.height
+  );
+}
+
+export function pointInLevelTwoHeatGallery(x, z, radius = 0) {
+  return (
+    Math.hypot(x - LEVEL_TWO_HEAT_GALLERY_CENTER.x, z - LEVEL_TWO_HEAT_GALLERY_CENTER.z) <=
+    LEVEL_TWO_HEAT_GALLERY.triggerRadius + radius
+  );
 }
 
 export function levelTwoCellWalkableCenter(col, row) {

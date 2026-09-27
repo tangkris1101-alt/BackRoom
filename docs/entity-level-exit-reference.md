@@ -47,8 +47,8 @@
 | THE HUB（-1） | NEXUS TUNNELS | 0 / 0 | 无 | 15 扇需对应层级钥匙的门：Level 0–13、37。 |
 | Level 0 | NOCLIP ZONE | 0 / 0 | 无 | 坠入出口孔洞 → **Level 1**。 |
 | Level 1 | HABITABLE ZONE | 1 / 1 | 细菌 ×1 | 电梯 → **Level 2**。 |
-| Level 2 | PIPE DREAMS | 1 / 1 | 猎犬 ×1 | 解锁门 → **Level 3**；返回门 → **Level 1**；办公室门 → **Level 4**；隐藏门 → **THE HUB**。 |
-| Level 3 | ELECTRICAL STATION | 4 / 4 | 细菌 ×2、猎犬 ×1、伏击猎犬 ×1 | 电梯 → **Level 4**；电梯 → **Level 5**。 |
+| Level 2 | PIPE DREAMS | 1 / 1 | 猎犬 ×1 | **热区切出（隧道 C 东端过热管道夹层，停留约 3 s，期间缓降血量；猎犬不入热区）→ Level 3**；办公室门 → **Level 4**；枢纽密门 → **THE HUB**（B1 支路尽头原本是一堵混凝土墙，墙上有一圈发丝细缝、地面有 B/A 两块踏板；按 **↑↑↓↓←→←→BA** 顺序走完 10 步后墙板下沉、门出现，此前既无提示也无法交互）。列于 A2/A3/B1/B2/C1 支路尽头的封死混凝土门不参与通行。 |
+| Level 3 | ELECTRICAL STATION | 4 / 4 | 细菌 ×2、猎犬 ×1、伏击猎犬 ×1 | 电梯 → **Level 4**（大厅南墙，格 36,20）；电梯 → **Level 5**（锅炉房西墙，格 30,18）。两扇都是墙面安装、门朝房间；入口壁龛(3,3) 到 HOTEL 电梯约 123 m。实体导航不进入这两格。 |
 | Level 4 | ABANDONED OFFICE | 1 / 1 | 猎犬 ×1 | 楼梯 → **Level 5**；楼梯 → **Level 6**；电梯 → **Level 3**。 |
 | Level 5 | TERROR HOTEL | 3 / 3 | 猎犬 ×3 | 锅炉门 → **Level 6**；服务电梯 → **Level 3**；楼梯 → **Level 4**。 |
 | Level 6 | LIGHTS OUT | 1 / 1 | Smiler ×1 | 楼梯 → **Level 7**；返回门 → **Level 5**；冷水池 → **Level 8**。 |

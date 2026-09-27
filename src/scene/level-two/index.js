@@ -26,6 +26,9 @@ import {
   LEVEL_TWO_TARGET_CELL,
   LEVEL_TWO_CELL_META,
   LEVEL_TWO_DARK_ZONES,
+  LEVEL_TWO_HEAT_GALLERY,
+  LEVEL_TWO_HEAT_GALLERY_CENTER,
+  LEVEL_TWO_HUB_TRAIL,
   LEVEL_TWO_MAP,
   CELL_OPEN,
   CELL_WALL,
@@ -43,6 +46,10 @@ import {
   levelTwoCellCenter,
   levelTwoCellWalkableCenter,
   levelTwoWorldToCell,
+  levelTwoHeatGalleryCell,
+  levelTwoHubTrailStep,
+  pointInLevelTwoHeatGallery,
+  sameLevelTwoCell,
   getLevelTwoMachineRect,
   levelTwoDiagonalCenterWorld,
   pointInLevelTwoDiagonalCell,
@@ -59,10 +66,13 @@ import {
   addLevelTwoMachinery,
   addLevelTwoSteam,
   addLevelTwoFloorHeat,
+  addLevelTwoHeatGallery,
   addLevelTwoDarkPockets,
   addLevelTwoIndustrialDetails,
   addLevelTwoUtilityProps,
+  addLevelTwoHubTrailMarkers,
   buildLevelTwoMachineryColliders,
+  createLevelTwoHubSeal,
 } from "./props.js";
 import {
   createAlmondWaterPickup,
@@ -623,6 +633,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
   propColliders = propColliders.concat(addLevelTwoUtilityProps(scene));
   const steamPuffs = addLevelTwoSteam(scene);
   addLevelTwoFloorHeat(scene);
+  addLevelTwoHeatGallery(scene);
   addLevelTwoDarkPockets(scene);
   addLevelTwoIndustrialDetails(scene);
 
@@ -701,16 +712,77 @@ export function createLevelTwoScene({ initialState = null } = {}) {
       initialState: interactionInitial["level-two-valve"] ?? null,
     }),
   ];
+  // The main way out of Level 2 is the thermal noclip at the east end of
+  // Tunnel C (see LEVEL_TWO_HEAT_GALLERY): a patch of floor, deliberately not a
+  // door. The two remaining routes sit in dead-end alcoves, so no exit leaves a
+  // collider standing in a corridor for the hound to jam against.
   const routes = [
-    { id: "level-two-door-level-three", targetLevel: 3, targetLabel: "LEVEL 3", label: "UNLOCKED", kind: "door", position: targetPosition, rotation: 0 },
-    { id: "level-two-door-level-one", targetLevel: 1, targetLabel: "LEVEL 1", label: "RETURN", kind: "door", position: levelTwoCellCenter(12, 2), rotation: 0 },
     { id: "level-two-door-level-four", targetLevel: 4, targetLabel: "LEVEL 4", label: "OFFICE", kind: "door", position: levelTwoCellCenter(37, 26), rotation: Math.PI },
-    { id: "level-two-hidden-hub-door", targetLevel: HUB_LEVEL, targetLabel: "THE HUB", kind: "door", hidden: true, position: levelTwoCellCenter(31, 9), rotation: Math.PI / 2 },
+    {
+      id: "level-two-hidden-hub-door",
+      targetLevel: HUB_LEVEL,
+      targetLabel: "THE HUB",
+      kind: "door",
+      hidden: true,
+      // The glyph over the frame is the door's own mark, not a level sign: only
+      // the wanderer who woke it ever sees it.
+      symbolSeed: 24,
+      // Faces south, down the alcove: the corridor runs along z, so a door that
+      // blocks it spans x with no yaw.
+      position: levelTwoCellCenter(LEVEL_TWO_HUB_TRAIL.door.col, LEVEL_TWO_HUB_TRAIL.door.row),
+      rotation: 0,
+      i18n: {
+        "zh-CN": {
+          name: "枢纽门径",
+          effect: "门后是 NEXUS 隧道",
+          action: "F / 按钮打开",
+          response: "枢纽门径已通行",
+        },
+        en: {
+          name: "NEXUS DOORWAY",
+          effect: "THE NEXUS TUNNELS LIE BEYOND",
+          action: "F / BUTTON OPEN",
+          response: "THE NEXUS DOORWAY IS CLEAR",
+        },
+      },
+    },
   ];
   // Door colliders join the prop list that isWalkable / getFloorHeight /
   // resolvePosition already walk. Every pickup above was placed before this
   // call, so item candidate cells and saved positions are untouched.
   const exitNetwork = createExitNetwork(scene, camera, routes, interactionInitial, { colliders: propColliders });
+  // The alcove ends in a flush concrete slab, not a door: the route model stays
+  // hidden, its gate closed, and its prompt suppressed until the corridor walk
+  // below is performed in order. See LEVEL_TWO_HUB_TRAIL for the sequence.
+  const hubRoute = exitNetwork.routes.find((route) => route.id === "level-two-hidden-hub-door");
+  // A save written after the walk (or after the doorway was used) restores the
+  // doorway itself — the slab would otherwise hide a route the save says is open.
+  const hubInitial = interactionInitial["level-two-hidden-hub-door"] ?? null;
+  const hubAwakeFromSave = Boolean(hubInitial?.count || hubInitial?.unlocked);
+  const hubTrail = {
+    index: hubAwakeFromSave ? LEVEL_TWO_HUB_TRAIL.steps.length : 0,
+    previousCell: null,
+    awake: hubAwakeFromSave,
+    wakeProgress: hubAwakeFromSave ? 1 : 0,
+    flashUntil: -1,
+  };
+  const hubSeal = createLevelTwoHubSeal(scene, {
+    position: hubRoute.position,
+    rotation: hubRoute.rotation ?? 0,
+  });
+  addLevelTwoHubTrailMarkers(scene);
+  hubRoute.gate = () => hubTrail.awake;
+  if (hubAwakeFromSave) {
+    // Keep the seal group only for its doorway light.
+    hubSeal.plug.visible = false;
+    hubSeal.seams.forEach((seam) => { seam.visible = false; });
+    hubSeal.setAwake(true);
+  } else {
+    hubRoute.model.group.visible = false;
+  }
+  // Last known hound position, fed back to isHoundWalkable so an entity that is
+  // somehow already inside the heat can still leave it.
+  const houndPosition = { x: Number.NaN, z: Number.NaN };
   const hound = createHoundEntity(scene, {
     spawnPosition:
       chooseBacteriaSpawn({
@@ -721,17 +793,50 @@ export function createLevelTwoScene({ initialState = null } = {}) {
         targetPosition,
         spawnPosition: spawnCell,
       })[0] ?? targetPosition,
-    isWalkable,
+    isWalkable: isHoundWalkable,
     speed: 1.83,
     initialState: entityInitial.find((entity) => entity.type === "hound") ?? null,
     cols: LEVEL_TWO_COLS,
     rows: LEVEL_TWO_ROWS,
-    isCellOpen: isLevelTwoOpenCell,
+    isCellOpen: isHoundOpenCell,
     worldToCell: levelTwoWorldToCell,
     cellCenter: levelTwoCellCenter,
   });
+  const houndSpawn = hound.getState().position;
+  houndPosition.x = houndSpawn.x;
+  houndPosition.z = houndSpawn.z;
 
   let objectiveReached = Boolean(objectiveInitial.reached);
+  // Heat exposure at the noclip site, 0..1. It fills while the player stands in
+  // the pool, drains once they step out, and at 1 the floor gives way.
+  let heatExposure = 0;
+  let heatNoclip = false;
+
+  // The gallery is unbearable for a hound too. Excluding it from both the step
+  // test and the search grid keeps the entity from pressing into a wall it can
+  // never cross — the same failure mode the corridor door used to cause. An
+  // entity that is *already* inside (a save restored from the door build) may
+  // still walk out; only entering is refused, so nothing can be trapped.
+  // The stand-off is wider than the pool itself: the hound has to stop far
+  // enough out that a wanderer anywhere in the heat is outside its 1.18m reach,
+  // otherwise the three seconds needed to noclip are three seconds of being
+  // bitten.
+  const HOUND_HEAT_STANDOFF = 2.2;
+
+  function isHoundWalkable(x, z, radius = 0.36, feetY = 0) {
+    if (!isWalkable(x, z, radius, feetY)) return false;
+    if (!pointInLevelTwoHeatGallery(x, z, radius + HOUND_HEAT_STANDOFF)) return true;
+    if (!Number.isFinite(houndPosition.x)) return false;
+    return (
+      Math.hypot(x - LEVEL_TWO_HEAT_GALLERY_CENTER.x, z - LEVEL_TWO_HEAT_GALLERY_CENTER.z) >
+      Math.hypot(houndPosition.x - LEVEL_TWO_HEAT_GALLERY_CENTER.x, houndPosition.z - LEVEL_TWO_HEAT_GALLERY_CENTER.z)
+    );
+  }
+
+  function isHoundOpenCell(col, row) {
+    if (!isLevelTwoOpenCell(col, row)) return false;
+    return !levelTwoHeatGalleryCell(col, row);
+  }
 
   function isWalkable(x, z, radius = 0.36, feetY = 0) {
     const corner = radius * 0.72;
@@ -783,8 +888,16 @@ export function createLevelTwoScene({ initialState = null } = {}) {
   function update(delta, elapsed, playerPosition, effects = {}) {
     let lightTotal = 0;
     fixtures.forEach((fixture) => {
+      // Lights at the overloaded end of Tunnel C brown out far more often.
+      const galleryStress = Math.max(
+        0,
+        1 -
+          Math.hypot(fixture.x - LEVEL_TWO_HEAT_GALLERY_CENTER.x, fixture.z - LEVEL_TWO_HEAT_GALLERY_CENTER.z) /
+            16,
+      );
       const hum = 0.78 + Math.sin(elapsed * 1.7 + fixture.phase) * 0.07;
-      const brownout = Math.sin(elapsed * fixture.speed + fixture.phase * 1.7) > 0.91 ? 0.48 : 1;
+      const brownout =
+        Math.sin(elapsed * fixture.speed + fixture.phase * 1.7) > 0.91 - galleryStress * 0.34 ? 0.48 : 1;
       const pulse = Math.max(0.24, hum * brownout - fixture.weak);
       fixture.material.emissiveIntensity = pulse * fixture.baseIntensity * 1.6;
       updateFixturePointLight(fixture, pulse, 1.08);
@@ -797,19 +910,75 @@ export function createLevelTwoScene({ initialState = null } = {}) {
 
     steamPuffs.forEach((puff) => {
       const phase = puff.userData.phase ?? 0;
-      const wave = 0.5 + Math.sin(elapsed * 1.8 + phase) * 0.5;
-      const scale = 0.8 + wave * 0.9;
-      puff.scale.set(scale * 0.78, 0.65 + wave * 0.9, scale);
-      puff.position.y = 1.12 + wave * 0.18;
-      puff.material.opacity = 0.035 + wave * 0.07;
+      const strength = puff.userData.strength ?? 1;
+      const wave = 0.5 + Math.sin(elapsed * 1.8 * strength + phase) * 0.5;
+      const scale = (0.8 + wave * 0.9) * (0.7 + strength * 0.3);
+      puff.scale.set(scale * 0.78, (0.65 + wave * 0.9) * strength, scale);
+      puff.position.y = 1.12 + wave * 0.18 * strength;
+      puff.material.opacity = Math.min(0.16, (0.035 + wave * 0.07) * strength);
     });
 
     const flicker = fixtures.length > 0 ? lightTotal / fixtures.length : 0.56;
     const enteredExit = exitNetwork.update(delta, playerPosition);
-    const exitDistance = Math.min(...routes.map((route) => Math.hypot(
-      playerPosition.x - route.position.x,
-      playerPosition.z - route.position.z,
-    )));
+
+    // Konami corridor walk. A step counts only when its cell is entered from the
+    // previous one, so a wanderer who drifts off the route keeps whatever they
+    // had instead of starting over.
+    const playerCell = levelTwoWorldToCell(playerPosition.x, playerPosition.z);
+    const expectedStep = levelTwoHubTrailStep(hubTrail.index);
+    if (expectedStep) {
+      const fromCell = hubTrail.index === 0
+        ? LEVEL_TWO_HUB_TRAIL.start
+        : levelTwoHubTrailStep(hubTrail.index - 1);
+      if (sameLevelTwoCell(playerCell, expectedStep) && sameLevelTwoCell(hubTrail.previousCell, fromCell)) {
+        hubTrail.index += 1;
+        hubTrail.flashUntil = elapsed + 1.6;
+        if (!levelTwoHubTrailStep(hubTrail.index)) {
+          hubTrail.awake = true;
+          hubTrail.flashUntil = elapsed + 3.4;
+          hubSeal.setAwake(true);
+          hubRoute.model.group.visible = true;
+        }
+      }
+    }
+    hubTrail.previousCell = playerCell;
+    if (hubTrail.awake && hubTrail.wakeProgress < 1) {
+      // The plug drops into the floor and its seam burns off, leaving the
+      // doorway standing where the concrete was.
+      hubTrail.wakeProgress = Math.min(1, hubTrail.wakeProgress + delta / 1.2);
+      hubSeal.plug.position.y = hubSeal.plugRestY - hubTrail.wakeProgress * (hubSeal.plugRestY * 2 + 0.2);
+      hubSeal.glowMaterial.opacity = 1 - hubTrail.wakeProgress;
+      if (hubTrail.wakeProgress >= 1) {
+        // The plug and its seam are gone; the seal group stays only to keep the
+        // doorway's warm light alive.
+        hubSeal.plug.visible = false;
+        hubSeal.seams.forEach((seam) => { seam.visible = false; });
+      }
+    }
+    if (hubTrail.awake && hubTrail.wakeProgress >= 0.5) hubRoute.model.group.visible = true;
+
+    // Thermal noclip: the site is the exit, so the "distance to the way out" the
+    // HUD and the compass aim at is the gallery, not one of the alcove doors.
+    const heatDistance = Math.hypot(
+      playerPosition.x - LEVEL_TWO_HEAT_GALLERY_CENTER.x,
+      playerPosition.z - LEVEL_TWO_HEAT_GALLERY_CENTER.z,
+    );
+    const standingInHeat = heatDistance <= LEVEL_TWO_HEAT_GALLERY.triggerRadius;
+    heatExposure = standingInHeat
+      ? Math.min(1, heatExposure + delta / LEVEL_TWO_HEAT_GALLERY.noclipSeconds)
+      : Math.max(0, heatExposure - delta / LEVEL_TWO_HEAT_GALLERY.coolSeconds);
+    if (heatExposure >= 1) {
+      heatNoclip = true;
+      objectiveReached = true;
+    }
+
+    const exitDistance = Math.min(
+      heatDistance,
+      ...routes.map((route) => Math.hypot(
+        playerPosition.x - route.position.x,
+        playerPosition.z - route.position.z,
+      )),
+    );
     if (enteredExit) objectiveReached = true;
     scene.fog.density = 0.011 + (1 - flicker) * 0.008;
     updateFirstPersonHazmatViewModel(viewModel, elapsed, playerPosition);
@@ -820,13 +989,26 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     const compassState = compass.update(delta, elapsed, playerPosition);
     const silenceLiquidState = silenceLiquid.update(delta, elapsed, playerPosition);
     const houndState = hound.update(delta, elapsed, playerPosition, effects);
+    houndPosition.x = houndState.position?.x ?? houndPosition.x;
+    houndPosition.z = houndState.position?.z ?? houndPosition.z;
     const entities = [houndState];
     const pickups = [almondWaterState, superAlmondWaterState, silenceLiquidState, compassState, detectorState, flashlightState];
+    const heatRatio = Math.max(0, Math.min(1, heatExposure));
 
     return {
       exitDistance: Math.round(exitDistance),
-      exitReached: Boolean(enteredExit),
-      nextLevel: enteredExit?.targetLevel,
+      exitReached: Boolean(enteredExit) || heatNoclip,
+      exitId: heatNoclip ? "level-two-thermal-noclip" : enteredExit?.id,
+      nextLevel: heatNoclip ? 3 : enteredExit?.targetLevel,
+      environmentDamagePerSecond:
+        standingInHeat && !heatNoclip ? LEVEL_TWO_HEAT_GALLERY.damagePerSecond : 0,
+      environmentDamageFloor: LEVEL_TWO_HEAT_GALLERY.healthFloor,
+      screenEffects: {
+        vignette: heatRatio * 0.72,
+        desaturation: heatRatio * 0.32,
+        static: heatRatio * 0.4,
+        whiteout: heatNoclip ? 1 : heatRatio * heatRatio * 0.25,
+      },
       entityContact: entities.some((entity) => entity.contact),
       flicker,
       almondWater: almondWaterState,
@@ -848,11 +1030,19 @@ export function createLevelTwoScene({ initialState = null } = {}) {
         flashlight.inspect(camera),
       ),
       lightState: updateLightState(delta, flicker),
-      statusText: objectiveReached
-        ? "SERVICE LOCKED"
-        : exitDistance < 8
-          ? "PIPE EXIT TRACE"
-          : "PIPE DREAMS",
+      statusText: elapsed < hubTrail.flashUntil
+        ? hubTrail.awake
+          ? "NEXUS TRAIL COMPLETE"
+          : `NEXUS TRAIL ${hubTrail.index}/${LEVEL_TWO_HUB_TRAIL.steps.length}`
+        : objectiveReached
+          ? "SERVICE LOCKED"
+          : heatRatio >= 0.98
+            ? "THERMAL NOCLIP"
+            : heatRatio > 0.05
+              ? `CORE TEMP ${Math.round(heatRatio * 100)}%`
+              : heatDistance < 14
+                ? "THERMAL SPIKE 43°C"
+                : "PIPE DREAMS",
     };
   }
 
@@ -878,7 +1068,7 @@ export function createLevelTwoScene({ initialState = null } = {}) {
     getFloorHeight,
     resolvePosition,
     decorativeItemSpawns: [
-      { id: "wire-spool", position: { ...levelTwoCellCenter(24, 16), y: 0.2 }, rotation: 1.1, tiltZ: 0.16 },
+      { id: "wire-spool", position: { ...levelTwoCellCenter(24, 16), y: 0.26 }, rotation: 1.1, tiltZ: 0.05 },
       { id: "rusted-key", position: { ...levelTwoCellCenter(14, 6), y: 0.08 }, rotation: -0.8, tiltX: 0.06 },
     ],
     flashlightEffectiveness: 1.82,

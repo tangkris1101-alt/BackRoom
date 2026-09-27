@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>玩家高精度人物模型与阴影验收</title>
+  <style>
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111; color:#fff; font:14px system-ui,sans-serif; }
+    canvas { display:block; width:100%; height:100%; }
+    .controls { position:fixed; left:20px; top:20px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; max-width:calc(100% - 40px); padding:10px 12px; background:#10170fdd; border:1px solid #89917188; border-radius:8px; }
+    button { background:#e8dfb5; color:#182016; border:0; border-radius:4px; padding:8px 13px; cursor:pointer; font-weight:600; }
+    #status { min-width:560px; flex:1; line-height:1.45; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button id="third">第三人称全身</button>
+    <button id="walk">行走中景</button>
+    <button id="down">第一人称俯视</button>
+    <button id="up">第一人称抬头</button>
+    <button id="forward">第一人称平视</button>
+    <button id="walk-first">第一人称行走</button>
+    <button id="shadow">地面阴影</button>
+    <button id="capture">纯画面截图</button>
+    <span id="status">正在加载 Level 1…</span>
+  </div>
+  <script type="module">
+    import * as THREE from "three";
+    import { createLevelOneScene } from "/src/scene/level-one/index.js";
+    import { createRenderingPipeline } from "/src/rendering-pipeline.js";
+    import { getGraphicsProfile } from "/src/graphics-profile.js";
+
+    const status = document.getElementById("status");
+    document.getElementById("capture").addEventListener("click", () => {
+      document.querySelector(".controls").style.display = "none";
+    });
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    document.body.append(renderer.domElement);
+
+    const profile = getGraphicsProfile("high");
+    const pipeline = createRenderingPipeline(renderer, renderer.domElement, profile);
+    const world = createLevelOneScene({});
+    pipeline.setWorld(world);
+    const scene = world.scene;
+    const camera = world.camera;
+    const viewModel = camera.getObjectByName("first-person-baked-hazmat-arms");
+    const body = viewModel?.userData?.body ?? null;
+
+    // 第三人称检视用的相机；人物模型挂在世界相机下，所以直接用它绕看即可。
+    const debugCamera = new THREE.PerspectiveCamera(46, 1, 0.02, 200);
+
+    let bodyMeshes = 0;
+    let bodyTriangles = 0;
+    let casting = 0;
+    let receiving = 0;
+    body?.traverse((object) => {
+      if (!object.isMesh) return;
+      bodyMeshes += 1;
+      bodyTriangles += (object.geometry.index?.count ?? object.geometry.attributes.position.count) / 3;
+      if (object.castShadow) casting += 1;
+      if (object.receiveShadow) receiving += 1;
+    });
+
+    const spawn = world.spawn;
+    const poses = {
+      third: {
+        mode: "third",
+        camera: { position: [spawn.x + 2.6, 1.75, spawn.z + 2.9], look: [spawn.x, 1.05, spawn.z] },
+        motion: { strand: 0 },
+        label: "第三人称全身 · 兜帽/面窗捲边/胸挂/腰带/工装裤/靴子",
+      },
+      walk: {
+        mode: "third",
+        camera: { position: [spawn.x + 3.4, 1.5, spawn.z + 1.4], look: [spawn.x, 1.0, spawn.z] },
+        motion: { walkCycle: 4.7, walkBobStrength: 1, moving: true, movementSpeed: 3.05 },
+        label: "行走中景 · 迈步瞬间的腿部与手臂摆动",
+      },
+      down: {
+        mode: "first",
+        pitch: -1.18,
+        yaw: 0,
+        motion: {},
+        label: "第一人称俯视 · 胸口/挂带/反光条/膝盖/靴子",
+      },
+      up: {
+        mode: "first",
+        pitch: 0.86,
+        yaw: 0,
+        motion: {},
+        label: "第一人称抬头 · 兜帽内衬与捲边（不应穿帮）",
+      },
+      "walk-first": {
+        mode: "first",
+        pitch: -0.62,
+        yaw: 0,
+        motion: { walkCycle: 1.6, walkBobStrength: 1, moving: true, movementSpeed: 3.05 },
+        label: "第一人称行走 · 摆臂时不能出现第二对手（身体手臂只投影不绘色）",
+      },
+      forward: {
+        mode: "first",
+        pitch: -0.02,
+        yaw: 0,
+        motion: {},
+        label: "第一人称平视 · 身体不应进入画面",
+      },
+      shadow: {
+        mode: "third",
+        camera: { position: [spawn.x + 2.5, 3.1, spawn.z + 2.1], look: [spawn.x, 0.0, spawn.z + 0.05] },
+        motion: { walkCycle: 4.7, walkBobStrength: 1, moving: true, movementSpeed: 3.05 },
+        label: "地面阴影 · 由关卡真实室内聚光灯投下",
+      },
+    };
+
+    let current = "third";
+    let elapsed = 0;
+
+    function motionFor(pose) {
+      return {
+        walkCycle: 0,
+        walkBobStrength: 0,
+        moving: false,
+        movementSpeed: 0,
+        sprinting: false,
+        grounded: true,
+        verticalVelocity: 0,
+        landingImpact: 0,
+        bodyY: camera.position.y,
+        eyeHeight: 1.62,
+        ...pose.motion,
+      };
+    }
+
+    function applyPose(name) {
+      const pose = poses[name];
+      current = name;
+      camera.position.set(spawn.x, spawn.y ?? 1.62, spawn.z);
+      camera.rotation.order = "YXZ";
+      camera.rotation.set(pose.pitch ?? -0.02, (pose.yaw ?? 0) + (spawn.yaw ?? 0), 0);
+      camera.userData.firstPersonMotion = motionFor(pose);
+      if (pose.camera) {
+        debugCamera.position.set(...pose.camera.position);
+        debugCamera.lookAt(...pose.camera.look);
+      }
+      resize();
+    }
+
+    function tick(delta) {
+      elapsed += delta;
+      const pose = poses[current];
+      const motion = pose.motion;
+      const stridePhase = motion.walkCycle ?? 0;
+      const bob = Math.sin(stridePhase * 2) * 0.031 * (motion.walkBobStrength ?? 0);
+      camera.position.y = (spawn.y ?? 1.62) + bob;
+      camera.userData.firstPersonMotion = {
+        ...motionFor(pose),
+        bodyY: spawn.y ?? 1.62,
+      };
+      world.update(delta, elapsed, camera.position, {});
+      pipeline.update(delta, camera.position);
+    }
+
+    let frame = 0;
+    function render() {
+      requestAnimationFrame(render);
+      frame += 1;
+      tick(1 / 60);
+      const pose = poses[current];
+      scene.updateMatrixWorld(true);
+      // 第三人称检视时收起第一人称手臂：它们是相机子物体，会浮在人物身前挡住身体。
+      // 手臂是异步加载的，必须每帧按名字取，页面初始化时它还不在。
+      // 第三人称检视时的两处临时开关，仅验收页使用：
+      // 1. 收起第一人称手臂（相机子物体，会浮在人物身前挡住身体），它们异步加载，按名字取。
+      // 2. 让身体手臂重新参与绘制——游戏里这些材质 material.visible=false，
+      //    既不出现在画面里，也不进入 GTAO 深度缓冲（否则墙上会留下胳膊形状的环境光空洞）。
+      const arms = camera.getObjectByName("first-person-baked-hazmat-arms-model");
+      if (arms) arms.visible = pose.mode === "first";
+      if (body?.userData?.materials?.arm) {
+        const inspectArms = pose.mode === "third";
+        for (const material of Object.values(body.userData.materials.arm)) {
+          material.visible = inspectArms;
+        }
+      }
+      if (pose.mode === "first") {
+        pipeline.render();
+      } else {
+        renderer.render(scene, debugCamera);
+      }
+      const sample = camera
+        .getWorldDirection(new THREE.Vector3());
+      status.textContent =
+        `${pose.label} | 网格=${bodyMeshes} 三角形=${Math.round(bodyTriangles)} ` +
+        `投影=${casting}/${bodyMeshes} 收影=${receiving}/${bodyMeshes} ` +
+        `| 管线阴影=${renderer.domElement.dataset.shadows} 模式=${renderer.domElement.dataset.shadowMode} ` +
+        `| 帧=${frame} 俯仰=${(pose.pitch ?? 0).toFixed(2)} 视线y=${sample.y.toFixed(2)}`;
+    }
+
+    function resize() {
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(innerWidth, innerHeight);
+      debugCamera.aspect = innerWidth / innerHeight;
+      debugCamera.updateProjectionMatrix();
+      pipeline.setSize(innerWidth, innerHeight, Math.min(devicePixelRatio, 2));
+    }
+
+    for (const name of Object.keys(poses)) {
+      document.getElementById(name).addEventListener("click", () => applyPose(name));
+    }
+    addEventListener("resize", resize);
+    applyPose("third");
+    render();
+  </script>
+</body>
+</html>

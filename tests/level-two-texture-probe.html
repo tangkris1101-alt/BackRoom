@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Level 2 地面纹理检查</title>
+  <style>
+    html,body { margin:0; background:#0d0d0d; color:#eee; font:13px system-ui,sans-serif; }
+    .row { display:flex; gap:12px; padding:12px; align-items:flex-start; }
+    figure { margin:0; }
+    figcaption { padding:2px 0 6px; opacity:0.75; }
+    canvas { image-rendering:pixelated; display:block; background:#222; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <figure>
+      <figcaption>单块纹理 512×512</figcaption>
+      <canvas id="single" width="512" height="512"></canvas>
+    </figure>
+    <figure>
+      <figcaption>2×2 平铺（检查接缝）</figcaption>
+      <canvas id="tiled" width="512" height="512"></canvas>
+    </figure>
+  </div>
+  <script type="module">
+    import { createLevelTwoFloorTexture } from "/src/scene/level-two/textures.js";
+
+    const texture = createLevelTwoFloorTexture();
+    const source = texture.image;
+
+    const single = document.getElementById("single").getContext("2d");
+    single.drawImage(source, 0, 0);
+
+    const tiled = document.getElementById("tiled").getContext("2d");
+    for (let y = 0; y < 2; y += 1) {
+      for (let x = 0; x < 2; x += 1) {
+        tiled.save();
+        tiled.translate(x * 256, y * 256);
+        tiled.scale(0.5, 0.5);
+        tiled.drawImage(source, 0, 0);
+        tiled.restore();
+      }
+    }
+
+    document.body.dataset.ready = "true";
+  </script>
+</body>
+</html>

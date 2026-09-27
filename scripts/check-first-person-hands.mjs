@@ -53,6 +53,15 @@ assert.match(source, /restPosition\.y \+ returnSwing \* 0\.085/);
 assert.match(source, /const heldDamping = holdingItem && !isLeft \? 0\.36 : 1/);
 assert.doesNotMatch(source, /mesh\.scale\.set\(mirrorSign, 1, 1\)/);
 
+// The player body is created and driven from this same call site, so every
+// level picks the figure up without level code and the opening cutscene hides
+// it together with the hands.
+assert.match(source, /viewModel\.userData\.body = attachPlayerBody\(camera\)/);
+assert.match(source, /updateFirstPersonPlayerBody\(viewModel, elapsed\)/);
+// A level that never drives the hands' key light must not inherit the previous
+// level's value: Level 0 in a Level 1 save left the sleeves blown out pale.
+assert.match(source, /viewModelLighting\.keyIntensity\.value = 0/);
+
 // Held props are anchored to the baked grip centre and parented to the right
 // hand, so the placement can never drift back into camera-space constants.
 const anchorUrl = new URL("../src/assets/models/fps-arm-anchors.json", import.meta.url);

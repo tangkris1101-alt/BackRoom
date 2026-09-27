@@ -719,3 +719,105 @@ export function addLevelThreeBoilerRoomPipe(scene) {
 
   return boilerColliders;
 }
+// The manifold at the north end of Level 3's entry stub: the pipe run that comes
+// down from Level 2's thermal gallery. Purely decorative — it publishes no
+// collider, so the stub the player arrives in stays walkable end to end.
+export function addLevelThreeArrivalManifold(scene) {
+  const center = levelThreeCellCenter(3, 3);
+  const wallZ = center.z - CELL_SIZE / 2;
+
+  const hotMaterial = new THREE.MeshStandardMaterial({
+    color: 0x5b4030,
+    emissive: 0x7a2405,
+    emissiveIntensity: 0.42,
+    roughness: 0.76,
+    metalness: 0.3,
+  });
+  const steelMaterial = new THREE.MeshStandardMaterial({
+    color: 0x4f5049,
+    emissive: 0x121612,
+    emissiveIntensity: 0.18,
+    roughness: 0.7,
+    metalness: 0.44,
+  });
+
+  const mouth = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 1.0, 16, 1, true), hotMaterial);
+  mouth.rotation.x = Math.PI / 2;
+  mouth.position.set(center.x, 1.26, wallZ + 0.45);
+  scene.add(mouth);
+
+  const throat = new THREE.Mesh(
+    new THREE.CircleGeometry(0.32, 16),
+    new THREE.MeshBasicMaterial({ color: 0x0a0503 }),
+  );
+  throat.position.set(center.x, 1.26, wallZ + 0.92);
+  scene.add(throat);
+
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.05, 8, 18), steelMaterial);
+  rim.position.set(center.x, 1.26, wallZ + 0.02);
+  scene.add(rim);
+
+  // Companion runs and a valve, so the stub reads as a plant rather than a hole.
+  const sideOffsets = [
+    { x: -0.92, y: 2.05, radius: 0.09, material: steelMaterial },
+    { x: 0.92, y: 2.05, radius: 0.09, material: steelMaterial },
+    { x: -1.28, y: 0.42, radius: 0.12, material: hotMaterial },
+    { x: 1.28, y: 0.42, radius: 0.12, material: hotMaterial },
+  ];
+  sideOffsets.forEach((side) => {
+    const pipe = new THREE.Mesh(
+      new THREE.CylinderGeometry(side.radius, side.radius, 1.2, 12),
+      side.material,
+    );
+    pipe.rotation.x = Math.PI / 2;
+    pipe.position.set(center.x + side.x, side.y, wallZ + 0.5);
+    scene.add(pipe);
+  });
+
+  const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.03, 8, 16), steelMaterial);
+  wheel.position.set(center.x + 0.86, 1.42, wallZ + 0.24);
+  scene.add(wheel);
+  for (let index = 0; index < 3; index += 1) {
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.03, 0.03), steelMaterial);
+    spoke.position.copy(wheel.position);
+    spoke.rotation.z = (index / 3) * Math.PI;
+    scene.add(spoke);
+  }
+
+  // One dim lamp over the manifold: the arrival stub used to be the darkest
+  // corner of the level, and this is now the first thing a wanderer sees.
+  const lampHousing = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.5), steelMaterial);
+  lampHousing.position.set(center.x, CEILING_Y - 0.08, center.z - 0.9);
+  scene.add(lampHousing);
+  const lamp = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 0.05, 0.34),
+    new THREE.MeshStandardMaterial({
+      color: 0xe8b285,
+      emissive: 0xd97a3c,
+      emissiveIntensity: 1.05,
+      roughness: 0.36,
+    }),
+  );
+  lamp.position.set(center.x, CEILING_Y - 0.15, center.z - 0.9);
+  scene.add(lamp);
+  const lampLight = new THREE.PointLight(0xe08b4a, 1.5, 5.4, 2.1);
+  lampLight.position.set(center.x, CEILING_Y - 0.42, center.z - 0.9);
+  scene.add(lampLight);
+
+  // One escaping puff, small enough that the electrical station does not read
+  // as another steam tunnel.
+  const puff = new THREE.Mesh(
+    new THREE.SphereGeometry(0.24, 12, 8),
+    new THREE.MeshBasicMaterial({
+      color: 0xd8cdb6,
+      transparent: true,
+      opacity: 0.05,
+      depthWrite: false,
+    }),
+  );
+  puff.position.set(center.x, 1.3, wallZ + 1.2);
+  puff.userData.phase = 0.6;
+  scene.add(puff);
+
+  return [puff];
+}

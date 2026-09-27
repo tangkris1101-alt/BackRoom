@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>玩家身体模型检查（临时）</title>
+  <style>
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#20242a; color:#fff; font:13px system-ui,sans-serif; }
+    canvas { display:block; }
+    .bar { position:fixed; left:12px; top:12px; display:flex; gap:6px; flex-wrap:wrap; padding:8px; background:#000a; border-radius:6px; }
+    button { background:#e8dfb5; border:0; border-radius:4px; padding:5px 9px; cursor:pointer; font-weight:600; }
+    #s { min-width:420px; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <button data-angle="front">正面</button>
+    <button data-angle="back">背面</button>
+    <button data-angle="left">侧面</button>
+    <button data-angle="head">头部特写</button>
+    <button data-angle="torso">躯干特写</button>
+    <button data-angle="legs">腿部特写</button>
+    <button data-angle="hands">手部特写</button>
+    <button data-angle="shoulder">肩部特写</button>
+    <button data-angle="feet">靴子特写</button>
+    <button data-pose="walk">行走姿态</button>
+    <button data-pose="sprint">冲刺姿态</button>
+    <button data-pose="idle">站立姿态</button>
+    <button data-light="0">无阴影</button>
+    <button data-light="1">顶灯阴影</button>
+    <button data-armcw="0">手臂 colorWrite 关</button>
+    <button data-armcw="1">手臂 colorWrite 开</button>
+    <span id="s"></span>
+  </div>
+  <script type="module">
+    import * as THREE from "three";
+    import { createPlayerBody, updatePlayerBody } from "/src/scene/common/player-body.js";
+
+    const status = document.getElementById("s");
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    document.body.append(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x2b3138);
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 80);
+    scene.add(new THREE.HemisphereLight(0xdfe8dc, 0x2c332c, 0.55));
+    const key = new THREE.DirectionalLight(0xfff3dc, 1.6);
+    key.position.set(2.4, 3.4, 2.2);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.camera.left = -2;
+    key.shadow.camera.right = 2;
+    key.shadow.camera.top = 3;
+    key.shadow.camera.bottom = -1;
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xbcd0c4, 0.5);
+    fill.position.set(-2.4, 1.4, -1.6);
+    scene.add(fill);
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x6a7268, roughness: 0.95 }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // The body is normally a camera child; emulate that so the exact same code
+    // path position it here.
+    const holder = new THREE.PerspectiveCamera(76, 1, 0.05, 100);
+    scene.add(holder);
+    const body = createPlayerBody();
+    holder.add(body);
+
+    let pose = "idle";
+    let walkPhase = 0;
+
+    function motion(overrides = {}) {
+      return {
+        walkCycle: walkPhase,
+        walkBobStrength: 0,
+        moving: false,
+        movementSpeed: 0,
+        sprinting: false,
+        grounded: true,
+        verticalVelocity: 0,
+        landingImpact: 0,
+        bodyY: 1.62,
+        eyeHeight: 1.62,
+        ...overrides,
+      };
+    }
+
+    const views = {
+      front: { pos: [0, 1.1, -3.2], look: [0, 0.95, 0] },
+      back: { pos: [0, 1.2, 3.2], look: [0, 0.95, 0] },
+      left: { pos: [-3.1, 1.15, 0.2], look: [0, 0.95, 0] },
+      head: { pos: [0.62, 1.74, -1.05], look: [0, 1.66, 0.02] },
+      torso: { pos: [0.75, 1.3, -1.5], look: [0, 1.2, 0] },
+      legs: { pos: [0.7, 0.75, -1.7], look: [0, 0.52, 0] },
+      hands: { pos: [0.8, 0.98, -0.7], look: [0.26, 0.78, 0.02] },
+      shoulder: { pos: [0.58, 1.6, -0.78], look: [0.17, 1.4, -0.01] },
+      feet: { pos: [0.6, 0.3, -0.95], look: [0, 0.1, 0.06] },
+    };
+    let view = "front";
+
+    function applyView() {
+      const entry = views[view];
+      camera.position.set(...entry.pos);
+      camera.lookAt(...entry.look);
+    }
+
+    let elapsed = 0;
+    function tick(delta) {
+      elapsed += delta;
+      if (pose === "walk") {
+        walkPhase += delta * 4.4;
+        holder.userData.firstPersonMotion = motion({ walkCycle: walkPhase, walkBobStrength: 1, moving: true, movementSpeed: 3.05 });
+      } else if (pose === "sprint") {
+        walkPhase += delta * 7.2;
+        holder.userData.firstPersonMotion = motion({ walkCycle: walkPhase, walkBobStrength: 1, moving: true, movementSpeed: 5.6, sprinting: true });
+      } else {
+        holder.userData.firstPersonMotion = motion();
+      }
+      holder.position.set(0, 1.62, 0);
+      updatePlayerBody(body, holder, elapsed);
+      body.visible = true;
+    }
+
+    let frames = 0;
+    function render() {
+      requestAnimationFrame(render);
+      frames += 1;
+      tick(1 / 60);
+      applyView();
+      scene.updateMatrixWorld(true);
+      renderer.render(scene, camera);
+      const size = body.userData.size;
+      status.textContent = `${view}/${pose} 高${size.y.toFixed(2)}m 宽${size.x.toFixed(2)}m 厚${size.z.toFixed(2)}m 网格${body.userData.partCount} 帧${frames}`;
+    }
+    for (const [name, entry] of Object.entries(views)) {
+      document.querySelector(`[data-angle="${name}"]`).addEventListener("click", () => { view = name; applyView(); });
+    }
+    document.querySelectorAll("[data-pose]").forEach((button) => {
+      button.addEventListener("click", () => { pose = button.dataset.pose; });
+    });
+    document.querySelectorAll("[data-light]").forEach((button) => {
+      button.addEventListener("click", () => { key.castShadow = button.dataset.light === "1"; });
+    });
+    document.querySelectorAll("[data-armcw]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const value = button.dataset.armcw === "1";
+        for (const material of Object.values(body.userData.materials.arm)) {
+          material.colorWrite = value;
+          material.depthWrite = value;
+        }
+      });
+    });
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight);
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+    }
+    addEventListener("resize", resize);
+    resize();
+    applyView();
+    render();
+  </script>
+</body>
+</html>

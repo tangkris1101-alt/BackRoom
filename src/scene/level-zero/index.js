@@ -375,7 +375,12 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     carpetMacroMaterial,
   );
   carpetMacroOverlay.rotation.x = -Math.PI / 2;
-  carpetMacroOverlay.position.set(MAP_CENTER.x, 0.014, MAP_CENTER.z);
+  // Clear of the wall's 2.8cm base chamfer below. At 1.4cm the overlay plane
+  // met the rounded base nearly tangentially, and the depth test flipped from
+  // texel to texel along the junction - a stitched dashed line running the
+  // length of every wall. Above the chamfer the plane crosses the vertical wall
+  // face instead, which is a clean, stable intersection.
+  carpetMacroOverlay.position.set(MAP_CENTER.x, 0.034, MAP_CENTER.z);
   scene.add(carpetMacroOverlay);
 
   const ceiling = new THREE.Mesh(

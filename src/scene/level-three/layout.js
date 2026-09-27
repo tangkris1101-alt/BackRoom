@@ -16,6 +16,24 @@ export const LEVEL_THREE_MIN_FIXTURE_DISTANCE = CELL_SIZE * 5.25;
 // render the majority of the level inaccessible". These four cells
 // block specific alternate routes so the player has to walk the
 // intended path through all four special rooms.
+// The two exits. Both are mounted flush on a wall by getLevelThreeTargetMount
+// so their doorway faces the room they open into, and both are kept out of the
+// entity navigation grid (see createLevelThreeScene): a mover whose search grid
+// says "open" while the door collider says "solid" is the shape that made
+// entities jam in a doorway.
+//
+// The hotel cell sits in the Boiler Room, which is the room the wiki's hotel
+// link comes up from, and keeps the second exit a long walk from the entry
+// stub instead of a few corridors away.
+export const LEVEL_THREE_ELEVATOR_CELLS = [
+  { col: 36, row: 20 },
+  { col: 30, row: 18 },
+];
+
+export function isLevelThreeElevatorCell(col, row) {
+  return LEVEL_THREE_ELEVATOR_CELLS.some((cell) => cell.col === col && cell.row === row);
+}
+
 export const LEVEL_THREE_BAR_POSITIONS = [
   { col: 12, row: 7 },
   { col: 16, row: 7 },

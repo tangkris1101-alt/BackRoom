@@ -6,6 +6,7 @@ import {
   createFlashlightModel,
   createFiresaltModel,
   createSilenceLiquidModel,
+  createWireSpoolModel,
 } from "../items/index.js";
 import { createItemHighlight, setItemHighlight } from "../items/shared.js";
 import { createSeededRandom } from "./texture-utils.js";
@@ -333,9 +334,9 @@ export function createWorldItemModel(id) {
     // cylinder: the same silhouette, so spawn offsets and aim boxes still fit.
     group.add(createEmptyCanModel());
   } else if (definition.shape === "spool") {
-    const spool = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.25, 16), material);
-    spool.rotation.z = Math.PI / 2;
-    group.add(spool);
+    // A wound spool (flanges, sticker, packed turns and a stripped lead end)
+    // instead of a bare cylinder: same silhouette and same floor offset.
+    group.add(createWireSpoolModel());
   } else if (definition.shape === "token") {
     const token = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.045, 20), material);
     group.add(token);

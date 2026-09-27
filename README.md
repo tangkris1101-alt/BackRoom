@@ -11,7 +11,7 @@
 ### 关卡
 - **Level 0 — NOCLIP ZONE**（起始/教学）
 - **Level 1 — HABITABLE ZONE**（黄墙纸经典迷宫）
-- **Level 2 — PIPE DREAMS**（管道机房）
+- **Level 2 — PIPE DREAMS**（管道机房；出口为隧道尽头的热区切出，非门）
 - **Level 3 — ELECTRICAL STATION**（超级细菌危险区）
 - **Level 4 — ABANDONED OFFICE**（安全补给办公室 + 黑窗/隔间/楼梯出口）
 - **Level 5 — TERROR HOTEL**（1930s 酒店主厅 + Beverly Room + 锅炉房）

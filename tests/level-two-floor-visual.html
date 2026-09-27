@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Level 2 地面视觉检查</title>
+  <style>
+    html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#111; color:#fff; font:13px system-ui,sans-serif; }
+    canvas { display:block; width:100%; height:100%; }
+    #hud { position:fixed; left:10px; top:10px; padding:4px 8px; background:#000000cc; border:1px solid #ffffff33; border-radius:4px; white-space:pre; }
+  </style>
+</head>
+<body>
+  <div id="hud"></div>
+  <script type="module">
+    import * as THREE from "three";
+    import { createLevelTwoScene } from "/src/scene/level-two/index.js";
+    import { levelTwoCellCenter } from "/src/scene/level-two/layout.js";
+
+    // Aim the check from the URL, e.g.
+    //   /tests/level-two-floor-visual.html?col=24&row=6&yaw=90&pitch=-19.5
+    //   /tests/level-two-floor-visual.html?texture=off   (floor map disabled)
+    const query = new URLSearchParams(location.search);
+    const number = (key, fallback) => (query.has(key) ? Number(query.get(key)) : fallback);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(1);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.94;
+    document.body.append(renderer.domElement);
+
+    const world = createLevelTwoScene();
+    const floorMesh = world.scene.children.find((child) => child.isMesh && child.material?.map);
+    const floorMap = floorMesh.material.map;
+    if (query.get("texture") === "off") {
+      floorMesh.material.map = null;
+      floorMesh.material.needsUpdate = true;
+    }
+    // ?hide=gallery     skip the thermal exit props
+    // ?hide=transparent skip every transparent decal (pools, steam, shades)
+    const hide = query.get("hide") ?? "";
+    if (hide) {
+      world.scene.traverse((object) => {
+        if (!object.isMesh) return;
+        const named = object.name.startsWith("level-two-heat-gallery");
+        const transparent = Boolean(object.material?.transparent);
+        if ((hide === "gallery" && named) || (hide === "transparent" && transparent)) {
+          object.visible = false;
+        }
+      });
+    }
+    // ?hub=awake shows the alcove after the Konami walk (visual preview only:
+    // the route gate itself lives inside the level).
+    if (query.get("hub") === "awake") {
+      const seal = world.scene.getObjectByName("level-two-hub-seal");
+      const doorway = world.scene.getObjectByName("exit-network-level-two-hidden-hub-door");
+      if (seal) seal.visible = false;
+      if (doorway) doorway.visible = true;
+    }
+
+    const cell = levelTwoCellCenter(number("col", 24), number("row", 6));
+    const camera = world.camera;
+    camera.fov = 76;
+    camera.position.set(cell.x, number("eye", 1.62), cell.z);
+    const yaw = (number("yaw", 90) * Math.PI) / 180;
+    const pitch = (number("pitch", -19.5) * Math.PI) / 180;
+    camera.rotation.set(pitch, yaw, 0, "YXZ");
+    camera.updateMatrixWorld(true);
+
+    document.getElementById("hud").textContent =
+      `cell ${number("col", 24)},${number("row", 6)}  yaw ${number("yaw", 90)}°  pitch ${number("pitch", -19.5)}°` +
+      `\nfloor map: ${floorMesh.material.map ? "on" : "off"}`;
+
+    function resize() {
+      renderer.setSize(innerWidth, innerHeight);
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+    }
+    addEventListener("resize", resize);
+    resize();
+
+    let previousFrame = performance.now();
+    let elapsed = 0;
+    const playerPosition = new THREE.Vector3(camera.position.x, 0, camera.position.z);
+    function frame(now) {
+      const delta = Math.min((now - previousFrame) / 1000, 0.05);
+      previousFrame = now;
+      elapsed += delta;
+      world.update(delta, elapsed, playerPosition);
+      camera.rotation.set(pitch, yaw, 0, "YXZ");
+      renderer.render(world.scene, camera);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    setTimeout(() => { document.body.dataset.ready = "true"; }, 900);
+    window.__world = world;
+  </script>
+</body>
+</html>

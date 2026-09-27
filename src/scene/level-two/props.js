@@ -5,6 +5,7 @@ import {
   WALL_HEIGHT,
 } from "../constants.js";
 import { createFixturePointLight } from "../common/lighting.js";
+import { createSeededRandom, paintCachedCanvas, wrapCanvasTexture } from "../common/texture-utils.js";
 import { wallSegmentTransform } from "../common/wall-corners.js";
 import { createWideSignTexture } from "../common/textures.js";
 import { createLevelTwoMetalTexture } from "./textures.js";
@@ -14,6 +15,9 @@ import {
   LEVEL_TWO_ROWS,
   LEVEL_TWO_MIN_FIXTURE_DISTANCE,
   LEVEL_TWO_DARK_ZONES,
+  LEVEL_TWO_HEAT_GALLERY,
+  LEVEL_TWO_HUB_TRAIL,
+  LEVEL_TWO_HEAT_GALLERY_CENTER,
   LEVEL_TWO_START_CELL,
   LEVEL_TWO_TARGET_CELL,
   LEVEL_TWO_MAX_POINT_LIGHTS,
@@ -250,6 +254,8 @@ export function createLayoutLights(scene, fixturePositions, { maxPointLights }) 
     fixtures.push({
       material: panelMaterial,
       light,
+      x: fixture.x,
+      z: fixture.z,
       phase: fixture.phase,
       speed: fixture.speed,
       weak: fixture.weak,
@@ -468,6 +474,10 @@ export function addLevelTwoSteam(scene) {
     { col: 29, row: 11, x: -1.5, z: 0.0, phase: 1.8 },
     { col: 29, row: 17, x: -1.5, z: 0.0, phase: 0.7 },
     { col: 35, row: 22, x: -1.5, z: -0.3, phase: 2.9 },
+    // The thermal gallery vents harder than the rest of the tunnels.
+    { col: 39, row: 22, x: -0.4, z: -1.3, phase: 0.9, strength: 1.3 },
+    { col: 40, row: 22, x: 0.2, z: -1.35, phase: 2.2, strength: 1.5 },
+    { col: 41, row: 22, x: 1.35, z: 0.2, phase: 1.5, strength: 1.7 },
   ];
 
   vents.forEach((vent) => {
@@ -482,6 +492,7 @@ export function addLevelTwoSteam(scene) {
     puff.position.set(center.x + vent.x, 1.22, center.z + vent.z);
     puff.scale.set(1, 0.8, 1);
     puff.userData.phase = vent.phase;
+    puff.userData.strength = vent.strength ?? 1;
     scene.add(puff);
     puffs.push(puff);
   });
@@ -489,11 +500,38 @@ export function addLevelTwoSteam(scene) {
   return puffs;
 }
 
+// Radial falloff shared by every warm section of the floor. A hard-edged
+// rectangle reads as a decal pasted on the ground; a masked pool does not.
+function createLevelTwoHeatMask() {
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-two-soft-mask", 128, (context, size) => {
+      const gradient = context.createRadialGradient(
+        size / 2,
+        size / 2,
+        0,
+        size / 2,
+        size / 2,
+        size / 2,
+      );
+      gradient.addColorStop(0, "rgba(255,255,255,1)");
+      gradient.addColorStop(0.5, "rgba(255,255,255,0.62)");
+      gradient.addColorStop(0.82, "rgba(255,255,255,0.22)");
+      gradient.addColorStop(1, "rgba(255,255,255,0)");
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, size, size);
+    }),
+    1,
+    1,
+  );
+}
+
 export function addLevelTwoFloorHeat(scene) {
+  const mask = createLevelTwoHeatMask();
   const material = new THREE.MeshBasicMaterial({
     color: 0xff7a30,
+    alphaMap: mask,
     transparent: true,
-    opacity: 0.045,
+    opacity: 0.085,
     depthWrite: false,
     side: THREE.DoubleSide,
   });
@@ -511,6 +549,109 @@ export function addLevelTwoFloorHeat(scene) {
     mesh.position.set(center.x, 0.028, center.z);
     scene.add(mesh);
   });
+}
+
+// The thermal noclip site at the east dead end of Tunnel C: a hot pipe gallery
+// whose pipe mouth swallows the wanderer who stays in the heat too long. Every
+// prop here hugs a wall or the end face, and none of them publishes a collider —
+// the exit has to stay a patch of floor, or the pursuing hound jams against it.
+export function addLevelTwoHeatGallery(scene) {
+  const { cells } = LEVEL_TWO_HEAT_GALLERY;
+  const center = LEVEL_TWO_HEAT_GALLERY_CENTER;
+  const mask = createLevelTwoHeatMask();
+
+  const poolMaterial = new THREE.MeshBasicMaterial({
+    color: 0xff6a1e,
+    alphaMap: mask,
+    transparent: true,
+    opacity: 0.16,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const pool = new THREE.Mesh(
+    new THREE.PlaneGeometry(cells.width * CELL_SIZE - 0.6, CELL_SIZE - 0.6),
+    poolMaterial,
+  );
+  pool.name = "level-two-heat-gallery-pool";
+  pool.rotation.x = -Math.PI / 2;
+  pool.position.set(center.x - CELL_SIZE, 0.031, center.z);
+  scene.add(pool);
+
+  const coreMaterial = poolMaterial.clone();
+  coreMaterial.opacity = 0.3;
+  const core = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.0), coreMaterial);
+  core.name = "level-two-heat-gallery-core";
+  core.rotation.x = -Math.PI / 2;
+  core.position.set(center.x - 0.4, 0.033, center.z);
+  scene.add(core);
+
+  // Pipe mouth cut into the level's east end wall.
+  const mouthX = LEVEL_TWO_ORIGIN_X + (cells.col + cells.width) * CELL_SIZE;
+  const steelMaterial = new THREE.MeshStandardMaterial({
+    color: 0x6b5540,
+    emissive: 0x2a0d02,
+    emissiveIntensity: 0.4,
+    roughness: 0.72,
+    metalness: 0.44,
+  });
+  const mouth = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 1.5, 18, 1, true), steelMaterial);
+  mouth.name = "level-two-heat-gallery-mouth";
+  mouth.rotation.z = Math.PI / 2;
+  mouth.position.set(mouthX - 0.62, 1.32, center.z);
+  scene.add(mouth);
+
+  const throat = new THREE.Mesh(
+    new THREE.CircleGeometry(0.6, 18),
+    new THREE.MeshBasicMaterial({ color: 0x090503 }),
+  );
+  throat.name = "level-two-heat-gallery-throat";
+  throat.rotation.y = -Math.PI / 2;
+  throat.position.set(mouthX - 1.34, 1.32, center.z);
+  scene.add(throat);
+
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(0.64, 0.07, 8, 20),
+    steelMaterial,
+  );
+  rim.name = "level-two-heat-gallery-rim";
+  rim.rotation.y = Math.PI / 2;
+  rim.position.set(mouthX - 0.03, 1.32, center.z);
+  scene.add(rim);
+
+  const heatGlowMaterial = new THREE.MeshStandardMaterial({
+    color: 0x4f3222,
+    emissive: 0x8c2606,
+    emissiveIntensity: 0.55,
+    roughness: 0.66,
+    metalness: 0.32,
+  });
+  // Warm pipe run along the north wall of the gallery: two thin runs at the
+  // wall base, deliberately dimmer than the fixtures so they read as hot metal
+  // rather than as light sources.
+  const wallZ = center.z - CELL_SIZE / 2 + 0.36;
+  for (const [index, radius] of [0.13, 0.1].entries()) {
+    const pipe = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius, radius, cells.width * CELL_SIZE, 14),
+      heatGlowMaterial,
+    );
+    pipe.name = "level-two-heat-gallery-run";
+    pipe.rotation.z = Math.PI / 2;
+    pipe.position.set(center.x - CELL_SIZE / 2, 0.36 + index * 0.62, wallZ);
+    scene.add(pipe);
+  }
+  const riser = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 2.2, 14), heatGlowMaterial);
+  riser.name = "level-two-heat-gallery-riser";
+  riser.position.set(center.x + CELL_SIZE / 2 - 0.28, 1.1, wallZ);
+  scene.add(riser);
+
+  // Gauge cluster: the machinery at the loudest end of the tunnel.
+  const meterMaterial = new THREE.MeshBasicMaterial({ color: 0xffb066 });
+  for (let index = 0; index < 3; index += 1) {
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.13, 0.2), meterMaterial);
+    panel.name = "level-two-heat-gallery-gauge";
+    panel.position.set(center.x - 1.2 + index * 0.9, 1.58, wallZ + 0.24);
+    scene.add(panel);
+  }
 }
 
 export function addLevelTwoDarkPockets(scene) {
@@ -606,6 +747,9 @@ export function addLevelTwoIndustrialDetails(scene) {
     }
   }
   doorCells.forEach(({ col, row }) => {
+    // The Hub alcove is sealed by a flush plug instead of a door prop, so the
+    // corridor reads as a dead end rather than as a locked room.
+    if (col === LEVEL_TWO_HUB_TRAIL.door.col && row === LEVEL_TWO_HUB_TRAIL.door.row) return;
     const center = levelTwoCellCenter(col, row);
     // door faces south (toward corridor)
     const doorMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.3), doorMaterial);
@@ -829,4 +973,257 @@ export function addLevelTwoUtilityProps(scene) {
   });
 
   return colliders;
+}
+
+// --- The Hub alcove ---------------------------------------------------------
+// Canon hides The Hub behind a corridor walk rather than an obvious door, so
+// the alcove ships as a flush concrete slab: no frame, no handle, no sign, just
+// a hairline seam. The trail props below are the only clue that anything is
+// there, and the seal swaps itself for the real door once the walk is done.
+
+function createLevelTwoSealTexture() {
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-two-hub-seal", 256, (context, size) => {
+      context.fillStyle = "#6f6656";
+      context.fillRect(0, 0, size, size);
+      const random = createSeededRandom(0x2f5a);
+      for (let i = 0; i < 260; i += 1) {
+        const x = random() * size;
+        const y = random() * size;
+        const radius = 1 + random() * 3.4;
+        context.fillStyle = `rgba(${random() > 0.5 ? "40,34,24" : "148,138,116"},${0.05 + random() * 0.12})`;
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+      }
+      context.strokeStyle = "rgba(28,24,17,0.5)";
+      context.lineWidth = 2;
+      for (let i = 0; i < 9; i += 1) {
+        const x = size * (0.1 + random() * 0.8);
+        const y = size * (0.1 + random() * 0.8);
+        context.beginPath();
+        context.moveTo(x, y);
+        context.lineTo(x + (random() - 0.5) * 90, y + (random() - 0.5) * 90);
+        context.stroke();
+      }
+    }),
+    1,
+    1,
+  );
+}
+
+// A sealed Hub doorway: a concrete plug filling the whole corridor section, so
+// the alcove simply ends. The only tell is a hairline seam around a door-sized
+// rectangle, and the seam light that appears once the wanderer walks the code.
+export function createLevelTwoHubSeal(scene, { position, rotation = 0 }) {
+  const group = new THREE.Group();
+  group.position.set(position.x, 0, position.z);
+  group.rotation.y = rotation;
+  group.name = "level-two-hub-seal";
+
+  // Sits just in front of the doorway it hides, so the plug can drop away and
+  // leave the real door standing in its place.
+  const width = CELL_SIZE;
+  const height = CEILING_Y;
+  const plugMaterial = new THREE.MeshStandardMaterial({
+    map: createLevelTwoSealTexture(),
+    color: 0xb4a893,
+    emissive: 0x140f08,
+    emissiveIntensity: 0.06,
+    roughness: 0.95,
+    metalness: 0.02,
+  });
+  const plug = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.24), plugMaterial);
+  plug.name = "level-two-hub-seal-plug";
+  plug.position.set(0, height / 2, 0.32);
+  group.add(plug);
+
+  const seamMaterial = new THREE.MeshBasicMaterial({ color: 0x0b0a07 });
+  const seamGlowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x7a4a1c,
+    transparent: true,
+    opacity: 1,
+  });
+  const seams = [];
+  const seamWidth = 2.36;
+  const seamHeight = 2.44;
+  const addSeam = (w, h, x, y) => {
+    const seam = new THREE.Mesh(new THREE.PlaneGeometry(w, h), seamMaterial);
+    seam.name = "level-two-hub-seal-seam";
+    seam.position.set(x, y, 0.32 + 0.12 + 0.004);
+    group.add(seam);
+    seams.push(seam);
+  };
+  addSeam(seamWidth, 0.03, 0, seamHeight);
+  addSeam(seamWidth, 0.03, 0, 0);
+  addSeam(0.03, seamHeight, -seamWidth / 2, seamHeight / 2);
+  addSeam(0.03, seamHeight, seamWidth / 2, seamHeight / 2);
+
+  const glowLight = new THREE.PointLight(0xff9a4a, 0, 6.2, 2);
+  glowLight.name = "level-two-hub-seal-light";
+  glowLight.position.set(0, 1.5, 1.5);
+  group.add(glowLight);
+
+  scene.add(group);
+
+  return {
+    group,
+    plug,
+    seams,
+    glowLight,
+    glowMaterial: seamGlowMaterial,
+    plugRestY: height / 2,
+    setAwake(awake) {
+      seams.forEach((seam) => {
+        seam.material = awake ? seamGlowMaterial : seamMaterial;
+      });
+      glowLight.intensity = awake ? 1.9 : 0;
+    },
+  };
+}
+
+// The scratched code and the two plates. Everything is drawn in-world: a
+// wanderer who has never heard of the corridor walk only sees old graffiti.
+export function addLevelTwoHubTrailMarkers(scene) {
+  const plates = [];
+  LEVEL_TWO_HUB_TRAIL.steps.forEach((step) => {
+    if (step.glyph !== "B" && step.glyph !== "A") return;
+    const center = levelTwoCellCenter(step.col, step.row);
+    const plate = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.5, 1.5),
+      new THREE.MeshStandardMaterial({
+        map: createWideSignTexture(step.glyph, "#6b6252", "#221d16"),
+        color: 0xc8bda6,
+        emissive: 0x33291a,
+        emissiveIntensity: 0.34,
+        roughness: 0.94,
+        metalness: 0.02,
+        transparent: true,
+        opacity: 0.86,
+        depthWrite: false,
+      }),
+    );
+    plate.name = `level-two-hub-plate-${step.glyph}`;
+    plate.rotation.x = -Math.PI / 2;
+    plate.rotation.z = step.col === 30 ? Math.PI / 2 : 0;
+    plate.position.set(center.x, 0.026, center.z);
+    scene.add(plate);
+    plates.push(plate);
+  });
+
+  const hint = LEVEL_TWO_HUB_TRAIL.hint;
+  const hintCenter = levelTwoCellCenter(hint.col, hint.row);
+  const wallX = hint.side === "west" ? hintCenter.x - S / 2 + 0.03 : hintCenter.x + S / 2 - 0.03;
+  const plaque = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.35, 0.92),
+    new THREE.MeshStandardMaterial({
+      map: createLevelTwoHubHintTexture(),
+      transparent: true,
+      depthWrite: false,
+      emissive: 0x0d0a06,
+      emissiveIntensity: 0.13,
+      roughness: 0.95,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    }),
+  );
+  plaque.name = "level-two-hub-hint";
+  plaque.rotation.y = hint.side === "west" ? Math.PI / 2 : -Math.PI / 2;
+  plaque.position.set(wallX, 1.55, hintCenter.z);
+  scene.add(plaque);
+
+  return { plates, plaque };
+}
+
+// The engraved code: arrows and the two circled letters scratched into the
+// concrete. The scrawl is eroded per pixel so it has no clean rectangle edge —
+// from a distance it is just another patch of old graffiti.
+function createLevelTwoHubHintTexture() {
+  return wrapCanvasTexture(
+    paintCachedCanvas("level-two-hub-hint", 512, (context, size) => {
+      const random = createSeededRandom(0x2f5b);
+      context.clearRect(0, 0, size, size);
+
+      const ink = "rgba(226,220,200,0.6)";
+      context.strokeStyle = ink;
+      context.fillStyle = ink;
+      context.lineWidth = 9;
+      context.lineCap = "round";
+
+      const drawArrow = (x, y, direction) => {
+        const length = 46;
+        const head = 17;
+        const vertical = direction === "up" || direction === "down";
+        const sign = direction === "up" || direction === "left" ? -1 : 1;
+        context.save();
+        context.translate(x, y);
+        context.beginPath();
+        if (vertical) {
+          context.moveTo(0, -sign * length * 0.5);
+          context.lineTo(0, sign * length * 0.5);
+          context.moveTo(0, sign * length * 0.5);
+          context.lineTo(-head * 0.7, sign * (length * 0.5 - head));
+          context.moveTo(0, sign * length * 0.5);
+          context.lineTo(head * 0.7, sign * (length * 0.5 - head));
+        } else {
+          context.moveTo(-sign * length * 0.5, 0);
+          context.lineTo(sign * length * 0.5, 0);
+          context.moveTo(sign * length * 0.5, 0);
+          context.lineTo(sign * (length * 0.5 - head), -head * 0.7);
+          context.moveTo(sign * length * 0.5, 0);
+          context.lineTo(sign * (length * 0.5 - head), head * 0.7);
+        }
+        context.stroke();
+        context.restore();
+      };
+
+      ["up", "up", "down", "down", "left", "right", "left", "right"].forEach((direction, index) => {
+        drawArrow(86 + index * 48, 150, direction);
+      });
+
+      context.font = "bold 132px Arial, sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      ["B", "A"].forEach((letter, index) => {
+        const x = size / 2 - 96 + index * 192;
+        const y = 356;
+        context.lineWidth = 8;
+        context.beginPath();
+        context.arc(x, y, 76, 0, Math.PI * 2);
+        context.stroke();
+        context.fillText(letter, x, y + 6);
+      });
+
+      // Weather the scrawl: chip the strokes wherever the concrete spalled, and
+      // keep the whole thing clear of the plate edges.
+      context.globalCompositeOperation = "destination-out";
+      for (let i = 0; i < 320; i += 1) {
+        // Bias the decay to the plate edges: the scrawl survives in the middle
+        // where the concrete is intact.
+        const edge = random() < 0.55;
+        const x = edge
+          ? (random() < 0.5 ? random() * 90 : size - random() * 90)
+          : random() * size;
+        const y = edge
+          ? (random() < 0.5 ? random() * 70 : size - random() * 70)
+          : random() * size;
+        context.fillStyle = `rgba(0,0,0,${0.2 + random() * 0.5})`;
+        context.beginPath();
+        context.arc(x, y, 3 + random() * 20, 0, Math.PI * 2);
+        context.fill();
+      }
+      for (let i = 0; i < 120; i += 1) {
+        context.fillStyle = `rgba(0,0,0,${0.3 + random() * 0.5})`;
+        context.beginPath();
+        context.moveTo(random() * size, random() * size);
+        context.lineTo(random() * size, random() * size);
+        context.lineWidth = 1 + random() * 5;
+        context.strokeStyle = `rgba(0,0,0,${0.2 + random() * 0.5})`;
+        context.stroke();
+      }
+      context.globalCompositeOperation = "source-over";
+    }),
+    1,
+    1,
+  );
 }

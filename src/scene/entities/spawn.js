@@ -10,24 +10,42 @@ export function chooseBacteriaSpawn({
   avoidPositions = [],
   minSeparation = CELL_SIZE * 5,
 }) {
-  const candidates = [];
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      if (!isCellOpen(col, row)) continue;
-      const center = getCellCenter(col, row);
-      const fromExit = Math.hypot(center.x - targetPosition.x, center.z - targetPosition.z);
-      const fromSpawn = Math.hypot(center.x - spawnPosition.x, center.z - spawnPosition.z);
-      const farFromAvoids = avoidPositions.every(
-        (avoid) => Math.hypot(center.x - avoid.x, center.z - avoid.z) >= minSeparation,
-      );
-      if (
-        fromExit <= BACTERIA_SPAWN_MAX_FROM_EXIT &&
-        fromSpawn >= BACTERIA_SPAWN_MIN_FROM_PLAYER &&
-        farFromAvoids
-      ) {
-        candidates.push({ ...center, score: fromExit + Math.random() * CELL_SIZE });
+  const collect = ({ maxFromExit, requireSeparation }) => {
+    const found = [];
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        if (!isCellOpen(col, row)) continue;
+        const center = getCellCenter(col, row);
+        const fromExit = Math.hypot(center.x - targetPosition.x, center.z - targetPosition.z);
+        const fromSpawn = Math.hypot(center.x - spawnPosition.x, center.z - spawnPosition.z);
+        const farFromAvoids = avoidPositions.every(
+          (avoid) => Math.hypot(center.x - avoid.x, center.z - avoid.z) >= minSeparation,
+        );
+        if (
+          fromExit <= maxFromExit &&
+          fromSpawn >= BACTERIA_SPAWN_MIN_FROM_PLAYER &&
+          (!requireSeparation || farFromAvoids)
+        ) {
+          found.push({ ...center, score: fromExit + Math.random() * CELL_SIZE });
+        }
       }
     }
+    return found;
+  };
+
+  let candidates = collect({
+    maxFromExit: BACTERIA_SPAWN_MAX_FROM_EXIT,
+    requireSeparation: true,
+  });
+  if (candidates.length === 0) {
+    // Either every exit is close to where the player enters, or the avoid radii
+    // already cover the usual ring. Widen the exit window before giving up:
+    // callers fall back to the exit cell itself when this list is empty, which
+    // parks the entity inside a doorway.
+    candidates = collect({ maxFromExit: Infinity, requireSeparation: true });
+  }
+  if (candidates.length === 0) {
+    candidates = collect({ maxFromExit: Infinity, requireSeparation: false });
   }
   candidates.sort((a, b) => a.score - b.score);
   return candidates;
