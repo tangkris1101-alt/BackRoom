@@ -132,6 +132,11 @@ const SCENES = [
 
 const SAVED_ENTITY = { type: "bacteria", position: { x: 0, z: 0 }, yaw: 0 };
 
+// A Level 0 save written before the angled bays can hold a bottle where a pier
+// now stands. The load path moves a stranded player to the spawn; a pickup has
+// no such path, so the level has to re-roll it onto open floor instead.
+const STRANDED_PICKUP_CELL = { col: 16, row: 20 };
+
 const vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "silent" });
 let built = 0;
 try {
@@ -159,6 +164,52 @@ try {
       built += 1;
     }
   }
+
+  const levelZeroScene = SCENES.find((scene) => scene.name === "level-zero");
+  const createLevelZero = Object.entries(await vite.ssrLoadModule(levelZeroScene.module))
+    .find(([name]) => /^create[A-Za-z]*Scene$/.test(name))?.[1];
+  const levelZeroLayout = await vite.ssrLoadModule("/src/scene/level-zero/layout.js");
+  assert.equal(
+    levelZeroLayout.isDiagonalCell(STRANDED_PICKUP_CELL.col, STRANDED_PICKUP_CELL.row),
+    true,
+    "the stranded-pickup probe points at an angled bay",
+  );
+  const pierCenter = levelZeroLayout.cellCenter(STRANDED_PICKUP_CELL.col, STRANDED_PICKUP_CELL.row);
+  assert.equal(
+    levelZeroLayout.pointInDiagonalCell(
+      STRANDED_PICKUP_CELL.col,
+      STRANDED_PICKUP_CELL.row,
+      pierCenter.x,
+      pierCenter.z,
+    ),
+    false,
+    "the stranded-pickup probe sits inside the pier",
+  );
+  const strandedScene = createLevelZero({
+    initialState: {
+      pickups: {
+        "almond-water": {
+          active: true,
+          respawnTimer: 0,
+          position: { x: pierCenter.x, y: 0, z: pierCenter.z },
+          rotation: 0,
+        },
+      },
+    },
+    entryContext: null,
+  });
+  built += 1;
+  const restored = strandedScene.getSnapshot().pickups["almond-water"];
+  assert.ok(restored.active, "the re-rolled bottle is still placed");
+  assert.ok(
+    Number.isFinite(restored.position.x) && Number.isFinite(restored.position.z),
+    "the re-rolled bottle has a position",
+  );
+  assert.equal(
+    strandedScene.isWalkable(restored.position.x, restored.position.z, 0.2, 0),
+    true,
+    "a bottle restored from an old save never lands inside an angled pier",
+  );
 } finally {
   await vite.close();
 }

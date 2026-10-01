@@ -7,12 +7,15 @@ import {
 } from "../constants.js";
 import { buildDetailedTable, buildPaperStack, createTableAssetKit } from "./table-model.js";
 import { isInAnyZone } from "../common/layout.js";
-import { wallSegmentTransform } from "../common/wall-corners.js";
+import { WALL_CORNER_EXTENSION, wallSegmentTransform } from "../common/wall-corners.js";
 import { isLowQuality } from "../common/materials.js";
 import {
   isOpenCell,
+  isDiagonalCell,
   cellCenter,
   countOpenNeighbors,
+  diagonalSideSpan,
+  diagonalWallTransform,
   ORIGIN_X,
   ORIGIN_Z,
   START_CELL,
@@ -353,16 +356,99 @@ export function createLights(scene, fixturePositions) {
 export function collectWallTransforms() {
   const northSouth = [];
   const eastWest = [];
+  const angledWalls = [];
   const fixtureCandidates = [];
 
   const wallSegment = (x, z, axis, extendNegative, extendPositive) =>
     wallSegmentTransform(x, z, axis, extendNegative, extendPositive);
+
+  // A wall of any length on a bay edge. Ordinary bays only ever need a whole
+  // side, but a diagonal bay's mass can hand back half of one, and an end that
+  // stops in the middle of the bay is covered by the 45° face instead of by the
+  // half-thickness extension an ordinary corner gets.
+  const pushWallSegment = (target, axis, fixedCoordinate, startAlong, endAlong, extendLow, extendHigh) => {
+    const lowExtension = extendLow ? WALL_CORNER_EXTENSION : 0;
+    const highExtension = extendHigh ? WALL_CORNER_EXTENSION : 0;
+    const length = endAlong - startAlong + lowExtension + highExtension;
+    const midAlong = (startAlong + endAlong) / 2 + (highExtension - lowExtension) / 2;
+    const stretch = length / CELL_SIZE;
+    target.push(axis === "x"
+      ? {
+        position: new THREE.Vector3(midAlong, WALL_HEIGHT / 2, fixedCoordinate),
+        scale: new THREE.Vector3(stretch, 1, 1),
+      }
+      : {
+        position: new THREE.Vector3(fixedCoordinate, WALL_HEIGHT / 2, midAlong),
+        scale: new THREE.Vector3(1, 1, stretch),
+      });
+  };
+
+  // Which part of a diagonal bay's side still needs a wall: the mass where the
+  // neighbour is open, the walkable corner where the neighbour is solid, and
+  // nothing at all where two dead sides meet.
+  const diagonalCoverage = (neighborOpen, span) => {
+    if (!span) return neighborOpen ? [0, 1] : null;
+    if (!neighborOpen) return span;
+    return span[0] === 0 ? [0.5, 1] : [0, 0.5];
+  };
 
   for (let row = 0; row < ROWS; row += 1) {
     for (let col = 0; col < COLS; col += 1) {
       if (!isOpenCell(col, row)) continue;
 
       const center = cellCenter(col, row);
+      if (isDiagonalCell(col, row)) {
+        const minX = center.x - CELL_SIZE / 2;
+        const minZ = center.z - CELL_SIZE / 2;
+        // The two cells beyond each end of a side decide whether that end needs
+        // the ordinary corner extension (see common/wall-corners.js).
+        const sides = [
+          {
+            side: "N", axis: "x", target: northSouth, dc: 0, dr: -1, fixed: minZ,
+            along: (fraction) => minX + fraction * CELL_SIZE,
+            lowEnd: [col - 1, row, col - 1, row - 1], highEnd: [col + 1, row, col + 1, row - 1],
+          },
+          {
+            side: "S", axis: "x", target: northSouth, dc: 0, dr: 1, fixed: minZ + CELL_SIZE,
+            along: (fraction) => minX + fraction * CELL_SIZE,
+            lowEnd: [col - 1, row, col - 1, row + 1], highEnd: [col + 1, row, col + 1, row + 1],
+          },
+          {
+            side: "W", axis: "z", target: eastWest, dc: -1, dr: 0, fixed: minX,
+            along: (fraction) => minZ + fraction * CELL_SIZE,
+            lowEnd: [col, row - 1, col - 1, row - 1], highEnd: [col, row + 1, col - 1, row + 1],
+          },
+          {
+            side: "E", axis: "z", target: eastWest, dc: 1, dr: 0, fixed: minX + CELL_SIZE,
+            along: (fraction) => minZ + fraction * CELL_SIZE,
+            lowEnd: [col, row - 1, col + 1, row - 1], highEnd: [col, row + 1, col + 1, row + 1],
+          },
+        ];
+        sides.forEach(({ side, axis, target, dc, dr, fixed, along, lowEnd, highEnd }) => {
+          const coverage = diagonalCoverage(isOpenCell(col + dc, row + dr), diagonalSideSpan(col, row, side));
+          if (!coverage) return;
+          pushWallSegment(
+            target,
+            axis,
+            fixed,
+            along(coverage[0]),
+            along(coverage[1]),
+            coverage[0] === 0 && isOpenCell(lowEnd[0], lowEnd[1]) && isOpenCell(lowEnd[2], lowEnd[3]),
+            coverage[1] === 1 && isOpenCell(highEnd[0], highEnd[1]) && isOpenCell(highEnd[2], highEnd[3]),
+          );
+        });
+        const angled = diagonalWallTransform(col, row);
+        if (angled) {
+          angledWalls.push({
+            position: new THREE.Vector3(angled.x, WALL_HEIGHT / 2, angled.z),
+            rotationY: angled.yaw,
+          });
+        }
+        // No ceiling fixture in a diagonal bay: half of it is pier, so there is
+        // no bay centre to hang one over.
+        continue;
+      }
+
       const isBrightZone = isInAnyZone(col, row, BRIGHT_ZONES);
       const isDarkZone = isInAnyZone(col, row, DARK_ZONES);
       const openNeighborCount = countOpenNeighbors(col, row);
@@ -490,5 +576,5 @@ export function collectWallTransforms() {
       if (!tooClose) fixturePositions.push(candidate);
     });
 
-  return { northSouth, eastWest, fixturePositions };
+  return { northSouth, eastWest, angledWalls, fixturePositions };
 }

@@ -142,7 +142,9 @@ assert.equal(FIRESALT_EFFECT_RADIUS, 8);
 assert.equal(FIRESALT_STUN_DURATION, 4);
 assert.equal(levelZeroWorld.LEVEL_ZERO_ROOM_TABLE_COUNT, 10);
 assert.equal(
-  levelZeroWorld.LEVEL_ZERO_ROOM_TABLE_CELLS.every(({ col, row }) => levelZero.isOpenCell(col, row)),
+  levelZeroWorld.LEVEL_ZERO_ROOM_TABLE_CELLS.every(
+    ({ col, row }) => levelZero.isOpenCell(col, row) && !levelZero.isDiagonalCell(col, row),
+  ),
   true,
 );
 const levelZeroTableScene = new THREE.Scene();

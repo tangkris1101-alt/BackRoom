@@ -7,6 +7,10 @@ import {
   ORIGIN_Z as L0_OZ,
   START_CELL as L0_START,
   EXIT_CELL as L0_EXIT,
+  CELL_DIAG_WN as L0_DIAG_WN,
+  CELL_DIAG_EN as L0_DIAG_EN,
+  CELL_DIAG_ES as L0_DIAG_ES,
+  CELL_DIAG_WS as L0_DIAG_WS,
   cellCenter as l0CellCenter,
   isOpenCell as l0IsOpen,
 } from "./scene/level-zero/layout.js";
@@ -109,18 +113,21 @@ import { chooseBacteriaSpawn, pickBacteriaSpawnPositions } from "./scene/entitie
 
 const ITEM_AVOID_RADIUS = CELL_SIZE * 4;
 
-const L0_PILLARS = [
-  [13, 12],
-  [15, 12],
-  [17, 12],
-  [14, 14],
-  [20, 4],
-  [23, 3],
-  [26, 5],
-  [16, 20],
-  [20, 20],
-  [5, 10],
-].map(([col, row]) => ({ col, row }));
+// Freestanding piers: solid bays whose four neighbours are open floor. Reading
+// them off the map keeps the list honest — a bay that was cut into a 45° face
+// leaves it on its own, and the angled bays are drawn from their own type.
+const L0_PILLARS = (() => {
+  const pillars = [];
+  for (let row = 0; row < L0_ROWS; row += 1) {
+    for (let col = 0; col < L0_COLS; col += 1) {
+      if (l0IsOpen(col, row)) continue;
+      const openNeighbours = [[0, -1], [0, 1], [-1, 0], [1, 0]]
+        .filter(([dc, dr]) => l0IsOpen(col + dc, row + dr)).length;
+      if (openNeighbours === 4) pillars.push({ col, row });
+    }
+  }
+  return pillars;
+})();
 
 const L1_BLOCKS = [
   { col: 2, row: 2, width: 5, height: 3 },
@@ -403,6 +410,10 @@ function buildLevel0() {
     getCellType(col, row) {
       const ch = grid[row]?.[col];
       if (ch === "#") return "wall";
+      if (ch === L0_DIAG_WN) return "diag-wn";
+      if (ch === L0_DIAG_EN) return "diag-en";
+      if (ch === L0_DIAG_ES) return "diag-es";
+      if (ch === L0_DIAG_WS) return "diag-ws";
       return "open";
     },
     startCell: L0_START,
@@ -928,22 +939,24 @@ function drawGrid() {
         if (type.startsWith("diag-")) {
           ctx.strokeStyle = PALETTE.diagFill;
           ctx.lineWidth = Math.max(1, px * 0.12);
+          // The 45° face runs between the two bay-edge midpoints the walkable
+          // corner leaves behind, which is what the level builds.
           const dirs = {
             "diag-wn": [
-              [0, 0],
-              [1, 0],
+              [0, 0.5],
+              [0.5, 0],
             ],
             "diag-en": [
-              [0, 0],
-              [1, 1],
+              [0.5, 0],
+              [1, 0.5],
             ],
             "diag-es": [
-              [0, 1],
-              [1, 1],
+              [0.5, 1],
+              [1, 0.5],
             ],
             "diag-ws": [
-              [0, 0],
-              [0, 1],
+              [0, 0.5],
+              [0.5, 1],
             ],
           };
           const d = dirs[type];

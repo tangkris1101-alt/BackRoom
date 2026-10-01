@@ -2,6 +2,8 @@ import * as THREE from "three";
 
 const matrix = new THREE.Matrix4();
 const identityQuaternion = new THREE.Quaternion();
+const yawQuaternion = new THREE.Quaternion();
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const unitScale = new THREE.Vector3(1, 1, 1);
 
 export function addInstancedBoxes(scene, geometry, material, transforms) {
@@ -9,7 +11,12 @@ export function addInstancedBoxes(scene, geometry, material, transforms) {
   transforms.forEach((entry, index) => {
     const position = entry.isVector3 ? entry : entry.position;
     const scale = entry.isVector3 || !entry.scale ? unitScale : entry.scale;
-    matrix.compose(position, identityQuaternion, scale);
+    // 45° runs (Level 0's angled bays) arrive as a yaw instead of a rotation
+    // matrix; everything else stays axis-aligned.
+    const quaternion = entry.isVector3 || entry.rotationY == null
+      ? identityQuaternion
+      : yawQuaternion.setFromAxisAngle(Y_AXIS, entry.rotationY);
+    matrix.compose(position, quaternion, scale);
     mesh.setMatrixAt(index, matrix);
   });
   mesh.instanceMatrix.needsUpdate = true;

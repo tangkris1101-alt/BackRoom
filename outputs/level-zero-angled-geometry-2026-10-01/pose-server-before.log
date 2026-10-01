@@ -1,0 +1,50 @@
+
+> three-backrooms@1.0.0 dev
+> vite --host 127.0.0.1 --host 127.0.0.1 --port 5173 --strictPort
+
+
+  VITE v8.0.16  ready in 192 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+11:08:18 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:08:31 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:08:40 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:08:45 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:08:50 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:08:55 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:09:00 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:09:06 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:09:11 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:09:16 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:09:21 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:09:26 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:09:31 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+11:09:36 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)

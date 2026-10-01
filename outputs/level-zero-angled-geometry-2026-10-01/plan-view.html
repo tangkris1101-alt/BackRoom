@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Level 0 angled bays — plan view of the emitted geometry</title>
+  <style>
+    html, body { margin: 0; background: #0d0f0c; color: #d9e3d6; font: 13px/1.5 ui-monospace, Consolas, monospace; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="plan"></canvas>
+  <script type="module">
+    import { CELL_SIZE, WALL_THICKNESS } from "/src/scene/constants.js";
+    import {
+      COLS, ROWS, MAP, START_CELL, EXIT_CELL,
+      ORIGIN_X, ORIGIN_Z,
+      isOpenCell, isDiagonalCell, pointInDiagonalCell, DIAGONAL_WALL_LENGTH,
+    } from "/src/scene/level-zero/layout.js";
+    import { WALL_CORNER_EXTENSION } from "/src/scene/common/wall-corners.js";
+    import { collectWallTransforms } from "/src/scene/level-zero/world.js";
+
+    const { northSouth, eastWest, angledWalls } = collectWallTransforms();
+    // Optional zoom window: ?x0=&z0=&w=&h=&scale= (world metres, px per bay).
+    const params = new URLSearchParams(window.location.search);
+    const scale = Number(params.get("scale") ?? 18);
+    const viewX = Number(params.get("x0") ?? ORIGIN_X);
+    const viewZ = Number(params.get("z0") ?? ORIGIN_Z);
+    const viewWidth = Number(params.get("w") ?? COLS * CELL_SIZE);
+    const viewHeight = Number(params.get("h") ?? ROWS * CELL_SIZE);
+    const px = (metres) => (metres * scale) / CELL_SIZE;
+    const width = px(viewWidth);
+    const height = px(viewHeight);
+    const canvas = document.getElementById("plan");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    const X = (x) => px(x - viewX);
+    const Y = (z) => px(z - viewZ);
+    const bayX = (col) => X(ORIGIN_X + col * CELL_SIZE);
+    const bayY = (row) => Y(ORIGIN_Z + row * CELL_SIZE);
+
+    ctx.fillStyle = "#101208";
+    ctx.fillRect(0, 0, width, height);
+
+    // Every open bay, then the walkable corner of each angled bay sampled on a
+    // 25 cm grid so the polygon the collision test uses is what is drawn.
+    for (let row = 0; row < ROWS; row += 1) {
+      for (let col = 0; col < COLS; col += 1) {
+        if (!isOpenCell(col, row)) continue;
+        ctx.fillStyle = isDiagonalCell(col, row) ? "#3d3a20" : "#33361f";
+        ctx.fillRect(bayX(col), bayY(row), px(CELL_SIZE), px(CELL_SIZE));
+      }
+    }
+    ctx.fillStyle = "#7f9b52";
+    const sampleStep = 0.25;
+    for (let row = 0; row < ROWS; row += 1) {
+      for (let col = 0; col < COLS; col += 1) {
+        if (!isDiagonalCell(col, row)) continue;
+        for (let wz = 0; wz < CELL_SIZE; wz += sampleStep) {
+          for (let wx = 0; wx < CELL_SIZE; wx += sampleStep) {
+            const worldX = ORIGIN_X + col * CELL_SIZE + wx + sampleStep / 2;
+            const worldZ = ORIGIN_Z + row * CELL_SIZE + wz + sampleStep / 2;
+            if (!pointInDiagonalCell(col, row, worldX, worldZ)) continue;
+            ctx.fillRect(X(worldX), Y(worldZ), px(sampleStep), px(sampleStep));
+          }
+        }
+      }
+    }
+
+    // Walls exactly as the renderer emits them.
+    const drawAxisWall = (entry, axis, color) => {
+      const position = entry.isVector3 ? entry : entry.position;
+      const stretch = entry.isVector3 ? 1 : axis === "x" ? entry.scale.x : entry.scale.z;
+      const length = CELL_SIZE * stretch;
+      const w = px(axis === "x" ? length : WALL_THICKNESS);
+      const h = px(axis === "x" ? WALL_THICKNESS : length);
+      ctx.fillStyle = color;
+      ctx.fillRect(X(position.x) - w / 2, Y(position.z) - h / 2, w, h);
+    };
+    northSouth.forEach((entry) => drawAxisWall(entry, "x", "#e8dfb4"));
+    eastWest.forEach((entry) => drawAxisWall(entry, "z", "#c9bf95"));
+
+    // The 45° faces: the box the renderer instantiates, at its yaw and length.
+    angledWalls.forEach(({ position, rotationY }) => {
+      ctx.save();
+      ctx.translate(X(position.x), Y(position.z));
+      // Screen +x is world +x and screen +y is world +z; a yaw about +Y turns
+      // world +x towards -z, which is screen -y, so the screen angle is -yaw.
+      ctx.rotate(-rotationY);
+      const length = px(DIAGONAL_WALL_LENGTH + WALL_CORNER_EXTENSION * 2);
+      const thickness = px(WALL_THICKNESS);
+      ctx.fillStyle = "#ff9f43";
+      ctx.fillRect(-length / 2, -thickness / 2, length, thickness);
+      ctx.restore();
+    });
+
+    const markCell = (col, row, color, label) => {
+      ctx.fillStyle = color;
+      const size = px(1.4);
+      ctx.beginPath();
+      ctx.arc(bayX(col) + px(CELL_SIZE) / 2, bayY(row) + px(CELL_SIZE) / 2, size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#0d0f0c";
+      ctx.font = `${px(1.6)}px ui-monospace, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, bayX(col) + px(CELL_SIZE) / 2, bayY(row) + px(CELL_SIZE) / 2);
+    };
+    markCell(START_CELL.col, START_CELL.row, "#5dff8e", "S");
+    markCell(EXIT_CELL.col, EXIT_CELL.row, "#ff5d5d", "E");
+
+    // Bay edges, then edge midpoints: every 45° face ends on a midpoint.
+    ctx.strokeStyle = "rgba(255,255,255,0.07)";
+    ctx.lineWidth = 1;
+    for (let col = 0; col <= COLS; col += 1) {
+      ctx.beginPath();
+      ctx.moveTo(bayX(col), 0);
+      ctx.lineTo(bayX(col), height);
+      ctx.stroke();
+    }
+    for (let row = 0; row <= ROWS; row += 1) {
+      ctx.beginPath();
+      ctx.moveTo(0, bayY(row));
+      ctx.lineTo(width, bayY(row));
+      ctx.stroke();
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.16)";
+    for (let col = 0; col <= COLS; col += 1) {
+      ctx.beginPath();
+      ctx.moveTo(bayX(col) + px(CELL_SIZE / 2), 0);
+      ctx.lineTo(bayX(col) + px(CELL_SIZE / 2), height);
+      ctx.stroke();
+    }
+    for (let row = 0; row <= ROWS; row += 1) {
+      ctx.beginPath();
+      ctx.moveTo(0, bayY(row) + px(CELL_SIZE / 2));
+      ctx.lineTo(width, bayY(row) + px(CELL_SIZE / 2));
+      ctx.stroke();
+    }
+
+    window.planReady = true;
+  </script>
+</body>
+</html>

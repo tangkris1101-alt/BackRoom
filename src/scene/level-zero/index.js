@@ -13,6 +13,7 @@ import {
 } from "../constants.js";
 import { createGameMaterial, applyFixtureLightFieldIfNeeded, isLowQuality } from "../common/materials.js";
 import { addInstancedBoxes, createStableLightState } from "../common/lighting.js";
+import { WALL_CORNER_EXTENSION } from "../common/wall-corners.js";
 import { attachFirstPersonViewModel, getViewModelName, updateFirstPersonHazmatViewModel } from "../common/view-model.js";
 import {
   createLevelZeroWallpaperTexture,
@@ -33,7 +34,10 @@ import {
 } from "./world.js";
 import {
   cellCenter,
+  walkableCenter,
   isOpenCell,
+  isDiagonalCell,
+  pointInDiagonalCell,
   worldToCell,
   START_CELL,
   EXIT_CELL,
@@ -41,6 +45,7 @@ import {
   ROWS,
   MAP_CENTER,
   MANILA_ROOM,
+  DIAGONAL_WALL_LENGTH,
 } from "./layout.js";
 import { createAlmondWaterPickup, createFlashlightPickup, createCompassPickup } from "../items/index.js";
 import {
@@ -66,7 +71,7 @@ function collectReachableLightCells(fixture) {
     if (visited.has(key) || !isOpenCell(cell.col, cell.row)) continue;
     visited.add(key);
 
-    const center = cellCenter(cell.col, cell.row);
+    const center = walkableCenter(cell.col, cell.row);
     if (Math.hypot(center.x - fixture.x, center.z - fixture.z) > maxDistance) continue;
     cells.push(cell);
     if (cell.steps >= maxSteps) continue;
@@ -298,7 +303,7 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   const pickupInitial = initialState?.pickups ?? {};
   const interactionInitial = initialState?.interactions ?? {};
   const objectiveInitial = initialState?.objectives ?? {};
-  const { northSouth, eastWest, fixturePositions } = collectWallTransforms();
+  const { northSouth, eastWest, angledWalls, fixturePositions } = collectWallTransforms();
   const fixtureLightField = isLowQuality() ? null : createFixtureLightField(fixturePositions);
 
   const carpetTexture = createLevelZeroCarpetTexture();
@@ -407,6 +412,34 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     wallMaterials,
     eastWest,
   );
+  // The 45° faces of the angled bays. A face is a cell's breadth across the
+  // diagonal (4 m / √2 ≈ 2.83 m), which matches neither wall above, so it gets a
+  // box of its own: stretching one of them would widen its rounded edge with
+  // it. The ends run half a thickness past the bay-edge midpoints they join,
+  // which is what an ordinary wall does at a corner.
+  const angledWallGeometry = new RoundedBoxGeometry(
+    DIAGONAL_WALL_LENGTH + WALL_CORNER_EXTENSION * 2,
+    WALL_HEIGHT,
+    WALL_THICKNESS,
+    2,
+    WALL_EDGE_RADIUS,
+  );
+  // RoundedBoxGeometry maps one texture tile across each face, so a 3.05 m 45°
+  // face would show the wallpaper at 0.76 of the scale the 4 m walls use. Push
+  // the u coordinate out on those two faces until a seam keeps the same spacing
+  // whichever wall it lands on.
+  {
+    const wallUv = angledWallGeometry.attributes.uv;
+    const wallNormal = angledWallGeometry.attributes.normal;
+    const uvScale = CELL_SIZE / (DIAGONAL_WALL_LENGTH + WALL_CORNER_EXTENSION * 2);
+    for (let index = 0; index < wallUv.count; index += 1) {
+      if (Math.abs(wallNormal.getZ(index)) > Math.abs(wallNormal.getX(index))) {
+        wallUv.setX(index, wallUv.getX(index) * uvScale);
+      }
+    }
+    wallUv.needsUpdate = true;
+  }
+  addInstancedBoxes(scene, angledWallGeometry, wallMaterials, angledWalls);
   // The map leaves a full-height opening for the shaft. Fill its upper part
   // with matching wallpaper so only the framed lift entrance is exposed.
   const elevatorWallHeadHeight = WALL_HEIGHT - 2.54;
@@ -449,20 +482,29 @@ export function createLevelZeroScene({ initialState = null } = {}) {
   // random pickups should appear outside the sealed cabin.
   const isPickupCellOpen = (col, row) =>
     isOpenCell(col, row) && !(col === EXIT_CELL.col + 1 && row === EXIT_CELL.row);
+  // A save written before the angled bays can hold a bottle that now sits
+  // inside one of their piers. The loaded player gets moved to the spawn when
+  // that happens; the pickups are re-rolled here for the same reason, instead
+  // of being restored behind a wall where nobody can reach them.
+  const restoreIfReachable = (saved) => {
+    const position = saved?.position;
+    if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.z)) return saved ?? null;
+    return isWalkable(position.x, position.z, 0.2, 0) ? saved : null;
+  };
   const almondWater = createAlmondWaterPickup(scene, {
     cols: COLS,
     rows: ROWS,
     isCellOpen: isPickupCellOpen,
-    getCellCenter: cellCenter,
+    getCellCenter: walkableCenter,
     avoidPositions: [spawnCell, exitPosition],
     blockedAabbs: propColliders,
-    initialState: pickupInitial["almond-water"] ?? null,
+    initialState: restoreIfReachable(pickupInitial["almond-water"]),
   });
   const superAlmondWater = createAlmondWaterPickup(scene, {
     cols: COLS,
     rows: ROWS,
     isCellOpen: isPickupCellOpen,
-    getCellCenter: cellCenter,
+    getCellCenter: walkableCenter,
     avoidPositions: [spawnCell, exitPosition],
     blockedAabbs: propColliders,
     variant: "super",
@@ -470,25 +512,25 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     respawnVariance: SUPER_ALMOND_WATER_RESPAWN_VARIANCE,
     initialSpawnChance: SUPER_ALMOND_WATER_INITIAL_SPAWN_CHANCE,
     respawnChance: SUPER_ALMOND_WATER_RESPAWN_CHANCE,
-    initialState: pickupInitial["super-almond-water"] ?? null,
+    initialState: restoreIfReachable(pickupInitial["super-almond-water"]),
   });
   const flashlight = createFlashlightPickup(scene, {
     cols: COLS,
     rows: ROWS,
     isCellOpen: isPickupCellOpen,
-    getCellCenter: cellCenter,
+    getCellCenter: walkableCenter,
     avoidPositions: [spawnCell, exitPosition],
     blockedAabbs: propColliders,
-    initialState: pickupInitial.flashlight ?? null,
+    initialState: restoreIfReachable(pickupInitial.flashlight),
   });
   const compass = createCompassPickup(scene, {
     cols: COLS,
     rows: ROWS,
     isCellOpen: isPickupCellOpen,
-    getCellCenter: cellCenter,
+    getCellCenter: walkableCenter,
     avoidPositions: [spawnCell, exitPosition],
     blockedAabbs: propColliders,
-    initialState: pickupInitial.compass ?? null,
+    initialState: restoreIfReachable(pickupInitial.compass),
   });
   let exitReached = Boolean(objectiveInitial.reached);
 
@@ -507,8 +549,17 @@ export function createLevelZeroScene({ initialState = null } = {}) {
     ];
 
     const insideLevelGeometry = samples.every(([offsetX, offsetZ]) => {
-      const cell = worldToCell(x + offsetX, z + offsetZ);
-      return isOpenCell(cell.col, cell.row) && !elevator.blocksMovement(x + offsetX, z + offsetZ);
+      const sampleX = x + offsetX;
+      const sampleZ = z + offsetZ;
+      const cell = worldToCell(sampleX, sampleZ);
+      if (!isOpenCell(cell.col, cell.row)) return false;
+      // An angled bay is only walkable in the corner its 45° face leaves open,
+      // and the sample ring already carries the body's radius, so the corner is
+      // tested as-is.
+      if (isDiagonalCell(cell.col, cell.row) && !pointInDiagonalCell(cell.col, cell.row, sampleX, sampleZ)) {
+        return false;
+      }
+      return !elevator.blocksMovement(sampleX, sampleZ);
     });
     return insideLevelGeometry && !propColliders.some((collider) =>
       colliderBlocksAtFeetHeight(collider, feetY) &&
