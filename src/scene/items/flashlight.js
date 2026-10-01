@@ -22,12 +22,15 @@ export function createFlashlightModel() {
   const group = new THREE.Group();
   group.name = "flashlight-model";
 
+  // No environment map anywhere in the project, so metalness mostly just
+  // removes lit response (see empty-can.js). The torch body keeps its dark
+  // colour from the albedo, not from the metal term.
   const bodyMaterial = new THREE.MeshStandardMaterial({
     color: 0x1f2423,
     emissive: 0x060807,
     emissiveIntensity: 0.12,
     roughness: 0.46,
-    metalness: 0.42,
+    metalness: 0.2,
   });
   const gripMaterial = new THREE.MeshStandardMaterial({
     color: 0x0b0e0d,

@@ -1,0 +1,26 @@
+
+> three-backrooms@1.0.0 dev
+> vite --host 127.0.0.1 --host 127.0.0.1 --port 5173 --strictPort
+
+
+  VITE v8.0.16  ready in 184 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+12:47:47 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+12:48:37 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+12:48:45 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+12:48:53 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+12:49:03 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)
+12:49:10 [vite] http proxy error: /api/v1/auth/me
+Error: connect ECONNREFUSED 127.0.0.1:8787
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)

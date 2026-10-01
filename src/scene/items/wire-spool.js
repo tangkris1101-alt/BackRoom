@@ -404,10 +404,13 @@ export function createWireSpoolModel() {
     emissive: 0x15160f,
     emissiveIntensity: 0.05,
   });
+  // Copper without an environment map: metalness would mostly subtract lit
+  // response (see empty-can.js), so the wire stays only faintly metallic and
+  // keeps its colour from the albedo.
   const copperMaterial = createGameMaterial({
     color: 0xb87333,
     roughness: 0.42,
-    metalness: 0.86,
+    metalness: 0.42,
     emissive: 0x150c04,
     emissiveIntensity: 0.06,
   });

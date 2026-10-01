@@ -221,11 +221,16 @@ export function createEmptyCanModel() {
 
   const metal = createTinMaps(0x9aa39c, 0x2f13);
   const label = createLabelTexture(0x77a1);
+  // No level sets an environment map, so a high metalness only subtracts from
+  // the lit response (three.js: diffuse = albedo × (1 - metalness)) while the
+  // specular highlight it turns into has nothing to reflect. At 0.56 the tin
+  // rendered as a black blob in dim rooms; the brushed, rusty look comes from
+  // the maps instead.
   const shellMaterial = createGameMaterial(({ lowQuality }) => ({
     map: metal.map,
     color: metal.map ? 0xffffff : 0x9aa39c,
     roughness: 0.46,
-    metalness: 0.56,
+    metalness: 0.22,
     emissive: 0x141a17,
     emissiveIntensity: 0.06,
     side: THREE.DoubleSide,
@@ -239,10 +244,12 @@ export function createEmptyCanModel() {
     emissive: 0x16170f,
     emissiveIntensity: 0.05,
   });
+  // The interior is meant to read dark, so it keeps a little metalness — just
+  // not enough to eat the light that reaches down into the tin.
   const interiorMaterial = createGameMaterial({
     color: 0x2b322c,
     roughness: 0.7,
-    metalness: 0.34,
+    metalness: 0.18,
     emissive: 0x0c0f0d,
     emissiveIntensity: 0.05,
     side: THREE.DoubleSide,
