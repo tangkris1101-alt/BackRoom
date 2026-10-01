@@ -830,8 +830,13 @@ body {
   backdrop-filter: blur(5px);
 }
 
-.stamina-meter {
-  grid-template-columns: auto minmax(92px, 130px);
+/* The two bars in the left column line up only if their label columns are the
+   same width: `auto` makes each meter as wide as its own word, and 生命 is a
+   hair wider than 体力 (STAMINA and HEALTH differ by more), which pushed the
+   health bar sideways. */
+.stamina-meter,
+.health-meter {
+  grid-template-columns: minmax(52px, auto) minmax(92px, 130px);
 }
 
 .flashlight-meter {
@@ -1018,7 +1023,7 @@ body {
 
 .health-meter {
   display: grid;
-  grid-template-columns: auto minmax(92px, 130px);
+  grid-template-columns: minmax(52px, auto) minmax(92px, 130px);
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
@@ -2585,9 +2590,33 @@ body {
     display: grid;
   }
 
+  /* A phone in landscape is only ~400px tall, so the old 272px bottom offset
+     parked the item card and its description across the middle of the screen.
+     Pin them to the top centre instead: the crosshair and the item itself stay
+     clear, and the bottom stays free for the thumb controls. */
   .item-info {
-    bottom: max(272px, calc(env(safe-area-inset-bottom) + 264px));
-    min-width: min(78vw, 320px);
+    top: max(12px, env(safe-area-inset-top));
+    bottom: auto;
+    width: min(58vw, 320px);
+    min-width: min(58vw, 300px);
+    padding: 8px 12px;
+    gap: 4px;
+    transform: translate(-50%, -6px);
+  }
+
+  .item-info.is-visible {
+    transform: translate(-50%, 0);
+  }
+
+  /* The F key the level draws next to an item moves with the view, which is a
+     hard target for a thumb. This is the fixed one: always on the button row,
+     dim until something is in reach. */
+  .use-button {
+    display: grid;
+    right: max(168px, calc(env(safe-area-inset-right) + 168px));
+    bottom: max(126px, calc(env(safe-area-inset-bottom) + 126px));
+    opacity: 0.34;
+    pointer-events: auto;
   }
 
   .hud--top {
@@ -2626,7 +2655,11 @@ body {
     min-width: min(76vw, 260px);
   }
 
+  /* Every meter shares one column template here, so their bars line up: the
+     health meter used to keep the desktop `auto` label column and its bar
+     started 40px left of the stamina one. */
   .stamina-meter,
+  .health-meter,
   .flashlight-meter,
   .detector-meter,
   .compass-meter {
@@ -3411,6 +3444,7 @@ body {
   .jump-button,
   .action-button,
   .drop-button,
+  .use-button,
   .flashlight-button,
   .detector-button,
   .pause-button {
@@ -3450,6 +3484,7 @@ body {
   }
 
   .stamina-meter,
+  .health-meter,
   .flashlight-meter,
   .detector-meter,
   .compass-meter,
@@ -3457,6 +3492,40 @@ body {
     grid-template-columns: minmax(64px, 92px) minmax(58px, max-content);
     gap: 7px;
     padding: 7px 9px;
+  }
+}
+
+/* Landscape phones only: the viewport is short, so both fixed panels go to the
+   edges — the item bar drops to the bottom strip between the joystick and the
+   button cluster (left-aligned against the joystick, because the cluster eats
+   more width than the joystick does), and the fixed F joins that cluster.
+   Portrait keeps the taller layout above, where the bar clears the joystick. */
+@media (orientation: landscape) and (pointer: coarse), (orientation: landscape) and (max-width: 800px) {
+  .use-button {
+    right: max(232px, calc(env(safe-area-inset-right) + 232px));
+    bottom: max(46px, calc(env(safe-area-inset-bottom) + 46px));
+  }
+
+  .inventory-bar.is-visible {
+    left: max(152px, calc(env(safe-area-inset-left) + 144px));
+    bottom: max(14px, env(safe-area-inset-bottom));
+    max-width: min(calc(100vw - 500px), 300px);
+    transform: none;
+  }
+}
+
+/* Portrait: the control column on the right (fixed F at bottom 126, pause above
+   it) reaches ~270px up, so the item bar waits above that and the description
+   card drops below the stacked HUD instead of sitting on top of it. */
+@media (orientation: portrait) and (max-width: 520px) {
+  .item-info {
+    top: max(170px, calc(env(safe-area-inset-top) + 162px));
+    width: min(84vw, 320px);
+    min-width: min(84vw, 300px);
+  }
+
+  .inventory-bar.is-visible {
+    bottom: max(280px, calc(env(safe-area-inset-bottom) + 272px));
   }
 }
 

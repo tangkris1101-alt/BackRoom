@@ -19,7 +19,7 @@
     "check:adaptive": "node scripts/check-adaptive-quality.mjs",
     "check:scenes": "node scripts/check-level-scene-load.mjs",
     "check:lights": "node scripts/check-light-count-stability.mjs",
-    "check": "node scripts/check-encoding.mjs && node scripts/check-content-expansion.mjs && node scripts/check-material-quality.mjs && node scripts/check-platform-collision.mjs && node scripts/check-prop-collision.mjs && node scripts/check-item-ground-shadows.mjs && node scripts/check-realism-systems.mjs && npm run check:hands && npm run check:body && npm run check:spool && npm run check:adaptive && npm run check:scenes && npm run check:lights",
+    "check": "node scripts/check-encoding.mjs && node scripts/check-content-expansion.mjs && node scripts/check-material-quality.mjs && node scripts/check-platform-collision.mjs && node scripts/check-prop-collision.mjs && node scripts/check-item-ground-shadows.mjs && node scripts/check-mobile-hud.mjs && node scripts/check-realism-systems.mjs && npm run check:hands && npm run check:body && npm run check:spool && npm run check:adaptive && npm run check:scenes && npm run check:lights",
     "changelog:sync": "node scripts/sync-changelog.mjs",
     "changelog:check": "node scripts/sync-changelog.mjs --check",
     "test:accounts": "node --test tests/account-api.test.mjs tests/account-ui.test.mjs tests/save-schema.test.mjs tests/server-config.test.mjs",

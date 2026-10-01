@@ -1409,6 +1409,17 @@ function isTypingTarget(target) {
   return Boolean(target?.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA");
 }
 
+// Touch layouts get the on-screen controls, and with them a coarser aim: the
+// fixed F button answers to whatever is merely in reach, not only to what the
+// crosshair happens to be on. The query is kept alive so its `matches` follows
+// the viewport instead of being re-evaluated every frame.
+const TOUCH_LAYOUT_QUERY = "(pointer: coarse), (max-width: 800px)";
+const touchLayoutQuery = window.matchMedia?.(TOUCH_LAYOUT_QUERY) ?? null;
+
+function isTouchLayout() {
+  return Boolean(touchLayoutQuery?.matches);
+}
+
 function findInventoryIndex(id) {
   return inventory.findIndex((entry) => entry.id === id);
 }
@@ -3552,7 +3563,7 @@ function updatePickupHud(metrics) {
   const canTakeCompass = focusedPickup?.id === "compass";
   const canTakeOther = focusedPickup?.id === "firesalt";
   const canInteract = Boolean(metrics.focusInteraction?.available);
-  const canUse =
+  const canUseFocused =
     canDrink ||
     canDrinkSuper ||
     canTakeFlashlight ||
@@ -3561,6 +3572,14 @@ function updatePickupHud(metrics) {
     canTakeCompass ||
     canTakeOther ||
     canInteract;
+  // On a touch layout the fixed F button takes everything in reach, so it lights
+  // up for anything in reach: waiting for the crosshair to land on an item would
+  // put the button's light out exactly when the player is trying to tap it.
+  const canUseInReach = isTouchLayout() && (
+    (metrics.pickups ?? []).some((pickup) => Boolean(pickup?.available)) ||
+    Boolean(worldItems?.getPickupTarget?.(world.camera.position))
+  );
+  const canUse = canUseFocused || canUseInReach;
   useButton?.classList.toggle("is-visible", canUse);
   if (useButton) useButton.disabled = !canUse;
   canvas.dataset.almondWaterVisible = String(Boolean(almondWater?.visible));
@@ -3814,11 +3833,128 @@ function tryFocusedInteraction() {
   return false;
 }
 
-function usePickup() {
+// One tap of the fixed F button sweeps everything within reach. The cap only
+// stops a pathological pile of items from spinning the loop.
+const PICKUP_SWEEP_LIMIT = 8;
+
+function applyWorldItemPickup(result) {
+  let added = false;
+  if (result.itemId === "flashlight") {
+    acquireFlashlight(1);
+    if (Number.isFinite(result.data?.battery)) {
+      flashlightBattery = Math.max(0, Math.min(FLASHLIGHT_BATTERY_MAX, result.data.battery));
+    }
+    added = true;
+  } else if (result.itemId === "detector") {
+    acquireDetector(1, result.data);
+    added = true;
+  } else if (result.itemId === "compass") {
+    acquireCompass(1);
+    added = true;
+  } else if (result.itemId === "silence-liquid") {
+    acquireSilenceLiquid(1);
+    added = true;
+  } else {
+    added = addInventory(result.itemId);
+  }
+  if (!added) return false;
+  const definition = getWorldItemDefinition(result.itemId);
+  const localized = definition?.i18n?.[currentLanguage] ?? definition?.i18n?.en;
+  pickupFlashText = localized?.name ?? result.itemId.toUpperCase();
+  pickupFlashUntil = clock.elapsedTime + 1.5;
+  renderInventoryBar();
+  markDirty();
+  return true;
+}
+
+function applyLevelPickup(pickup) {
+  if (pickup.itemId === "flashlight") {
+    acquireFlashlight(pickup.count);
+  } else if (pickup.itemId === "detector") {
+    acquireDetector(pickup.count);
+  } else if (pickup.itemId === "compass") {
+    acquireCompass(pickup.count);
+  } else if (pickup.itemId === "silence-liquid") {
+    acquireSilenceLiquid(pickup.count);
+  } else if (pickup.itemId === "firesalt") {
+    if (!addInventory("firesalt")) {
+      pickupFlashText = formatLocalizedStatus("inventoryFull");
+      pickupFlashUntil = clock.elapsedTime + 1.4;
+      return false;
+    }
+    pickupFlashText = getInventoryItemLabel("firesalt");
+    pickupFlashUntil = clock.elapsedTime + 1.7;
+  } else if (pickup.itemId === "super-almond-water") {
+    addInventory("super-almond-water");
+    pickupFlashText = formatLocalizedStatus("superAlmondWaterUsed", {
+      seconds: SUPER_ALMOND_WATER_DURATION,
+    });
+    pickupFlashUntil = clock.elapsedTime + 1.9;
+    canvas.dataset.superAlmondWaterDrinks = String(pickup.count);
+  } else if (pickup.itemId === "almond-water") {
+    addInventory("almond-water");
+    pickupFlashText = formatLocalizedStatus("almondWaterUsed", {
+      seconds: ALMOND_WATER_DURATION,
+    });
+    pickupFlashUntil = clock.elapsedTime + 1.7;
+    canvas.dataset.almondWaterDrinks = String(pickup.count);
+  }
+
+  if (completedLevels.has(world.level)) {
+    pickedUpItems.add(`${world.level}-${pickup.itemId}`);
+    saveStringSet(PICKED_UP_KEY, pickedUpItems);
+  }
+  return true;
+}
+
+// The fixed F button cannot rely on the crosshair: it takes every loose item in
+// reach, nearest first, then every level pickup. Each call consumes one item,
+// so the sweep ends when the level reports nothing left to take — or when the
+// inventory refuses the next one.
+function grabEverythingInReach() {
+  let grabbed = 0;
+  for (let index = 0; index < PICKUP_SWEEP_LIMIT; index += 1) {
+    const result = worldItems?.tryPickup(world.camera.position);
+    if (!result?.pickedUp) break;
+    if (!applyWorldItemPickup(result)) break;
+    grabbed += 1;
+  }
+  for (let index = 0; index < PICKUP_SWEEP_LIMIT; index += 1) {
+    const target = world?.getPickupTarget?.(world.camera.position);
+    if (!target?.id) break;
+    if (target.id === "flashlight" && getInventoryCount("flashlight") >= FLASHLIGHT_MAX_STACK) {
+      flashPickupHint("flashlightFull", 1400);
+      break;
+    }
+    if (target.id === "firesalt" && getInventoryCount("firesalt") >= 3) {
+      flashPickupHint("inventoryFull", 1200);
+      break;
+    }
+    const result = world.tryPickup?.(world.camera.position);
+    if (!result?.pickedUp) break;
+    if (!applyLevelPickup(result)) break;
+    grabbed += 1;
+  }
+  if (grabbed === 0) return false;
+  if (grabbed > 1) {
+    pickupFlashText = formatLocalizedStatus("pickupSweep", { count: grabbed });
+    pickupFlashUntil = clock.elapsedTime + 1.7;
+  }
+  renderInventoryBar();
+  markDirty();
+  return true;
+}
+
+function usePickup({ grabAll = false } = {}) {
   if (!world || exitComplete || gameFailed || levelTransition || isPaused) return;
   // The visible door prompt is an explicit target. Resolve it before nearby props or
   // pickups can consume F, which previously made the Level 5 STAIRS door appear inert.
   if (isDoorInteraction(lastMetrics?.focusInteraction) && tryFocusedInteraction()) return;
+  if (grabAll && grabEverythingInReach()) {
+    useButton?.classList.add("is-active");
+    window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
+    return;
+  }
   const focusedPickup = getFocusedPickupable(lastMetrics);
   const looseTarget = focusedPickup ? worldItems?.getPickupTarget(world.camera.position) : null;
   // Do not compare two optional ids directly: when both are absent, undefined
@@ -3830,32 +3966,7 @@ function usePickup() {
     }
     const result = worldItems.tryPickup(world.camera.position);
     if (result?.pickedUp) {
-      let added = false;
-      if (result.itemId === "flashlight") {
-        acquireFlashlight(1);
-        if (Number.isFinite(result.data?.battery)) {
-          flashlightBattery = Math.max(0, Math.min(FLASHLIGHT_BATTERY_MAX, result.data.battery));
-        }
-        added = true;
-      } else if (result.itemId === "detector") {
-        acquireDetector(1, result.data);
-        added = true;
-      } else if (result.itemId === "compass") {
-        acquireCompass(1);
-        added = true;
-      } else if (result.itemId === "silence-liquid") {
-        acquireSilenceLiquid(1);
-        added = true;
-      } else {
-        added = addInventory(result.itemId);
-      }
-      if (!added) return;
-      const definition = getWorldItemDefinition(result.itemId);
-      const localized = definition?.i18n?.[currentLanguage] ?? definition?.i18n?.en;
-      pickupFlashText = localized?.name ?? result.itemId.toUpperCase();
-      pickupFlashUntil = clock.elapsedTime + 1.5;
-      renderInventoryBar();
-      markDirty();
+      applyWorldItemPickup(result);
       return;
     }
   }
@@ -3885,42 +3996,7 @@ function usePickup() {
     return;
   }
 
-  if (pickup.itemId === "flashlight") {
-    acquireFlashlight(pickup.count);
-  } else if (pickup.itemId === "detector") {
-    acquireDetector(pickup.count);
-  } else if (pickup.itemId === "compass") {
-    acquireCompass(pickup.count);
-  } else if (pickup.itemId === "silence-liquid") {
-    acquireSilenceLiquid(pickup.count);
-  } else if (pickup.itemId === "firesalt") {
-    if (!addInventory("firesalt")) {
-      pickupFlashText = formatLocalizedStatus("inventoryFull");
-      pickupFlashUntil = clock.elapsedTime + 1.4;
-      return;
-    }
-    pickupFlashText = getInventoryItemLabel("firesalt");
-    pickupFlashUntil = clock.elapsedTime + 1.7;
-  } else if (pickup.itemId === "super-almond-water") {
-    addInventory("super-almond-water");
-    pickupFlashText = formatLocalizedStatus("superAlmondWaterUsed", {
-      seconds: SUPER_ALMOND_WATER_DURATION,
-    });
-    pickupFlashUntil = clock.elapsedTime + 1.9;
-    canvas.dataset.superAlmondWaterDrinks = String(pickup.count);
-  } else if (pickup.itemId === "almond-water") {
-    addInventory("almond-water");
-    pickupFlashText = formatLocalizedStatus("almondWaterUsed", {
-      seconds: ALMOND_WATER_DURATION,
-    });
-    pickupFlashUntil = clock.elapsedTime + 1.7;
-    canvas.dataset.almondWaterDrinks = String(pickup.count);
-  }
-
-  if (completedLevels.has(world.level)) {
-    pickedUpItems.add(`${world.level}-${pickup.itemId}`);
-    saveStringSet(PICKED_UP_KEY, pickedUpItems);
-  }
+  applyLevelPickup(pickup);
 
   useButton?.classList.add("is-active");
   window.setTimeout(() => useButton?.classList.remove("is-active"), 140);
@@ -4404,7 +4480,7 @@ function onUseKeyDown(event) {
   }
   if (isTypingTarget(event.target)) return;
   if (event.code === "KeyO") {
-    const mobileLayout = window.matchMedia?.("(pointer: coarse), (max-width: 800px)").matches;
+    const mobileLayout = isTouchLayout();
     if (!mobileLayout && !event.repeat) {
       event.preventDefault();
       gameplayUiHidden = !gameplayUiHidden;
@@ -4533,13 +4609,13 @@ function onWheelCycleInventory(event) {
 useButton?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   event.stopPropagation();
-  usePickup();
+  usePickup({ grabAll: isTouchLayout() });
 });
 [pickupPrompt, doorPrompt].forEach((prompt) => {
   prompt?.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    usePickup();
+    usePickup({ grabAll: isTouchLayout() });
   });
 });
 actionButton?.addEventListener("pointerdown", (event) => {
