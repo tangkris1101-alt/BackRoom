@@ -1,6 +1,9 @@
 // Generated from local Git history by `npm.cmd run changelog:sync`.
 // English titles preserve commit subjects; Chinese titles reuse saved translations or CLI overrides.
 export const CHANGELOG_ENTRIES = [
+  { commit: "555abd0", date: "2026-10-01", title: "fix: keep item metals lit now that nothing reflects them", titleZh: "修复物品金属在没有环境贴图时发黑" },
+  { commit: "93253e8", date: "2026-10-01", title: "fix: realign the mobile HUD, clear the crosshair, add a fixed F button", titleZh: "修复手机端血条对齐、面板遮挡与固定 F 按钮" },
+  { commit: "7a0b8f1", date: "2026-10-01", title: "feat: cut Level 0's corners and piers into 45-degree angled bays", titleZh: "Level 0 转角与柱墩改为 45° 斜角格" },
   { commit: "3299633", date: "2026-09-27", title: "feat: thermal noclip exit, sealed Hub walk, Level 3 exit mount fixes", titleZh: "feat: thermal noclip exit, sealed Hub walk, Level 3 exit mount fixes" },
   { commit: "985f09f", date: "2026-09-26", title: "feat: level content passes, texture cache and hands lighting fix", titleZh: "feat: 关卡内容通行性、纹理缓存与手部光照修正" },
   { commit: "2564604", date: "2026-09-26", title: "fix: keep the player supported while walking to a platform edge", titleZh: "修复走向平台边缘时角色失去支撑的问题" },
@@ -10,7 +13,4 @@ export const CHANGELOG_ENTRIES = [
   { commit: "3dbe91b", date: "2026-09-26", title: "test: tighten the CI checks and the scene unit tests", titleZh: "后室" },
   { commit: "356b917", date: "2026-09-26", title: "chore: trim dead Level 0 exit code and unused level arguments", titleZh: "清理 Level 0 已废弃的出口代码与关卡里未使用的参数" },
   { commit: "c05a98e", date: "2026-09-26", title: "fix: recover the first-person arms when the initial fetch fails", titleZh: "修复首次加载失败后第一人称手臂不再恢复的问题" },
-  { commit: "6313803", date: "2026-09-25", title: "docs: commit the verification reports under outputs/", titleZh: "提交 outputs/ 下的验证报告" },
-  { commit: "2e154bb", date: "2026-09-25", title: "test: run the scene and gameplay unit tests in CI", titleZh: "把场景与玩法单元测试接入 CI" },
-  { commit: "b9120f5", date: "2026-09-25", title: "feat: add the Level 0 elevator exit and refine levels, hands and props", titleZh: "新增 Level 0 电梯出口并打磨关卡、手部与道具" },
 ];
